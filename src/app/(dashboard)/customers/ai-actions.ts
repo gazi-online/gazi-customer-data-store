@@ -2,6 +2,7 @@
 
 import { AIProviderRegistry } from "@/lib/ai/providers";
 import { PromptManager } from "@/lib/ai/prompts/PromptManager";
+import { ExtractionCache } from "@/lib/ai/cache/ExtractionCache";
 import { createClient } from "@/lib/supabase/server";
 import sharp from "sharp";
 import { v4 as uuidv4 } from "uuid";
@@ -60,6 +61,7 @@ export async function extractDataFromDocuments(formData: FormData) {
     // 4. Generate the Prompt using PromptManager
     const providerName = process.env.DEFAULT_AI_PROVIDER || 'gemini';
     const promptVersion = process.env.PROMPT_VERSION || 'v1';
+    const modelName = 'gemini-flash-latest';
     
     const finalPrompt = PromptManager.generateFinalPrompt({
       provider: providerName as any,
@@ -70,72 +72,126 @@ export async function extractDataFromDocuments(formData: FormData) {
     const reqId = uuidv4().substring(0, 8);
     console.log(`[AI] extraction_start requestId=${reqId}`);
 
-    const TOTAL_AI_BUDGET_MS = 15000;
-    const providerStartTime = Date.now();
+    // 4.5 CACHE LOOKUP: Compute request hash and check ExtractionCache
+    const requestHash = ExtractionCache.computeRequestHash({
+      files: fileDataArray,
+      documentTypes,
+      promptVersion,
+      modelName
+    });
 
-    // 5. Get the AI Provider from Registry
-    const provider = AIProviderRegistry.getProvider(providerName);
+    const cacheRes = await ExtractionCache.lookupCache(supabase, user.id, requestHash);
+    let cacheHit = cacheRes.hit;
+    let cacheLookupMs = cacheRes.lookupMs;
+    let cacheWriteMs = 0;
+    let savedProviderMs = 0;
 
-    // 6. Call AI Extraction (Primary attempt + capped retry)
-    const primaryStart = Date.now();
-    console.log(`[AI] gemini_start requestId=${reqId}`);
-    let extractionResult = await provider.extractData(
-      "You are a highly accurate Document Extraction AI.", 
-      finalPrompt, 
-      fileDataArray,
-      { reqId } as any
-    );
-    
-    const primaryAttemptMs = extractionResult.primaryAttemptMs || (Date.now() - primaryStart);
-    const retryAttemptMs = extractionResult.retryAttemptMs || 0;
-    perfTimings.primaryAttemptDuration = Date.now() - primaryStart;
-    
-    console.log(`[AI] gemini_end requestId=${reqId} primary_attempt_ms=${primaryAttemptMs} retry_attempt_ms=${retryAttemptMs} duration=${perfTimings.primaryAttemptDuration}ms status=${extractionResult.status} category=${extractionResult.errorCategory}`);
-
+    let extractionResult: any = null;
     let finalProviderName = providerName;
     let fallbackTriggered = false;
-    let primaryStatus = extractionResult.status;
-    let primaryErrorCategory = extractionResult.errorCategory || 'UNKNOWN';
-    perfTimings.fallbackAttemptDuration = 0;
+    let providerStartTime = Date.now();
+    let primaryAttemptMs = 0;
+    let retryAttemptMs = 0;
+    let primaryStatus = 'success';
+    let primaryErrorCategory = 'NONE';
 
-    // 6.1 Fallback Architecture with budget check
-    const qualifyingFallbackErrors = [
-      'AUTHENTICATION',
-      'RATE_LIMIT',
-      'QUOTA',
-      'MODEL_UNAVAILABLE',
-      'NETWORK',
-      'PROVIDER_ERROR',
-      'TIMEOUT'
-    ];
+    if (cacheHit && cacheRes.resultJson) {
+      savedProviderMs = 4500; // Estimated API time saved
+      console.log(`[AI Cache] ⚡ CACHE HIT requestId=${reqId} hash=${requestHash.substring(0, 8)} lookupMs=${cacheLookupMs}ms`);
+      
+      extractionResult = {
+        status: 'success',
+        parsedJson: cacheRes.resultJson,
+        modelName: modelName,
+        processingTimeMs: cacheLookupMs,
+        inputTokens: 0,
+        outputTokens: 0,
+        estimatedCost: 0
+      };
+      
+      perfTimings.primaryAttemptDuration = 0;
+      perfTimings.fallbackAttemptDuration = 0;
+    } else {
+      console.log(`[AI Cache] 🔍 CACHE MISS requestId=${reqId} hash=${requestHash.substring(0, 8)}`);
+      
+      const TOTAL_AI_BUDGET_MS = 15000;
+      providerStartTime = Date.now();
 
-    const elapsedSoFar = Date.now() - providerStartTime;
-    const remainingBudgetMs = TOTAL_AI_BUDGET_MS - elapsedSoFar;
+      // 5. Get the AI Provider from Registry
+      const provider = AIProviderRegistry.getProvider(providerName);
 
-    if (extractionResult.status === 'failed') {
-      if (remainingBudgetMs <= 2000) {
-        console.warn(`[AI Extraction] Primary provider failed and remaining budget (${remainingBudgetMs}ms) is too low for fallback. Returning timeout.`);
-        extractionResult.errorCategory = 'TIMEOUT';
-        extractionResult.errorMessage = 'AI extraction total budget exceeded (15000ms cap).';
-      } else if (primaryErrorCategory && qualifyingFallbackErrors.includes(primaryErrorCategory)) {
-        console.warn(`[AI Extraction] Primary provider '${providerName}' failed (${extractionResult.errorCategory}). Triggering OpenRouter fallback (Budget remaining: ${remainingBudgetMs}ms).`);
-        
-        fallbackTriggered = true;
-        const fallbackStart = Date.now();
-        const fallbackProvider = AIProviderRegistry.getProvider('openrouter');
-        
-        extractionResult = await fallbackProvider.extractData(
-          "You are a highly accurate Document Extraction AI.", 
-          finalPrompt, 
-          fileDataArray,
-          { reqId: reqId + '-fb', timeoutMs: Math.min(8000, remainingBudgetMs) } as any
-        );
-        
-        perfTimings.fallbackAttemptDuration = Date.now() - fallbackStart;
-        finalProviderName = fallbackProvider.getName();
-        console.log(`[AI] fallback_end requestId=${reqId} fallback_attempt_ms=${perfTimings.fallbackAttemptDuration}ms status=${extractionResult.status}`);
-      } else {
-        console.warn(`[AI Extraction] Primary provider '${providerName}' failed (${extractionResult.errorCategory}). Category does not qualify for fallback.`);
+      // 6. Call AI Extraction (Primary attempt + capped retry)
+      const primaryStart = Date.now();
+      console.log(`[AI] gemini_start requestId=${reqId}`);
+      extractionResult = await provider.extractData(
+        "You are a highly accurate Document Extraction AI.", 
+        finalPrompt, 
+        fileDataArray,
+        { reqId } as any
+      );
+      
+      primaryAttemptMs = extractionResult.primaryAttemptMs || (Date.now() - primaryStart);
+      retryAttemptMs = extractionResult.retryAttemptMs || 0;
+      perfTimings.primaryAttemptDuration = Date.now() - primaryStart;
+      
+      console.log(`[AI] gemini_end requestId=${reqId} primary_attempt_ms=${primaryAttemptMs} retry_attempt_ms=${retryAttemptMs} duration=${perfTimings.primaryAttemptDuration}ms status=${extractionResult.status} category=${extractionResult.errorCategory}`);
+
+      primaryStatus = extractionResult.status;
+      primaryErrorCategory = extractionResult.errorCategory || 'UNKNOWN';
+      perfTimings.fallbackAttemptDuration = 0;
+
+      // 6.1 Fallback Architecture with budget check
+      const qualifyingFallbackErrors = [
+        'AUTHENTICATION',
+        'RATE_LIMIT',
+        'QUOTA',
+        'MODEL_UNAVAILABLE',
+        'NETWORK',
+        'PROVIDER_ERROR',
+        'TIMEOUT'
+      ];
+
+      const elapsedSoFar = Date.now() - providerStartTime;
+      const remainingBudgetMs = TOTAL_AI_BUDGET_MS - elapsedSoFar;
+
+      if (extractionResult.status === 'failed') {
+        if (remainingBudgetMs <= 2000) {
+          console.warn(`[AI Extraction] Primary provider failed and remaining budget (${remainingBudgetMs}ms) is too low for fallback. Returning timeout.`);
+          extractionResult.errorCategory = 'TIMEOUT';
+          extractionResult.errorMessage = 'AI extraction total budget exceeded (15000ms cap).';
+        } else if (primaryErrorCategory && qualifyingFallbackErrors.includes(primaryErrorCategory)) {
+          console.warn(`[AI Extraction] Primary provider '${providerName}' failed (${extractionResult.errorCategory}). Triggering OpenRouter fallback (Budget remaining: ${remainingBudgetMs}ms).`);
+          
+          fallbackTriggered = true;
+          const fallbackStart = Date.now();
+          const fallbackProvider = AIProviderRegistry.getProvider('openrouter');
+          
+          extractionResult = await fallbackProvider.extractData(
+            "You are a highly accurate Document Extraction AI.", 
+            finalPrompt, 
+            fileDataArray,
+            { reqId: reqId + '-fb', timeoutMs: Math.min(8000, remainingBudgetMs) } as any
+          );
+          
+          perfTimings.fallbackAttemptDuration = Date.now() - fallbackStart;
+          finalProviderName = fallbackProvider.getName();
+          console.log(`[AI] fallback_end requestId=${reqId} fallback_attempt_ms=${perfTimings.fallbackAttemptDuration}ms status=${extractionResult.status}`);
+        } else {
+          console.warn(`[AI Extraction] Primary provider '${providerName}' failed (${extractionResult.errorCategory}). Category does not qualify for fallback.`);
+        }
+      }
+
+      // If extraction was valid & successful, save to cache!
+      if (extractionResult.status === 'success' && extractionResult.parsedJson && typeof extractionResult.parsedJson === 'object') {
+        const saveRes = await ExtractionCache.saveCache(supabase, {
+          requestHash,
+          userId: user.id,
+          provider: finalProviderName,
+          modelName: extractionResult.modelName || modelName,
+          promptVersion,
+          resultJson: extractionResult.parsedJson
+        });
+        cacheWriteMs = saveRes.writeMs;
       }
     }
 
@@ -296,7 +352,7 @@ export async function extractDataFromDocuments(formData: FormData) {
       historyId: historyData?.id,
       perfSummary: {
         provider: finalProviderName,
-        model: extractionResult.modelName,
+        model: extractionResult.modelName || modelName,
         documentCount: files.length,
         imagePrepTime: perfTimings.imagePreparation,
         primaryAttemptDuration: perfTimings.primaryAttemptDuration,
@@ -305,7 +361,11 @@ export async function extractDataFromDocuments(formData: FormData) {
         jsonParseTime: extractionResult.jsonParseTimeMs || 0,
         normalizationTime: perfTimings.normalizationAndMerge,
         dbLogTime: perfTimings.databaseLogging,
-        totalTime: perfTimings.totalTime
+        totalTime: perfTimings.totalTime,
+        cacheHit: cacheHit,
+        cacheLookupMs: cacheLookupMs,
+        cacheWriteMs: cacheWriteMs,
+        savedProviderMs: savedProviderMs
       }
     };
 

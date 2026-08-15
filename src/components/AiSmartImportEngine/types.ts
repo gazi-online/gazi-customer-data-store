@@ -64,6 +64,10 @@ export interface ImportJob {
     normalizationTime: number;
     dbLogTime: number;
     totalTime: number;
+    cacheHit?: boolean;
+    cacheLookupMs?: number;
+    cacheWriteMs?: number;
+    savedProviderMs?: number;
   };
 }
 

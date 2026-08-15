@@ -101,24 +101,39 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                {result.jobs.filter(j => j.perfSummary).map((job, idx) => (
                  <div key={idx} className="bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 rounded-lg p-4 font-mono text-[11px] md:text-xs text-indigo-900 dark:text-indigo-200 shadow-sm">
-                    <p className="font-bold mb-2 uppercase text-indigo-700 dark:text-indigo-400 border-b border-indigo-200 dark:border-indigo-800/50 pb-1">{job.documentType}</p>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                      <span>Provider:</span> <span className="font-semibold text-right">{job.perfSummary!.provider}</span>
-                      <span>Model:</span> <span className="font-semibold text-right">{job.perfSummary!.model}</span>
-                      <span>Docs Count:</span> <span className="font-semibold text-right">{job.perfSummary!.documentCount}</span>
-                      <hr className="col-span-2 border-indigo-200/50 dark:border-indigo-800/50 my-1" />
-                      <span>Primary Attempt:</span> <span className="font-semibold text-right">{job.perfSummary!.primaryAttemptDuration} ms</span>
-                      {job.perfSummary!.fallbackAttemptDuration > 0 && (
-                         <><span>Fallback Attempt:</span> <span className="font-semibold text-right text-amber-600 dark:text-amber-400">{job.perfSummary!.fallbackAttemptDuration} ms</span></>
-                      )}
-                      <hr className="col-span-2 border-indigo-200/50 dark:border-indigo-800/50 my-1" />
-                      <span>Image Prep:</span> <span className="font-semibold text-right">{job.perfSummary!.imagePrepTime} ms</span>
-                      <span>JSON Parse:</span> <span className="font-semibold text-right">{job.perfSummary!.jsonParseTime} ms</span>
-                      <span>Normalization:</span> <span className="font-semibold text-right">{job.perfSummary!.normalizationTime} ms</span>
-                      <span>DB Logging:</span> <span className="font-semibold text-right">{job.perfSummary!.dbLogTime} ms</span>
-                      <hr className="col-span-2 border-indigo-200/50 dark:border-indigo-800/50 my-1" />
-                      <span className="font-bold">Total Pipeline:</span> <span className="font-bold text-right text-indigo-600 dark:text-indigo-300">{job.perfSummary!.totalTime} ms</span>
-                    </div>
+                     <div className="flex items-center justify-between font-bold mb-2 uppercase text-indigo-700 dark:text-indigo-400 border-b border-indigo-200 dark:border-indigo-800/50 pb-1">
+                       <span>{job.documentType}</span>
+                       {job.perfSummary!.cacheHit ? (
+                         <span className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2 py-0.5 rounded-full text-[10px] normal-case font-bold flex items-center">
+                           ⚡ Cache Hit (Saved ~{(job.perfSummary!.savedProviderMs! / 1000).toFixed(1)}s)
+                         </span>
+                       ) : (
+                         <span className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 px-2 py-0.5 rounded-full text-[10px] normal-case font-semibold">
+                           🔍 Cache Miss
+                         </span>
+                       )}
+                     </div>
+                     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                       <span>Provider:</span> <span className="font-semibold text-right">{job.perfSummary!.provider}</span>
+                       <span>Model:</span> <span className="font-semibold text-right">{job.perfSummary!.model}</span>
+                       <span>Docs Count:</span> <span className="font-semibold text-right">{job.perfSummary!.documentCount}</span>
+                       <hr className="col-span-2 border-indigo-200/50 dark:border-indigo-800/50 my-1" />
+                       <span>Cache Lookup:</span> <span className="font-semibold text-right text-emerald-600 dark:emerald-400">{job.perfSummary!.cacheLookupMs || 0} ms</span>
+                       {job.perfSummary!.cacheWriteMs !== undefined && job.perfSummary!.cacheWriteMs > 0 && (
+                         <><span>Cache Write:</span> <span className="font-semibold text-right">{job.perfSummary!.cacheWriteMs} ms</span></>
+                       )}
+                       <span>Primary Attempt:</span> <span className="font-semibold text-right">{job.perfSummary!.primaryAttemptDuration} ms</span>
+                       {job.perfSummary!.fallbackAttemptDuration > 0 && (
+                          <><span>Fallback Attempt:</span> <span className="font-semibold text-right text-amber-600 dark:text-amber-400">{job.perfSummary!.fallbackAttemptDuration} ms</span></>
+                       )}
+                       <hr className="col-span-2 border-indigo-200/50 dark:border-indigo-800/50 my-1" />
+                       <span>Image Prep:</span> <span className="font-semibold text-right">{job.perfSummary!.imagePrepTime} ms</span>
+                       <span>JSON Parse:</span> <span className="font-semibold text-right">{job.perfSummary!.jsonParseTime} ms</span>
+                       <span>Normalization:</span> <span className="font-semibold text-right">{job.perfSummary!.normalizationTime} ms</span>
+                       <span>DB Logging:</span> <span className="font-semibold text-right">{job.perfSummary!.dbLogTime} ms</span>
+                       <hr className="col-span-2 border-indigo-200/50 dark:border-indigo-800/50 my-1" />
+                       <span className="font-bold">Total Pipeline:</span> <span className="font-bold text-right text-indigo-600 dark:text-indigo-300">{job.perfSummary!.totalTime} ms</span>
+                     </div>
                  </div>
                ))}
              </div>
