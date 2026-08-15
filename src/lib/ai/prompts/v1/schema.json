@@ -1,0 +1,77 @@
+{
+  "customer": {
+    "customer_code": null,
+    "full_name": null,
+    "original_language_name": null,
+    "first_name": null,
+    "middle_name": null,
+    "last_name": null,
+    "father_name": null,
+    "mother_name": null,
+    "marital_status": null,
+    "spouse_name": null,
+    "dob": null,
+    "gender": null,
+    "mobile": null,
+    "email": null,
+    "occupation": null,
+    "nationality": "Indian"
+  },
+  "address": {
+    "house": null,
+    "street": null,
+    "landmark": null,
+    "village": null,
+    "post_office": null,
+    "city": null,
+    "district": null,
+    "state": null,
+    "country": "India",
+    "pincode": null
+  },
+  "documents": {
+    "aadhaar": {
+      "number": null
+    },
+    "pan": {
+      "number": null
+    },
+    "passport": {
+      "number": null
+    },
+    "driving_license": {
+      "number": null
+    },
+    "voter_id": {
+      "number": null
+    }
+  },
+  "profile_photo": {
+    "available": false,
+    "source_document": null,
+    "confidence": 0,
+    "bounding_box": null
+  },
+  "conflicts": [
+    {
+      "field": "string",
+      "options": [
+        {
+          "value": "any",
+          "source_document": "string",
+          "source_side": "front|back|unknown",
+          "confidence": 0.0
+        }
+      ]
+    }
+  ],
+  "missing_fields": [],
+  "confidence": {
+    "field_name": {
+      "value": "any",
+      "source_document": "string",
+      "source_side": "front|back|unknown",
+      "confidence": 0.0
+    }
+  }
+}

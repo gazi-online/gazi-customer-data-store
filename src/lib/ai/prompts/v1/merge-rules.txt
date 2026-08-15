@@ -1,0 +1,26 @@
+Merge Rules
+
+Name Priority:
+1. Aadhaar
+2. Passport
+3. PAN
+
+DOB Priority:
+1. Aadhaar
+2. Birth Certificate
+3. Passport
+
+Address Priority:
+1. Aadhaar Back
+2. Utility Bill
+3. Bank Passbook
+
+Numbers:
+- PAN Number: Only from PAN Card
+- Passport Number: Only from Passport
+- Driving Licence Number: Only from Driving Licence
+- Aadhaar Number: Only from Aadhaar Card
+
+Contact:
+- Phone: Prefer Aadhaar, otherwise Utility Bill
+- Email: Use only if explicitly visible on the document.

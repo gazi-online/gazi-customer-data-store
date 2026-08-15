@@ -1,0 +1,19 @@
+Conflict Rules
+
+If data fields from multiple documents contradict each other (e.g. name spelling differs), populate the `conflicts` array in the JSON schema like this:
+
+"conflicts": [
+  {
+    "field": "full_name",
+    "document1": {
+      "type": "aadhaar",
+      "value": "Rahul Kumar"
+    },
+    "document2": {
+      "type": "passport",
+      "value": "Rahul K."
+    }
+  }
+]
+
+Do not guess which one is correct if they are significantly different, just report the conflict and use the highest priority value in the main data fields.
