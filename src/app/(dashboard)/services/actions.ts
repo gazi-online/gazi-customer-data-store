@@ -111,19 +111,25 @@ export async function upsertCustomerService(data: any) {
     notes: data.notes || null,
   };
 
-  if (data.status === 'completed' && !data.id) {
-    payload.completed_at = new Date().toISOString();
-  }
-
-  if (data.id) {
-    // If transitioning to completed, set completed_at if not already set
-    if (data.status === 'completed') {
-      const { data: existing } = await supabase.from("customer_services").select("completed_at").eq("id", data.id).single();
+  if (data.status === 'completed') {
+    if (!data.id) {
+      payload.completed_at = new Date().toISOString();
+    } else {
+      const { data: existing } = await supabase
+        .from("customer_services")
+        .select("completed_at")
+        .eq("id", data.id)
+        .single();
       if (existing && !existing.completed_at) {
         payload.completed_at = new Date().toISOString();
       }
     }
-    
+  } else {
+    // When status is pending, in_progress, or cancelled, reset completed_at = null
+    payload.completed_at = null;
+  }
+
+  if (data.id) {
     const { error } = await supabase.from("customer_services").update(payload).eq("id", data.id);
     if (error) return { error: error.message };
   } else {
