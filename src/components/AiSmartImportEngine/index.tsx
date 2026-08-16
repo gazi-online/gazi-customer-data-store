@@ -113,8 +113,8 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
       toast.loading(`Extracting with ${provider === 'gemini' ? 'Gemini' : provider}...`, { id: toastId });
       const result = await extractDataFromDocuments(formData);
       
-      if (!result.success || !result.data) {
-        throw new Error(result.error || "Failed to extract data");
+      if (!result.success || 'error' in result) {
+        throw new Error((result as { error?: string }).error || "Failed to extract data");
       }
 
       toast.loading(`Finalizing result...`, { id: toastId });

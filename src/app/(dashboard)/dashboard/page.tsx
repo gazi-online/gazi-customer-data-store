@@ -61,18 +61,18 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Placeholder: Active Services */}
-        <div className="bg-zinc-50 dark:bg-zinc-900/50 p-6 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-5">
+        {/* Active Services */}
+        <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden group hover:border-indigo-300 dark:hover:border-indigo-800 transition-colors">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <Briefcase className="h-16 w-16 text-indigo-600" />
           </div>
           <div className="relative z-10">
             <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400 flex items-center">
-              Active Services <span className="ml-2 text-[10px] bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded-full font-medium">Coming Soon</span>
+              Active Services
             </p>
-            <p className="text-3xl font-bold text-zinc-300 dark:text-zinc-700 mt-2">--</p>
-            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-2">
-              Services module pending
+            <p className="text-3xl font-bold text-zinc-900 dark:text-white mt-2">{stats.activeServices}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+              Pending or in progress
             </p>
           </div>
         </div>

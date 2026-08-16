@@ -1,7 +1,8 @@
 import { MergedResult, NormalizedData, Conflict } from "../types";
-import { AlertCircle, CheckCircle2, ChevronRight, Check, Activity } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronRight, Check, Activity, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { getProfilePhotoSignedUrl } from "@/app/(dashboard)/customers/ai-actions";
+import { getProfilePhotoSignedUrl, cropAndUploadProfilePhoto } from "@/app/(dashboard)/customers/ai-actions";
+import { toast } from "sonner";
 
 export function ReviewPanel({ 
   result, 
@@ -11,7 +12,25 @@ export function ReviewPanel({
   onConfirm: (finalData: Record<string, any>) => void 
 }) {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [usePhoto, setUsePhoto] = useState<boolean>(true);
+  const [usePhoto, setUsePhoto] = useState<boolean>(false);
+  const [isCroppingPhoto, setIsCroppingPhoto] = useState<boolean>(false);
+
+  const conflictFields = new Set(result.conflicts.map(c => c.field));
+
+  const [resolvedData, setResolvedData] = useState<Record<string, any>>(() => {
+    // Flatten the MergedResult to a simple key-value object using the highest priority values
+    const flat: Record<string, any> = {};
+    Object.keys(result.data).forEach(key => {
+      if (key !== 'profile_photo') {
+        if (conflictFields.has(key as any)) {
+          flat[key] = undefined;
+        } else {
+          flat[key] = (result.data as any)[key].value;
+        }
+      }
+    });
+    return flat;
+  });
 
 const ALL_FIELDS: (keyof NormalizedData)[] = [
   'full_name',
@@ -38,26 +57,60 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
   'country'
 ];
 
-  const [resolvedData, setResolvedData] = useState<Record<string, any>>(() => {
-    // Flatten the MergedResult to a simple key-value object using the highest priority values
-    const flat: Record<string, any> = {};
-    Object.keys(result.data).forEach(key => {
-      if (key !== 'profile_photo') {
-        flat[key] = (result.data as any)[key].value;
-      }
-    });
-    return flat;
-  });
-
   useEffect(() => {
     async function fetchPhoto() {
       if (result.data.profile_photo?.storage_path) {
         const url = await getProfilePhotoSignedUrl(result.data.profile_photo.storage_path);
         setPhotoUrl(url);
+        setUsePhoto(true);
       }
     }
     fetchPhoto();
   }, [result.data.profile_photo]);
+
+  const handleUsePhoto = async () => {
+    if (result.data.profile_photo?.storage_path) {
+      setUsePhoto(true);
+      return;
+    }
+
+    if (!result.data.profile_photo?.bounding_box) {
+      toast.error("No profile photo bounding box available.");
+      return;
+    }
+
+    const jobWithFile = result.jobs?.find(j => j.frontFile);
+    const originalFile = jobWithFile?.frontFile;
+
+    if (!originalFile) {
+      toast.error("Original document file is unavailable for cropping.");
+      return;
+    }
+
+    try {
+      setIsCroppingPhoto(true);
+      const toastId = toast.loading("Cropping profile photo from original document...");
+
+      const formData = new FormData();
+      formData.append("file", originalFile);
+      formData.append("bounding_box", JSON.stringify(result.data.profile_photo.bounding_box));
+
+      const res = await cropAndUploadProfilePhoto(formData);
+
+      if (res.success && res.storagePath) {
+        result.data.profile_photo.storage_path = res.storagePath;
+        setPhotoUrl(res.signedUrl || null);
+        setUsePhoto(true);
+        toast.success("Profile photo cropped & prepared!", { id: toastId });
+      } else {
+        toast.error(res.error || "Failed to crop profile photo", { id: toastId });
+      }
+    } catch (err: any) {
+      toast.error("Crop error: " + err.message);
+    } finally {
+      setIsCroppingPhoto(false);
+    }
+  };
 
   const handleResolveConflict = (field: keyof NormalizedData, value: any) => {
     setResolvedData(prev => ({
@@ -67,6 +120,14 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
   };
 
   const handleConfirm = () => {
+    // Task 5: Check if there are unresolved conflicts
+    const unresolved = result.conflicts.filter(c => resolvedData[c.field] === undefined || resolvedData[c.field] === null || resolvedData[c.field] === "");
+    if (unresolved.length > 0) {
+      const fieldNames = unresolved.map(u => String(u.field).replace(/_/g, ' ')).join(', ');
+      toast.error(`Please resolve conflict(s) for: ${fieldNames} before auto-filling.`);
+      return;
+    }
+
     const finalData = { ...resolvedData };
     if (result.data.profile_photo?.storage_path && usePhoto) {
       finalData.photo_source = result.data.profile_photo.storage_path;
@@ -137,8 +198,8 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
                  </div>
                ))}
              </div>
-          </div>
-        )}
+           </div>
+         )}
 
         {result.conflicts.length > 0 && (
           <div className="mb-6 space-y-4">
@@ -192,39 +253,46 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
           </div>
         )}
 
-        {result.data.profile_photo && result.data.profile_photo.available && result.data.profile_photo.storage_path && (
+        {result.data.profile_photo && result.data.profile_photo.available && (
           <div className="mb-6 space-y-4">
             <h4 className="text-sm font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider border-b border-zinc-100 dark:border-zinc-800 pb-2">
               Profile Photo Extracted
             </h4>
             <div className="flex items-center space-x-6 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 rounded-lg p-4">
-              <div className="h-24 w-24 rounded-full border-4 border-white dark:border-zinc-800 bg-zinc-200 overflow-hidden shadow-sm shrink-0">
+              <div className="h-24 w-24 rounded-full border-4 border-white dark:border-zinc-800 bg-zinc-200 overflow-hidden shadow-sm shrink-0 flex items-center justify-center">
                 {photoUrl ? (
                   <img src={photoUrl} alt="Extracted profile" className="h-full w-full object-cover" />
+                ) : isCroppingPhoto ? (
+                  <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
                 ) : (
-                  <div className="h-full w-full animate-pulse bg-zinc-300 dark:bg-zinc-700" />
+                  <div className="text-xs text-zinc-400 text-center px-2">Click "Use Photo" to crop</div>
                 )}
               </div>
               <div className="flex-1 space-y-3">
                 <div>
-                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">AI found a portrait</p>
-                  <p className="text-xs text-zinc-500">Source: {result.data.profile_photo.source_document}</p>
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">AI detected portrait</p>
+                  <p className="text-xs text-zinc-500">Source: {result.data.profile_photo.source_document || 'Uploaded Document'}</p>
                 </div>
                 <div className="flex space-x-3">
                   <button
-                    onClick={() => setUsePhoto(true)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    type="button"
+                    onClick={handleUsePhoto}
+                    disabled={isCroppingPhoto}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center ${
                       usePhoto 
                         ? 'bg-indigo-600 text-white shadow-sm' 
-                        : 'bg-white text-zinc-700 border border-zinc-300 hover:bg-zinc-50'
+                        : 'bg-white text-zinc-700 border border-zinc-300 hover:bg-indigo-50 hover:text-indigo-700'
                     }`}
                   >
-                    Use Photo
+                    {isCroppingPhoto && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
+                    {usePhoto ? "✓ Photo Selected" : "Use Photo"}
                   </button>
                   <button
+                    type="button"
                     onClick={() => setUsePhoto(false)}
+                    disabled={isCroppingPhoto}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      !usePhoto 
+                      !usePhoto && !isCroppingPhoto
                         ? 'bg-red-600 text-white shadow-sm' 
                         : 'bg-white text-zinc-700 border border-zinc-300 hover:bg-red-50 hover:text-red-600'
                     }`}

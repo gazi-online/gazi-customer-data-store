@@ -68,3 +68,52 @@ export async function deleteCustomer(id: string) {
   revalidatePath("/customers");
   return { success: true };
 }
+
+export async function checkDuplicateCustomer(params: {
+  aadhaar_number?: string | null;
+  pan_number?: string | null;
+  phone?: string | null;
+  customer_code?: string | null;
+  excludeId?: string;
+}) {
+  const supabase = await createClient();
+  const warnings: string[] = [];
+
+  if (params.phone) {
+    let q = supabase.from("customers").select("id, first_name, last_name").eq("phone", params.phone);
+    if (params.excludeId) q = q.neq("id", params.excludeId);
+    const { data } = await q;
+    if (data && data.length > 0) {
+      warnings.push(`Phone number (${params.phone}) is already registered under ${data[0].first_name} ${data[0].last_name}.`);
+    }
+  }
+
+  if (params.aadhaar_number) {
+    let q = supabase.from("customers").select("id, first_name, last_name").eq("aadhaar_number", params.aadhaar_number);
+    if (params.excludeId) q = q.neq("id", params.excludeId);
+    const { data } = await q;
+    if (data && data.length > 0) {
+      warnings.push(`Aadhaar number (${params.aadhaar_number}) is already registered under ${data[0].first_name} ${data[0].last_name}.`);
+    }
+  }
+
+  if (params.pan_number) {
+    let q = supabase.from("customers").select("id, first_name, last_name").eq("pan_number", params.pan_number);
+    if (params.excludeId) q = q.neq("id", params.excludeId);
+    const { data } = await q;
+    if (data && data.length > 0) {
+      warnings.push(`PAN number (${params.pan_number}) is already registered under ${data[0].first_name} ${data[0].last_name}.`);
+    }
+  }
+
+  if (params.customer_code) {
+    let q = supabase.from("customers").select("id, first_name, last_name").eq("customer_code", params.customer_code);
+    if (params.excludeId) q = q.neq("id", params.excludeId);
+    const { data } = await q;
+    if (data && data.length > 0) {
+      warnings.push(`Customer Code (${params.customer_code}) is already assigned to ${data[0].first_name} ${data[0].last_name}.`);
+    }
+  }
+
+  return { hasDuplicates: warnings.length > 0, warnings };
+}

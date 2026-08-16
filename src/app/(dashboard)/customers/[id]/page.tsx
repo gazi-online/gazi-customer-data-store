@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { getCustomerById } from "../actions";
-import { getCustomerDocuments } from "@/app/(dashboard)/documents/actions";
+import { getCustomerDocuments, getCustomerAiImports } from "@/app/(dashboard)/documents/actions";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Edit, Mail, Phone, MapPin, Calendar, MessageCircle, FileText, Hash, ShieldCheck, Map, Users } from "lucide-react";
+import { ArrowLeft, Edit, Calendar, Hash, ShieldCheck, Phone, MessageCircle, Mail, Users, MapPin } from "lucide-react";
 import { DocumentUploadForm } from "@/components/forms/DocumentUploadForm";
-import { DocumentGrid } from "@/components/shared/DocumentGrid";
 import { getProfilePhotoSignedUrl } from "@/app/(dashboard)/customers/ai-actions";
+import { CustomerProfileTabs } from "@/components/customers/CustomerProfileTabs";
+import { getCustomerServices, getActiveServices } from "@/app/(dashboard)/services/actions";
 
 // Helper function to mask Aadhaar
 function maskAadhaar(aadhaar: string | null) {
@@ -33,20 +34,68 @@ export default async function CustomerProfilePage({
 }) {
   const { id } = await params;
   let customer;
-  let documents = [];
-  let displayPhotoUrl = null;
+  let activeDocuments = [];
+  let allDocuments = [];
+  let aiImports: any[] = [];
+  let customerServices: any[] = [];
+  let availableServices: any[] = [];
+  let displayPhotoUrl: string | null = null;
+
   try {
     customer = await getCustomerById(id);
-    documents = await getCustomerDocuments(id);
-    
+  } catch {
+    notFound();
+  }
+
+  try {
     if (customer.photo_source) {
       displayPhotoUrl = await getProfilePhotoSignedUrl(customer.photo_source);
     } else if (customer.photo_url) {
       displayPhotoUrl = customer.photo_url;
     }
-  } catch {
-    notFound();
+  } catch (err) {
+    console.error("Failed to fetch customer photo:", err);
   }
+
+  // Fetch Active Documents
+  try {
+    activeDocuments = await getCustomerDocuments(id, false);
+  } catch (err: any) {
+    console.error("Failed to fetch active documents:", err?.message || err);
+  }
+
+  // Fetch All Documents
+  try {
+    allDocuments = await getCustomerDocuments(id, true);
+  } catch (err: any) {
+    console.error("Failed to fetch all documents:", err?.message || err);
+  }
+
+  // Fetch AI Imports
+  try {
+    aiImports = await getCustomerAiImports(id);
+  } catch (err: any) {
+    console.error("Failed to fetch AI imports:", err?.message || err);
+  }
+
+  // Fetch Customer Services
+  let csRes: any[] = [];
+  try {
+    csRes = await getCustomerServices(id);
+  } catch (err: any) {
+    console.error("Failed to fetch customer services:", err?.message || err);
+  }
+  customerServices = csRes;
+
+  // Fetch Active Services
+  let asRes: any[] = [];
+  try {
+    asRes = await getActiveServices();
+    console.log(`[TRACE] getActiveServices() returned: ${asRes?.length || 0} rows`);
+  } catch (err: any) {
+    console.error(`[TRACE] getActiveServices() Error: ${err.code || 'UNKNOWN_CODE'} - ${err.message || err}`);
+  }
+  availableServices = asRes;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -259,17 +308,17 @@ export default async function CustomerProfilePage({
             </div>
           </div>
           
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
-             <div className="flex items-center justify-between mb-6 border-b border-zinc-100 dark:border-zinc-800 pb-4">
-               <h2 className="text-lg font-semibold text-zinc-900 dark:text-white flex items-center">
-                 <FileText className="mr-2 h-5 w-5 text-blue-600" />
-                 Customer Documents
-               </h2>
-             </div>
-             
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-6">
              <DocumentUploadForm customerId={id} />
              
-             <DocumentGrid documents={documents} customerId={id} />
+             <CustomerProfileTabs
+               customerId={id}
+               documents={activeDocuments}
+               allDocuments={allDocuments}
+               aiImports={aiImports}
+               customerServices={customerServices || []}
+               availableServices={availableServices || []}
+             />
           </div>
         </div>
       </div>

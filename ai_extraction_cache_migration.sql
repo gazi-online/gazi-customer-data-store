@@ -1,6 +1,12 @@
+-- ==============================================================================
+-- AI EXTRACTION CACHE HARDENING MIGRATION
+-- Migration to harden cache uniqueness from global request_hash to per-user (created_by, request_hash)
+-- ==============================================================================
+
+-- 1. Create table with per-user composite unique constraint if not exists
 CREATE TABLE IF NOT EXISTS public.ai_extraction_cache (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  request_hash text UNIQUE NOT NULL,
+  request_hash text NOT NULL,
   created_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   provider text NOT NULL,
   model_name text NOT NULL,
@@ -9,16 +15,35 @@ CREATE TABLE IF NOT EXISTS public.ai_extraction_cache (
   created_at timestamptz DEFAULT timezone('utc', now()) NOT NULL,
   expires_at timestamptz,
   hit_count integer DEFAULT 0 NOT NULL,
-  last_used_at timestamptz DEFAULT timezone('utc', now()) NOT NULL
+  last_used_at timestamptz DEFAULT timezone('utc', now()) NOT NULL,
+  CONSTRAINT ai_extraction_cache_user_request_hash_key UNIQUE (created_by, request_hash)
 );
 
--- Index for fast lookup by request_hash
-CREATE INDEX IF NOT EXISTS idx_ai_extraction_cache_request_hash ON public.ai_extraction_cache(request_hash);
+-- 2. Safely drop legacy global request_hash UNIQUE constraints if present on existing installations
+ALTER TABLE public.ai_extraction_cache DROP CONSTRAINT IF EXISTS ai_extraction_cache_request_hash_key;
+ALTER TABLE public.ai_extraction_cache DROP CONSTRAINT IF EXISTS ai_extraction_cache_request_hash_unique;
 
--- Enable Row Level Security (RLS)
+-- 3. Safely drop redundant standalone index on request_hash if present
+DROP INDEX IF EXISTS public.idx_ai_extraction_cache_request_hash;
+
+-- 4. Ensure Composite Unique Constraint on (created_by, request_hash) is applied idempotently
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'ai_extraction_cache_user_request_hash_key' 
+      AND conrelid = 'public.ai_extraction_cache'::regclass
+  ) THEN
+    ALTER TABLE public.ai_extraction_cache 
+      ADD CONSTRAINT ai_extraction_cache_user_request_hash_key 
+      UNIQUE (created_by, request_hash);
+  END IF;
+END $$;
+
+-- 5. Enable Row Level Security (RLS)
 ALTER TABLE public.ai_extraction_cache ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies (Strict privacy matching ai_import_history)
+-- 6. RLS Policies (Strict privacy & user isolation matching ai_import_history)
 DROP POLICY IF EXISTS "Users can insert own cache" ON public.ai_extraction_cache;
 DROP POLICY IF EXISTS "Users can view own cache" ON public.ai_extraction_cache;
 DROP POLICY IF EXISTS "Users can update own cache" ON public.ai_extraction_cache;
@@ -44,7 +69,7 @@ CREATE POLICY "Users can delete own cache"
   FOR DELETE
   USING (auth.uid() = created_by);
 
--- Security Hardened Cleanup function for expired cache entries
+-- 7. Security Hardened Cleanup function for expired cache entries
 CREATE OR REPLACE FUNCTION public.cleanup_expired_ai_cache()
 RETURNS integer
 LANGUAGE plpgsql

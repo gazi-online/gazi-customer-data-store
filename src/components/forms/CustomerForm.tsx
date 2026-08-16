@@ -11,7 +11,8 @@ import { Customer, CustomerFormData } from "@/types/customer";
 import { getProfilePhotoSignedUrl } from "@/app/(dashboard)/customers/ai-actions";
 import { createClient } from "@/lib/supabase/client";
 import { v4 as uuidv4 } from "uuid";
-import { createCustomer, updateCustomer } from "@/app/(dashboard)/customers/actions";
+import { createCustomer, updateCustomer, checkDuplicateCustomer } from "@/app/(dashboard)/customers/actions";
+import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { AiSmartImportEngine } from "../AiSmartImportEngine";
 
 const customerSchema = z.object({
@@ -53,9 +54,11 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [aiDataApplied, setAiDataApplied] = useState(false);
+  const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
   const isEditing = !!initialData;
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<CustomerFormData>({
+  const { register, handleSubmit, setValue, watch, getValues, formState: { errors } } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues: initialData ? {
       first_name: initialData.first_name,
@@ -153,16 +156,43 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   };
 
   const handleAutoFill = (data: Record<string, any>) => {
+    const currentValues = getValues();
+
     Object.keys(data).forEach(field => {
-       if (data[field] !== undefined && data[field] !== null && data[field] !== "") {
-         setValue(field as any, data[field], { shouldValidate: true, shouldDirty: true });
-       }
+      // Do not overwrite manually uploaded profile photo unless current photo is empty
+      if (field === 'photo_source' && currentValues.photo_source && currentValues.photo_source.length > 0) {
+        return;
+      }
+
+      // Only populate non-empty approved AI fields
+      if (data[field] !== undefined && data[field] !== null && data[field] !== "") {
+        setValue(field as any, data[field], { shouldValidate: true, shouldDirty: true });
+      }
     });
+
+    setAiDataApplied(true);
+    toast.success("AI extracted data applied to form. Please review before saving.");
   };
 
   const onSubmit = async (data: CustomerFormData) => {
     setIsLoading(true);
+    setDuplicateWarnings([]);
+
     try {
+      // Task 9: Check for existing duplicates
+      const dupCheck = await checkDuplicateCustomer({
+        aadhaar_number: data.aadhaar_number,
+        pan_number: data.pan_number,
+        phone: data.phone,
+        customer_code: data.customer_code,
+        excludeId: initialData?.id
+      });
+
+      if (dupCheck.hasDuplicates) {
+        setDuplicateWarnings(dupCheck.warnings);
+        dupCheck.warnings.forEach(w => toast.warning(w));
+      }
+
       // Clean up empty optional fields
       const cleanedData = {
         ...data,
@@ -216,6 +246,41 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
       {/* Advanced AI Smart Import Engine */}
       {!isEditing && <AiSmartImportEngine onAutoFill={handleAutoFill} />}
+
+      {/* Task 7: AI Data Review Banner */}
+      {aiDataApplied && (
+        <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center space-x-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">AI Data Applied</p>
+              <p className="text-xs text-emerald-700 dark:text-emerald-300">Form fields have been populated from AI extraction. Please review before saving.</p>
+            </div>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setAiDataApplied(false)}
+            className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-medium"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Task 9: Duplicate Warnings Banner */}
+      {duplicateWarnings.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4 space-y-2 shadow-sm animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center space-x-2 text-amber-800 dark:text-amber-200 font-semibold text-sm">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>Duplicate Warnings Found</span>
+          </div>
+          <ul className="list-disc list-inside text-xs text-amber-700 dark:text-amber-300 space-y-1">
+            {duplicateWarnings.map((warning, idx) => (
+              <li key={idx}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-8 shadow-sm space-y-8 relative">
         

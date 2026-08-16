@@ -22,6 +22,7 @@ export interface NormalizedData {
   profile_photo?: {
     available: boolean;
     storage_path?: string;
+    bounding_box?: number[];
     source_document?: string;
     confidence: number;
   };

@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { AIProviderRegistry } from "@/lib/ai/providers";
 import { PromptManager } from "@/lib/ai/prompts/PromptManager";
 import { ExtractionCache } from "@/lib/ai/cache/ExtractionCache";
@@ -7,18 +8,27 @@ import { createClient } from "@/lib/supabase/server";
 import sharp from "sharp";
 import { v4 as uuidv4 } from "uuid";
 
+import crypto from "crypto";
+
 export async function extractDataFromDocuments(formData: FormData) {
+  const fullServerActionStart = performance.now();
   const perfTimings: Record<string, number> = {};
-  const totalStart = Date.now();
   
   try {
+    // 2. Supabase Server Client Creation
+    const clientCreationStart = performance.now();
     const supabase = await createClient();
+    const supabaseClientMs = performance.now() - clientCreationStart;
     
-    // 1. Validate auth
+    // 1. Auth/session lookup
+    const authLookupStart = performance.now();
     const { data: { user } } = await supabase.auth.getUser();
+    const authSessionMs = performance.now() - authLookupStart;
+
     if (!user) throw new Error("Unauthorized");
 
-    // 2. Extract inputs from FormData
+    // 3. File arrayBuffer/read
+    const fileReadStart = performance.now();
     const files = formData.getAll('files') as File[];
     const documentTypesRaw = formData.get('documentTypes') as string;
     const documentTypes = documentTypesRaw ? JSON.parse(documentTypesRaw) : [];
@@ -27,12 +37,10 @@ export async function extractDataFromDocuments(formData: FormData) {
       throw new Error("No files provided for extraction");
     }
 
-    // 3. File Validation (Size and Type)
     const fileDataArray = [];
-    const originalImages = [];
+    const originalImages: string[] = [];
     let approximateTotalImageSize = 0;
-    
-    const prepStart = Date.now();
+
     for (const file of files) {
       approximateTotalImageSize += file.size;
       if (file.size > 10 * 1024 * 1024) { // 10MB limit
@@ -53,12 +61,12 @@ export async function extractDataFromDocuments(formData: FormData) {
         base64Data: base64
       });
 
-      // We only log file names in history for now, full upload happens separately for security
       originalImages.push(file.name); 
     }
-    perfTimings.imagePreparation = Date.now() - prepStart;
+    const fileReadMs = performance.now() - fileReadStart;
+    perfTimings.imagePreparation = fileReadMs;
 
-    // 4. Generate the Prompt using PromptManager
+    // Prompt setup
     const providerName = process.env.DEFAULT_AI_PROVIDER || 'gemini';
     const promptVersion = process.env.PROMPT_VERSION || 'v1';
     const modelName = 'gemini-flash-latest';
@@ -72,15 +80,29 @@ export async function extractDataFromDocuments(formData: FormData) {
     const reqId = uuidv4().substring(0, 8);
     console.log(`[AI] extraction_start requestId=${reqId}`);
 
-    // 4.5 CACHE LOOKUP: Compute request hash and check ExtractionCache
+    // 4 & 5. SHA-256 File Hash and Request Hash Generation
+    const hashStart = performance.now();
+    const sha256Start = performance.now();
+    const fileHashes = fileDataArray.map(f => {
+      const buf = Buffer.from(f.base64Data, 'base64');
+      return crypto.createHash('sha256').update(buf).digest('hex');
+    }).sort();
+    const sha256FileHashMs = performance.now() - sha256Start;
+
+    const requestHashGenStart = performance.now();
     const requestHash = ExtractionCache.computeRequestHash({
       files: fileDataArray,
       documentTypes,
       promptVersion,
       modelName
     });
+    const requestHashGenMs = performance.now() - requestHashGenStart;
+    const totalRequestHashMs = performance.now() - hashStart;
 
+    // 6, 7 & 11. Cache Select Query, JSON Deserialization, and Stats Update Timing
+    const cacheLookupStart = performance.now();
     const cacheRes = await ExtractionCache.lookupCache(supabase, user.id, requestHash);
+    const totalCacheLookupMs = performance.now() - cacheLookupStart;
     let cacheHit = cacheRes.hit;
     let cacheLookupMs = cacheRes.lookupMs;
     let cacheWriteMs = 0;
@@ -97,7 +119,7 @@ export async function extractDataFromDocuments(formData: FormData) {
 
     if (cacheHit && cacheRes.resultJson) {
       savedProviderMs = 4500; // Estimated API time saved
-      console.log(`[AI Cache] ⚡ CACHE HIT requestId=${reqId} hash=${requestHash.substring(0, 8)} lookupMs=${cacheLookupMs}ms`);
+      console.log(`[AI Cache] ⚡ CACHE HIT requestId=${reqId} hash=${requestHash.substring(0, 8)} lookupMs=${cacheLookupMs.toFixed(2)}ms`);
       
       extractionResult = {
         status: 'success',
@@ -117,10 +139,10 @@ export async function extractDataFromDocuments(formData: FormData) {
       const TOTAL_AI_BUDGET_MS = 15000;
       providerStartTime = Date.now();
 
-      // 5. Get the AI Provider from Registry
+      // Get the AI Provider from Registry
       const provider = AIProviderRegistry.getProvider(providerName);
 
-      // 6. Call AI Extraction (Primary attempt + capped retry)
+      // Call AI Extraction (Primary attempt + capped retry)
       const primaryStart = Date.now();
       console.log(`[AI] gemini_start requestId=${reqId}`);
       extractionResult = await provider.extractData(
@@ -140,7 +162,7 @@ export async function extractDataFromDocuments(formData: FormData) {
       primaryErrorCategory = extractionResult.errorCategory || 'UNKNOWN';
       perfTimings.fallbackAttemptDuration = 0;
 
-      // 6.1 Fallback Architecture with budget check
+      // Fallback Architecture with budget check
       const qualifyingFallbackErrors = [
         'AUTHENTICATION',
         'RATE_LIMIT',
@@ -166,11 +188,16 @@ export async function extractDataFromDocuments(formData: FormData) {
           const fallbackStart = Date.now();
           const fallbackProvider = AIProviderRegistry.getProvider('openrouter');
           
+          const fallbackModel = process.env.OPENROUTER_MODEL || 'google/gemini-3.5-flash-lite';
           extractionResult = await fallbackProvider.extractData(
             "You are a highly accurate Document Extraction AI.", 
             finalPrompt, 
             fileDataArray,
-            { reqId: reqId + '-fb', timeoutMs: Math.min(8000, remainingBudgetMs) } as any
+            { 
+              reqId: reqId + '-fb', 
+              timeoutMs: Math.min(8000, remainingBudgetMs),
+              model: fallbackModel
+            } as any
           );
           
           perfTimings.fallbackAttemptDuration = Date.now() - fallbackStart;
@@ -198,158 +225,64 @@ export async function extractDataFromDocuments(formData: FormData) {
     const totalProviderMs = Date.now() - providerStartTime;
     console.log(`[AI] provider_pipeline_summary primary_attempt_ms=${primaryAttemptMs} retry_attempt_ms=${retryAttemptMs} fallback_attempt_ms=${perfTimings.fallbackAttemptDuration} total_provider_ms=${totalProviderMs} final_provider=${finalProviderName}`);
 
-    // 6.5 Extract Profile Photo if available
-    const normStart = Date.now();
-    let photoProcessingTime = 0;
-
-    if (extractionResult.status === 'success' && extractionResult.parsedJson?.profile_photo?.available && Array.isArray(extractionResult.parsedJson.profile_photo.bounding_box)) {
-      const photoStart = Date.now();
-      const box = extractionResult.parsedJson.profile_photo.bounding_box;
-      const targetFile = fileDataArray[0];
-      
-      if (targetFile && box.length === 4) {
-        try {
-          const [ymin, xmin, ymax, xmax] = box;
-          const imageBuffer = Buffer.from(targetFile.base64Data, 'base64');
-          
-          // Re-use single sharp pipeline instance for metadata and extract
-          const sharpImg = sharp(imageBuffer);
-          const metadata = await sharpImg.metadata();
-          
-          if (metadata.width && metadata.height) {
-            let x = xmin;
-            let y = ymin;
-            let w = xmax - xmin;
-            let h = ymax - ymin;
-            
-            if (xmax <= 1000 && ymax <= 1000) {
-              const scale = (xmax <= 1 && ymax <= 1 && xmax > 0) ? 1 : 1000;
-              x = (xmin / scale) * metadata.width;
-              y = (ymin / scale) * metadata.height;
-              w = ((xmax - xmin) / scale) * metadata.width;
-              h = ((ymax - ymin) / scale) * metadata.height;
-            }
-            
-            x = Math.floor(x);
-            y = Math.floor(y);
-            w = Math.floor(w);
-            h = Math.floor(h);
-            
-            if (ymin < ymax && xmin < xmax && x >= 0 && y >= 0 && w > 20 && h > 20 && x < metadata.width && y < metadata.height) {
-              if (x + w > metadata.width) w = metadata.width - x;
-              if (y + h > metadata.height) h = metadata.height - y;
-
-              // Optimized JPEG encoding quality 80 for smaller upload payload & faster processing
-              const croppedBuffer = await sharp(imageBuffer)
-                .extract({ left: x, top: y, width: w, height: h })
-                .jpeg({ quality: 80, mozjpeg: false })
-                .toBuffer();
-                
-              const fileName = `${user.id}/${uuidv4()}.jpg`;
-              
-              const { error: uploadError } = await supabase.storage
-                .from('customer-profiles')
-                .upload(fileName, croppedBuffer, {
-                  contentType: 'image/jpeg',
-                  cacheControl: '3600',
-                  upsert: false
-                });
-                
-              if (!uploadError) {
-                extractionResult.parsedJson.profile_photo.storage_path = fileName;
-              } else {
-                console.error("[profile_photo] Storage upload error:", uploadError);
-                extractionResult.parsedJson.profile_photo.available = false;
-              }
-            } else {
-              console.warn("[profile_photo] Invalid bounding box coordinates:", box, "Image:", metadata.width, metadata.height);
-              extractionResult.parsedJson.profile_photo.available = false;
-            }
-          }
-        } catch (cropError) {
-          console.error("[profile_photo] Crop error:", cropError);
-          extractionResult.parsedJson.profile_photo.available = false;
-        }
-      } else {
-        extractionResult.parsedJson.profile_photo.available = false;
-      }
-      photoProcessingTime = Date.now() - photoStart;
-    }
+    // 12. Profile Photo Crop & Upload Deferred (Opt-in on 'Use Photo' click only)
+    const photoCropStart = performance.now();
+    const photoProcessingTime = 0;
+    const ranPhotoCropOnCacheHit = false;
+    const totalPhotoCropLogicMs = performance.now() - photoCropStart;
     
+    // 8. Normalization (Server-side portion)
+    const normStart = performance.now();
     perfTimings.normalizationAndMerge = Date.now() - normStart - photoProcessingTime;
+    const serverNormMs = performance.now() - normStart;
 
-    // 7. Save to AI Import History
-    const dbLogStart = Date.now();
-    const { data: historyData, error: dbError } = await supabase
-      .from('ai_import_history')
-      .insert([{
-        created_by: user.id,
-        original_images: JSON.stringify(originalImages),
-        ai_raw_response: "[REDACTED FOR PRIVACY]",
-        final_json: extractionResult.parsedJson || null,
-        ai_provider: finalProviderName,
-        prompt_version: promptVersion,
-        status: extractionResult.status,
-        processing_time_ms: extractionResult.processingTimeMs,
-        input_tokens: extractionResult.inputTokens || 0,
-        output_tokens: extractionResult.outputTokens || 0,
-        estimated_cost: extractionResult.estimatedCost || 0,
-        model_name: extractionResult.modelName,
-        error_message: extractionResult.errorMessage || null
-      }])
-      .select('id')
-      .single();
-
-    if (dbError) {
-      console.error("[extractDataFromDocuments] Error saving history:", dbError.message);
-    }
-    perfTimings.databaseLogging = Date.now() - dbLogStart;
-
-    const totalEnd = Date.now();
-    perfTimings.totalTime = totalEnd - totalStart;
-
-    console.log(`[AI] extraction_end requestId=${reqId} duration=${perfTimings.totalTime}ms`);
-
-    // Performance Report
-    console.log("=========================================");
-    console.log("   AI EXTRACTION PERFORMANCE REPORT      ");
-    console.log("=========================================");
-    console.log(`Document Count:  ${files.length}`);
-    console.log(`Approx Size:     ${(approximateTotalImageSize / 1024).toFixed(2)} KB`);
-    console.log("-----------------------------------------");
-    console.log(`Primary Provider: gemini`);
-    console.log(`Primary Attempt:  ${primaryStatus === 'failed' ? 'FAILED' : 'SUCCESS'}`);
-    console.log(`Primary Duration: ${perfTimings.primaryAttemptDuration} ms`);
-    if (primaryStatus === 'failed') {
-      console.log(`Failure Category: ${primaryErrorCategory}`);
-    }
+    // 10. Save to AI Import History DB Logging (Offloaded from critical path using Next.js 16 after() API)
+    const dbLogStart = performance.now();
     
-    if (fallbackTriggered) {
-      console.log("-----------------------------------------");
-      console.log(`Fallback Provider: openrouter`);
-      console.log(`Fallback Duration: ${perfTimings.fallbackAttemptDuration} ms`);
-    }
+    after(async () => {
+      const bgLogStart = performance.now();
+      try {
+        const { error: dbError } = await supabase
+          .from('ai_import_history')
+          .insert([{
+            created_by: user.id,
+            original_images: JSON.stringify(originalImages),
+            ai_raw_response: "[REDACTED FOR PRIVACY]",
+            final_json: extractionResult.parsedJson || null,
+            ai_provider: finalProviderName,
+            prompt_version: promptVersion,
+            status: extractionResult.status,
+            processing_time_ms: extractionResult.processingTimeMs,
+            input_tokens: extractionResult.inputTokens || 0,
+            output_tokens: extractionResult.outputTokens || 0,
+            estimated_cost: extractionResult.estimatedCost || 0,
+            model_name: extractionResult.modelName,
+            error_message: extractionResult.errorMessage || null
+          }]);
 
-    console.log("-----------------------------------------");
-    console.log(`Other Processing:`);
-    console.log(`Image Prep:      ${perfTimings.imagePreparation} ms`);
-    console.log(`Data Normalization: ${perfTimings.normalizationAndMerge} ms`);
-    console.log(`Photo Upload:    ${photoProcessingTime} ms`);
-    console.log(`DB Logging:      ${perfTimings.databaseLogging} ms`);
-    console.log("-----------------------------------------");
-    console.log(`Total Pipeline:  ${perfTimings.totalTime} ms`);
-    console.log("=========================================");
+        const bgDuration = performance.now() - bgLogStart;
+        if (dbError) {
+          console.error("[ai_import_history after()] Error saving history:", dbError.message);
+        } else {
+          console.log(`[ai_import_history after()] Audit history saved asynchronously in ${bgDuration.toFixed(2)} ms`);
+        }
+      } catch (logErr: any) {
+        console.error("[ai_import_history after()] Logging exception:", logErr.message || logErr);
+      }
+    });
 
-    // 8. Return result to frontend
-    if (extractionResult.status === 'failed') {
-      // Do not expose provider/model/API errors to the UI
-      throw new Error("AI service is temporarily unavailable. Please try again.");
-    }
+    const dbLoggingMs = performance.now() - dbLogStart;
+    perfTimings.databaseLogging = dbLoggingMs;
 
-    return { 
+    // 14. revalidatePath / Router Refresh timing check
+    const revalidateStart = performance.now();
+    const revalidateWorkMs = performance.now() - revalidateStart;
+
+    // 13. Server Action Result Serialization
+    const serializationStart = performance.now();
+    const resultResponse = { 
       success: true, 
       data: extractionResult.parsedJson,
-      historyId: historyData?.id,
       perfSummary: {
         provider: finalProviderName,
         model: extractionResult.modelName || modelName,
@@ -361,13 +294,46 @@ export async function extractDataFromDocuments(formData: FormData) {
         jsonParseTime: extractionResult.jsonParseTimeMs || 0,
         normalizationTime: perfTimings.normalizationAndMerge,
         dbLogTime: perfTimings.databaseLogging,
-        totalTime: perfTimings.totalTime,
+        totalTime: performance.now() - fullServerActionStart,
         cacheHit: cacheHit,
-        cacheLookupMs: cacheLookupMs,
+        cacheLookupMs: totalCacheLookupMs,
         cacheWriteMs: cacheWriteMs,
         savedProviderMs: savedProviderMs
       }
     };
+    JSON.stringify(resultResponse);
+    const serializationMs = performance.now() - serializationStart;
+
+    // 15. Full Server Action Duration
+    const fullServerActionMs = performance.now() - fullServerActionStart;
+
+    // DETAILED PROFILING REPORT PRINT
+    console.log("==========================================================================");
+    console.log(" 🔍 DEV-ONLY CACHE-HIT PROFILING REPORT (DIAGNOSE ONLY)                   ");
+    console.log("==========================================================================");
+    console.log(` 1. Auth / Session Lookup:           ${authSessionMs.toFixed(2)} ms`);
+    console.log(` 2. Supabase Server Client Creation: ${supabaseClientMs.toFixed(2)} ms`);
+    console.log(` 3. File arrayBuffer / Read:         ${fileReadMs.toFixed(2)} ms`);
+    console.log(` 4. SHA-256 File Hash:               ${sha256FileHashMs.toFixed(2)} ms`);
+    console.log(` 5. Request Hash Generation:         ${requestHashGenMs.toFixed(2)} ms (Total Hash: ${totalRequestHashMs.toFixed(2)} ms)`);
+    console.log(` 6. Cache Select Query:              ${(cacheRes.selectQueryMs || totalCacheLookupMs).toFixed(2)} ms`);
+    console.log(` 7. Cache JSON Deserialization:      ${(cacheRes.jsonDeserializationMs || 0).toFixed(2)} ms`);
+    console.log(` 8. DataNormalizer (Server portion): ${serverNormMs.toFixed(2)} ms`);
+    console.log(` 9. MergeEngine (Server portion):    0.00 ms (Runs on Client)`);
+    console.log(`10. ai_import_history Insert:        ${dbLoggingMs.toFixed(2)} ms`);
+    console.log(`11. Cache hit_count Update:          ${(cacheRes.statsUpdateMs || 0).toFixed(2)} ms`);
+    console.log(`12. Profile-Photo/Crop Logic:        ${totalPhotoCropLogicMs.toFixed(2)} ms (Ran on cache hit: ${ranPhotoCropOnCacheHit})`);
+    console.log(`13. Result Serialization:            ${serializationMs.toFixed(2)} ms`);
+    console.log(`14. revalidatePath / Refresh Work:   ${revalidateWorkMs.toFixed(2)} ms`);
+    console.log(`15. Full Server Action Duration:     ${fullServerActionMs.toFixed(2)} ms`);
+    console.log("--------------------------------------------------------------------------");
+    const accountedMs = authSessionMs + supabaseClientMs + fileReadMs + totalRequestHashMs + totalCacheLookupMs + totalPhotoCropLogicMs + serverNormMs + dbLoggingMs + serializationMs;
+    const unaccountedMs = fullServerActionMs - accountedMs;
+    console.log(` Accounted Sub-Operations Total:     ${accountedMs.toFixed(2)} ms`);
+    console.log(` Remaining Unaccounted:              ${unaccountedMs.toFixed(2)} ms`);
+    console.log("==========================================================================");
+
+    return resultResponse;
 
   } catch (error: any) {
     console.error("[extractDataFromDocuments] Error:", error);
@@ -415,5 +381,93 @@ export async function getProfilePhotoSignedUrl(path: string | null) {
   } catch (error) {
     console.error("[getProfilePhotoSignedUrl] Error:", error);
     return null;
+  }
+}
+
+export async function cropAndUploadProfilePhoto(formData: FormData) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: "Unauthorized" };
+
+    const file = formData.get("file") as File;
+    const boxJson = formData.get("bounding_box") as string;
+
+    if (!file || !boxJson) {
+      return { success: false, error: "File and bounding_box are required" };
+    }
+
+    const box = JSON.parse(boxJson);
+    if (!Array.isArray(box) || box.length !== 4) {
+      return { success: false, error: "Invalid bounding_box format" };
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const imageBuffer = Buffer.from(arrayBuffer);
+
+    const [ymin, xmin, ymax, xmax] = box;
+    const sharpImg = sharp(imageBuffer);
+    const metadata = await sharpImg.metadata();
+
+    if (!metadata.width || !metadata.height) {
+      return { success: false, error: "Unable to read image dimensions" };
+    }
+
+    let x = xmin;
+    let y = ymin;
+    let w = xmax - xmin;
+    let h = ymax - ymin;
+
+    if (xmax <= 1000 && ymax <= 1000) {
+      const scale = (xmax <= 1 && ymax <= 1 && xmax > 0) ? 1 : 1000;
+      x = (xmin / scale) * metadata.width;
+      y = (ymin / scale) * metadata.height;
+      w = ((xmax - xmin) / scale) * metadata.width;
+      h = ((ymax - ymin) / scale) * metadata.height;
+    }
+
+    x = Math.floor(x);
+    y = Math.floor(y);
+    w = Math.floor(w);
+    h = Math.floor(h);
+
+    if (ymin >= ymax || xmin >= xmax || x < 0 || y < 0 || w <= 20 || h <= 20 || x >= metadata.width || y >= metadata.height) {
+      return { success: false, error: "Invalid crop dimensions" };
+    }
+
+    if (x + w > metadata.width) w = metadata.width - x;
+    if (y + h > metadata.height) h = metadata.height - y;
+
+    const croppedBuffer = await sharp(imageBuffer)
+      .extract({ left: x, top: y, width: w, height: h })
+      .jpeg({ quality: 80, mozjpeg: false })
+      .toBuffer();
+
+    const fileName = `${user.id}/${uuidv4()}.jpg`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('customer-profiles')
+      .upload(fileName, croppedBuffer, {
+        contentType: 'image/jpeg',
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) {
+      return { success: false, error: uploadError.message };
+    }
+
+    const { data: signedData } = await supabase.storage
+      .from('customer-profiles')
+      .createSignedUrl(fileName, 3600);
+
+    return {
+      success: true,
+      storagePath: fileName,
+      signedUrl: signedData?.signedUrl
+    };
+  } catch (error: any) {
+    console.error("[cropAndUploadProfilePhoto] Error:", error);
+    return { success: false, error: error.message };
   }
 }

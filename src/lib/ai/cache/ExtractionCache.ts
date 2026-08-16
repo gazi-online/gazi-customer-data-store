@@ -5,6 +5,9 @@ export interface CacheLookupResult {
   hit: boolean;
   resultJson?: any;
   lookupMs: number;
+  selectQueryMs?: number;
+  jsonDeserializationMs?: number;
+  statsUpdateMs?: number;
 }
 
 export interface CacheSaveOptions {
@@ -57,33 +60,44 @@ export class ExtractionCache {
     userId: string,
     requestHash: string
   ): Promise<CacheLookupResult> {
-    const startTime = Date.now();
+    const startTime = performance.now();
+    let selectQueryMs = 0;
+    let jsonDeserializationMs = 0;
+    let statsUpdateMs = 0;
+
     try {
+      const selectStart = performance.now();
       const { data, error } = await supabase
         .from('ai_extraction_cache')
         .select('*')
         .eq('request_hash', requestHash)
         .eq('created_by', userId)
         .maybeSingle();
+      selectQueryMs = performance.now() - selectStart;
 
-      const lookupMs = Date.now() - startTime;
+      const lookupMs = performance.now() - startTime;
 
       if (error) {
         console.warn("[ExtractionCache] Cache lookup warning:", error.message);
-        return { hit: false, lookupMs };
+        return { hit: false, lookupMs, selectQueryMs, jsonDeserializationMs, statsUpdateMs };
       }
 
       if (!data) {
-        return { hit: false, lookupMs };
+        return { hit: false, lookupMs, selectQueryMs, jsonDeserializationMs, statsUpdateMs };
       }
 
       // Expiry Check
       if (data.expires_at && new Date(data.expires_at) < new Date()) {
         console.log(`[ExtractionCache] Cache expired for hash=${requestHash.substring(0, 8)}`);
-        return { hit: false, lookupMs };
+        return { hit: false, lookupMs, selectQueryMs, jsonDeserializationMs, statsUpdateMs };
       }
 
-      // Increment hit_count and update last_used_at asynchronously
+      const deserialStart = performance.now();
+      const resultJson = data.result_json;
+      jsonDeserializationMs = performance.now() - deserialStart;
+
+      // Increment hit_count and update last_used_at
+      const statsStart = performance.now();
       supabase
         .from('ai_extraction_cache')
         .update({
@@ -92,17 +106,21 @@ export class ExtractionCache {
         })
         .eq('id', data.id)
         .then(({ error: updateErr }) => {
+          statsUpdateMs = performance.now() - statsStart;
           if (updateErr) console.warn("[ExtractionCache] Error updating cache stats:", updateErr.message);
         });
 
       return {
         hit: true,
-        resultJson: data.result_json,
-        lookupMs
+        resultJson,
+        lookupMs,
+        selectQueryMs,
+        jsonDeserializationMs,
+        statsUpdateMs
       };
     } catch (err: any) {
       console.warn("[ExtractionCache] Cache lookup exception:", err.message || err);
-      return { hit: false, lookupMs: Date.now() - startTime };
+      return { hit: false, lookupMs: performance.now() - startTime, selectQueryMs, jsonDeserializationMs, statsUpdateMs };
     }
   }
 
@@ -140,7 +158,7 @@ export class ExtractionCache {
             expires_at: expiresAt,
             last_used_at: new Date().toISOString()
           },
-          { onConflict: 'request_hash' }
+          { onConflict: 'created_by,request_hash' }
         );
 
       const writeMs = Date.now() - startTime;

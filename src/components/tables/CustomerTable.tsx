@@ -88,9 +88,9 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
               customers.map((customer) => (
                 <tr key={customer.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
                   <td className="px-6 py-4">
-                    <div className="font-medium text-zinc-900 dark:text-zinc-50">
+                    <Link href={`/customers/${customer.id}`} className="font-medium text-zinc-900 dark:text-zinc-50 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                       {customer.first_name} {customer.middle_name ? `${customer.middle_name} ` : ""}{customer.last_name}
-                    </div>
+                    </Link>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-zinc-600 dark:text-zinc-300">{customer.phone}</div>

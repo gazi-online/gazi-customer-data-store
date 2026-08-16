@@ -26,11 +26,17 @@ export async function getDashboardStats() {
     .select("*", { count: 'exact', head: true })
     .gte("created_at", today.toISOString());
 
+  const { count: activeServices } = await supabase
+    .from("customer_services")
+    .select("*", { count: 'exact', head: true })
+    .in("status", ["pending", "in_progress"]);
+
   return {
     totalCustomers: totalCustomers || 0,
     activeCustomers: activeCustomers || 0,
     inactiveCustomers: inactiveCustomers || 0,
     todayEntries: todayEntries || 0,
+    activeServices: activeServices || 0,
   };
 }
 

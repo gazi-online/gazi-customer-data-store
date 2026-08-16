@@ -52,10 +52,11 @@ export class DataNormalizer {
       normalized.internal_conflicts = rawData.conflicts;
     }
 
-    if (profilePhoto && profilePhoto.available && profilePhoto.storage_path) {
+    if (profilePhoto && profilePhoto.available) {
       normalized.profile_photo = {
         available: profilePhoto.available,
         storage_path: profilePhoto.storage_path,
+        bounding_box: profilePhoto.bounding_box,
         source_document: profilePhoto.source_document,
         confidence: profilePhoto.confidence || 1.0,
       };
