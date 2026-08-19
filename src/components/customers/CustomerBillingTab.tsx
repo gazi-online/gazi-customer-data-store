@@ -73,7 +73,13 @@ export function CustomerBillingTab({
           <p className="text-xs text-zinc-500">Customer ledger, outstanding balance & transaction history.</p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Link
+            href={`/reports?tab=statement&customer_id=${customerId}`}
+            className="inline-flex items-center justify-center px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-lg transition-colors font-medium text-xs border border-zinc-200 dark:border-zinc-700"
+          >
+            <Receipt className="h-3.5 w-3.5 mr-1 text-indigo-500" /> View Full Statement
+          </Link>
           <Link
             href={`/invoices/new?customer_id=${customerId}`}
             className="inline-flex items-center justify-center px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-xs shadow-sm"
