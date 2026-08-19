@@ -1,0 +1,303 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { PaymentMethod } from "@/types/billing";
+import { BillingEngine } from "@/lib/billing/BillingEngine";
+
+export async function getPayments(
+  searchQuery?: string,
+  statusFilter?: string,
+  methodFilter?: string
+) {
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("payments")
+    .select(`
+      *,
+      customer:customers(id, first_name, middle_name, last_name, customer_code),
+      allocations:payment_allocations(
+        id,
+        amount,
+        invoice:invoices(id, invoice_number, total_amount, due_amount, status)
+      )
+    `)
+    .order("created_at", { ascending: false });
+
+  if (statusFilter && statusFilter !== "all") {
+    query = query.eq("status", statusFilter);
+  }
+
+  if (methodFilter && methodFilter !== "all") {
+    query = query.eq("payment_method", methodFilter);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("Error fetching payments:", error);
+    throw new Error(error.message);
+  }
+
+  let filtered = data || [];
+  if (searchQuery && searchQuery.trim()) {
+    const q = searchQuery.toLowerCase().trim();
+    filtered = filtered.filter((pay: any) => {
+      const payNum = pay.payment_number?.toLowerCase() || "";
+      const refNum = pay.reference_number?.toLowerCase() || "";
+      const cust = pay.customer;
+      const custName = cust
+        ? `${cust.first_name || ""} ${cust.middle_name || ""} ${cust.last_name || ""}`.toLowerCase()
+        : "";
+      return payNum.includes(q) || refNum.includes(q) || custName.includes(q);
+    });
+  }
+
+  return filtered;
+}
+
+export interface CreatePaymentPayload {
+  customer_id: string;
+  amount: number;
+  payment_date?: string;
+  payment_method: PaymentMethod;
+  reference_number?: string | null;
+  notes?: string | null;
+  invoice_id?: string | null;
+}
+
+export async function createPayment(payload: CreatePaymentPayload) {
+  const supabase = await createClient();
+
+  if (!payload.customer_id) {
+    return { error: "Customer selection is required." };
+  }
+
+  if (!payload.amount || Number(payload.amount) <= 0) {
+    return { error: "Payment amount must be greater than zero." };
+  }
+
+  const roundedAmount = BillingEngine.roundMoney(Number(payload.amount));
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Insert payment row into DB. payment_number is generated automatically by DB trigger.
+  const { data: insertedPayment, error: insertError } = await supabase
+    .from("payments")
+    .insert([{
+      customer_id: payload.customer_id,
+      created_by: user?.id || null,
+      amount: roundedAmount,
+      payment_date: payload.payment_date || new Date().toISOString().split("T")[0],
+      payment_method: payload.payment_method,
+      reference_number: payload.reference_number?.trim() || null,
+      status: "recorded",
+      notes: payload.notes?.trim() || null,
+    }])
+    .select()
+    .single();
+
+  if (insertError) {
+    console.error("Error inserting payment:", insertError);
+    return { error: insertError.message };
+  }
+
+  // If an invoice is specified for direct allocation, call allocate_payment_atomic RPC
+  let allocationResult = null;
+  if (payload.invoice_id) {
+    // Get target invoice due_amount
+    const { data: inv } = await supabase
+      .from("invoices")
+      .select("due_amount, customer_id, status")
+      .eq("id", payload.invoice_id)
+      .single();
+
+    if (inv) {
+      const allocAmount = Math.min(roundedAmount, Number(inv.due_amount));
+      if (allocAmount > 0) {
+        const { data: rpcRes, error: rpcError } = await supabase.rpc("allocate_payment_atomic", {
+          p_payment_id: insertedPayment.id,
+          p_invoice_id: payload.invoice_id,
+          p_amount: allocAmount,
+        });
+
+        if (rpcError) {
+          console.error("RPC Error allocating payment:", rpcError);
+          allocationResult = { error: rpcError.message };
+        } else if (rpcRes && !rpcRes.success) {
+          allocationResult = { error: rpcRes.error };
+        } else {
+          allocationResult = { success: true };
+        }
+      }
+    }
+  }
+
+  revalidatePath("/payments");
+  revalidatePath("/invoices");
+  if (payload.invoice_id) revalidatePath(`/invoices/${payload.invoice_id}`);
+  revalidatePath(`/customers/${payload.customer_id}`);
+  revalidatePath("/dashboard");
+
+  return {
+    success: true,
+    data: insertedPayment,
+    allocationResult,
+  };
+}
+
+export async function allocatePayment(paymentId: string, invoiceId: string, amount: number) {
+  const supabase = await createClient();
+
+  const roundedAmount = BillingEngine.roundMoney(Number(amount));
+  if (roundedAmount <= 0) {
+    return { error: "Allocation amount must be greater than zero." };
+  }
+
+  const { data: res, error } = await supabase.rpc("allocate_payment_atomic", {
+    p_payment_id: paymentId,
+    p_invoice_id: invoiceId,
+    p_amount: roundedAmount,
+  });
+
+  if (error) {
+    console.error("Error executing allocate_payment_atomic RPC:", error);
+    return { error: error.message };
+  }
+
+  if (!res.success) {
+    // Map safe user-friendly errors
+    let msg = res.error || "Failed to allocate payment.";
+    if (msg.includes("exceeds remaining payment balance")) {
+      msg = "Allocation exceeds the remaining payment balance.";
+    } else if (msg.includes("exceeds remaining invoice due")) {
+      msg = "Payment amount exceeds the remaining invoice balance.";
+    } else if (msg.includes("Cross-customer")) {
+      msg = "This payment cannot be applied to the selected invoice.";
+    }
+    return { error: msg };
+  }
+
+  revalidatePath("/payments");
+  revalidatePath("/invoices");
+  revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath("/dashboard");
+
+  return { success: true, allocationId: res.allocation_id };
+}
+
+export async function voidPayment(paymentId: string) {
+  const supabase = await createClient();
+
+  const { data: res, error } = await supabase.rpc("void_payment_atomic", {
+    p_payment_id: paymentId,
+  });
+
+  if (error) {
+    console.error("Error executing void_payment_atomic RPC:", error);
+    return { error: error.message };
+  }
+
+  if (!res.success) {
+    return { error: res.error || "Failed to void payment." };
+  }
+
+  revalidatePath("/payments");
+  revalidatePath("/invoices");
+  revalidatePath("/dashboard");
+
+  return { success: true };
+}
+
+export async function refundPayment(paymentId: string) {
+  const supabase = await createClient();
+
+  const { data: res, error } = await supabase.rpc("refund_payment_atomic", {
+    p_payment_id: paymentId,
+  });
+
+  if (error) {
+    console.error("Error executing refund_payment_atomic RPC:", error);
+    return { error: error.message };
+  }
+
+  if (!res.success) {
+    return { error: res.error || "Failed to refund payment." };
+  }
+
+  revalidatePath("/payments");
+  revalidatePath("/invoices");
+  revalidatePath("/dashboard");
+
+  return { success: true };
+}
+
+export async function getDashboardBillingSummary() {
+  const supabase = await createClient();
+
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
+
+    // Fetch invoices for receivables calculation
+    const { data: invoices, error: invError } = await supabase
+      .from("invoices")
+      .select("id, status, due_date, due_amount, total_amount, paid_amount");
+
+    if (invError) throw invError;
+
+    // Fetch recorded payments for current month revenue
+    const { data: payments, error: payError } = await supabase
+      .from("payments")
+      .select("amount, payment_date, status")
+      .gte("payment_date", startOfMonth)
+      .eq("status", "recorded");
+
+    if (payError) throw payError;
+
+    const activeInvoices = (invoices || []).filter((inv) => inv.status !== "cancelled");
+    const draftExcludedInvoices = activeInvoices.filter((inv) => inv.status !== "draft");
+
+    // 1. Outstanding Receivables: sum due_amount for non-draft/non-cancelled invoices
+    const outstandingReceivables = draftExcludedInvoices.reduce(
+      (sum, inv) => sum + Number(inv.due_amount),
+      0
+    );
+
+    // 2. Paid This Month: sum of recorded payments in current month
+    const paidThisMonth = (payments || []).reduce(
+      (sum, p) => sum + Number(p.amount),
+      0
+    );
+
+    // 3. Overdue Invoices: count of due_date < today AND due_amount > 0 AND status NOT IN ('draft', 'cancelled')
+    const overdueCount = draftExcludedInvoices.filter(
+      (inv) => inv.due_date && inv.due_date < today && Number(inv.due_amount) > 0
+    ).length;
+
+    // 4. Open Invoices: count of issued + partially_paid invoices
+    const openInvoicesCount = activeInvoices.filter(
+      (inv) => inv.status === "issued" || inv.status === "partially_paid"
+    ).length;
+
+    return {
+      success: true,
+      data: {
+        outstandingReceivables: BillingEngine.roundMoney(outstandingReceivables),
+        paidThisMonth: BillingEngine.roundMoney(paidThisMonth),
+        overdueCount,
+        openInvoicesCount,
+      },
+    };
+  } catch (err: any) {
+    console.error("Error fetching dashboard billing summary:", err);
+    return {
+      success: false,
+      data: {
+        outstandingReceivables: 0,
+        paidThisMonth: 0,
+        overdueCount: 0,
+        openInvoicesCount: 0,
+      },
+    };
+  }
+}

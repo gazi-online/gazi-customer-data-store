@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CustomerDocument, AiImportHistoryRecord } from "@/types/document";
-import { FileText, Cpu, Clock, RefreshCw, Archive, Replace, CheckCircle2, XCircle, AlertCircle, FileCode, Layers, User, Briefcase, Activity } from "lucide-react";
+import { FileText, Cpu, Clock, RefreshCw, Archive, Replace, CheckCircle2, XCircle, AlertCircle, FileCode, Layers, User, Briefcase, Activity, Receipt } from "lucide-react";
 import { rerunExtraction, archiveDocument } from "@/app/(dashboard)/documents/actions";
 import { toast } from "sonner";
 import { ReviewPanel } from "@/components/AiSmartImportEngine/components/ReviewPanel";
@@ -11,27 +11,41 @@ import { MergedResult } from "@/components/AiSmartImportEngine/types";
 import { AssignServiceForm } from "@/components/forms/AssignServiceForm";
 import { Service, CustomerServiceWithDetails } from "@/types/service";
 import { CustomerServiceFormData } from "@/app/(dashboard)/services/schema";
+import { CustomerBillingTab } from "./CustomerBillingTab";
 
 interface CustomerProfileTabsProps {
   customerId: string;
+  customerName?: string;
   documents: CustomerDocument[];
   allDocuments: CustomerDocument[]; // Includes active, superseded, archived
   aiImports: AiImportHistoryRecord[];
   customerServices?: CustomerServiceWithDetails[];
   availableServices?: Service[];
+  billingSummary?: {
+    totalBilled: number;
+    totalPaid: number;
+    outstanding: number;
+    overdue: number;
+    invoices: any[];
+    payments: any[];
+  };
+  billingError?: string | null;
 }
 
 export function CustomerProfileTabs({
   customerId,
+  customerName = "Customer",
   documents,
   allDocuments,
   aiImports,
   customerServices = [],
-  availableServices = []
+  availableServices = [],
+  billingSummary = { totalBilled: 0, totalPaid: 0, outstanding: 0, overdue: 0, invoices: [], payments: [] },
+  billingError = null,
 }: CustomerProfileTabsProps) {
   console.log(`[TRACE] CustomerProfileTabs activeServices: ${availableServices?.length || 0}`);
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'ai-imports' | 'services' | 'activity'>('documents');
+  const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'ai-imports' | 'services' | 'billing' | 'activity'>('documents');
   const [filterDocStatus, setFilterDocStatus] = useState<'active' | 'all' | 'archived'>('active');
   const [runningRerunId, setRunningRerunId] = useState<string | null>(null);
   const [rerunReviewResult, setRerunReviewResult] = useState<MergedResult | null>(null);
@@ -112,6 +126,7 @@ export function CustomerProfileTabs({
             { id: 'ai-imports', label: 'AI Imports Audit', icon: Cpu, count: aiImports.length },
             { id: 'overview', label: 'Overview', icon: User },
             { id: 'services', label: 'Services', icon: Briefcase, count: customerServices.length },
+            { id: 'billing', label: 'Billing & History', icon: Receipt, count: billingSummary?.invoices?.length || 0 },
             { id: 'activity', label: 'Activity Log', icon: Activity },
           ].map(tab => {
             const Icon = tab.icon;
@@ -529,6 +544,16 @@ export function CustomerProfileTabs({
             </div>
           )}
         </div>
+      )}
+
+      {/* BILLING TAB */}
+      {activeTab === 'billing' && (
+        <CustomerBillingTab
+          customerId={customerId}
+          customerName={customerName}
+          billingSummary={billingSummary}
+          error={billingError}
+        />
       )}
 
       {/* ACTIVITY PLACEHOLDER TAB */}

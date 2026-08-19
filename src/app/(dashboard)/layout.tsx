@@ -12,7 +12,9 @@ import {
   LogOut,
   Menu,
   X,
-  Search
+  Search,
+  Receipt,
+  CreditCard
 } from "lucide-react";
 import { logout } from "./actions";
 import { useState } from "react";
@@ -20,6 +22,8 @@ import { useState } from "react";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "Customers", href: "/customers", icon: Users },
+  { name: "Invoices", href: "/invoices", icon: Receipt },
+  { name: "Payments", href: "/payments", icon: CreditCard },
   { name: "Documents", href: "/documents", icon: FileText },
   { name: "Services", href: "/services", icon: Wrench },
   { name: "Reports", href: "/reports", icon: BarChart2 },

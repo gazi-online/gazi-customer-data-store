@@ -7,6 +7,7 @@ import { DocumentUploadForm } from "@/components/forms/DocumentUploadForm";
 import { getProfilePhotoSignedUrl } from "@/app/(dashboard)/customers/ai-actions";
 import { CustomerProfileTabs } from "@/components/customers/CustomerProfileTabs";
 import { getCustomerServices, getActiveServices } from "@/app/(dashboard)/services/actions";
+import { getCustomerBillingSummary } from "@/app/(dashboard)/invoices/actions";
 
 // Helper function to mask Aadhaar
 function maskAadhaar(aadhaar: string | null) {
@@ -96,6 +97,21 @@ export default async function CustomerProfilePage({
     console.error(`[TRACE] getActiveServices() Error: ${err.code || 'UNKNOWN_CODE'} - ${err.message || err}`);
   }
   availableServices = asRes;
+
+  // Fetch Customer Billing Summary safely
+  let billingSummaryData: { totalBilled: number; totalPaid: number; outstanding: number; overdue: number; invoices: any[]; payments: any[] } = { totalBilled: 0, totalPaid: 0, outstanding: 0, overdue: 0, invoices: [], payments: [] };
+  let billingError: string | null = null;
+  try {
+    const billingRes = await getCustomerBillingSummary(id);
+    if (billingRes.success) {
+      billingSummaryData = billingRes.data;
+    } else {
+      billingError = billingRes.error || "Failed to load customer billing history.";
+    }
+  } catch (err: any) {
+    console.error("Error loading customer billing summary:", err);
+    billingError = err.message || "Failed to load customer billing summary.";
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -313,11 +329,14 @@ export default async function CustomerProfilePage({
              
              <CustomerProfileTabs
                customerId={id}
+               customerName={`${customer.first_name} ${customer.last_name}`}
                documents={activeDocuments}
                allDocuments={allDocuments}
                aiImports={aiImports}
                customerServices={customerServices || []}
                availableServices={availableServices || []}
+               billingSummary={billingSummaryData}
+               billingError={billingError}
              />
           </div>
         </div>
