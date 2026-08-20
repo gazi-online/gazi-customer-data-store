@@ -35,6 +35,10 @@ export class OpenRouterProvider extends BaseAIProvider {
       };
     }
 
+    const rawEnvMax = parseInt(process.env.OPENROUTER_MAX_TOKENS || '1536', 10);
+    const validEnvMax = isNaN(rawEnvMax) ? 1536 : rawEnvMax;
+    const maxTokens = Math.min(Math.max(validEnvMax, 512), 4096);
+
     while (attempt <= maxRetries) {
       try {
         const contentArray: any[] = [
@@ -61,6 +65,7 @@ export class OpenRouterProvider extends BaseAIProvider {
           ],
           response_format: { type: "json_object" },
           temperature: options?.temperature ?? 0.0,
+          max_tokens: maxTokens
         };
 
         const apiStartTime = Date.now();
@@ -192,8 +197,7 @@ export class OpenRouterProvider extends BaseAIProvider {
     
     if (lastError?.isTimeout || lastError?.name === 'AbortError' || errStr.includes("abort")) category = 'TIMEOUT';
     else if (lastError?.status === 401 || lastError?.status === 403 || errStr.includes("key")) category = 'AUTHENTICATION';
-    else if (lastError?.status === 429 || errStr.includes("rate limit") || errStr.includes("credits")) category = 'RATE_LIMIT';
-    else if (lastError?.status === 402 || errStr.includes("quota")) category = 'QUOTA';
+    else if (lastError?.status === 402 || lastError?.status === 429 || errStr.includes("rate limit") || errStr.includes("quota") || errStr.includes("credits") || errStr.includes("max_tokens")) category = 'QUOTA';
     else if (lastError?.status === 404 || errStr.includes("model")) category = 'MODEL_UNAVAILABLE';
     else if (lastError?.status >= 500) category = 'PROVIDER_ERROR';
     else if (errStr.includes("fetch") || errStr.includes("network") || errStr.includes("failed to fetch")) category = 'NETWORK';
@@ -202,9 +206,10 @@ export class OpenRouterProvider extends BaseAIProvider {
 
     let finalErrorMessage = "Unknown error occurred during AI extraction";
     
-    // We do NOT override other HTTP errors as simple Timeout, but the timeout gets its own message
     if (category === 'TIMEOUT') {
       finalErrorMessage = "AI service is temporarily unavailable. Please try again.";
+    } else if (category === 'QUOTA' || lastError?.status === 402) {
+      finalErrorMessage = "Backup AI provider quota is unavailable. Please try again later.";
     } else if (lastError?.status) {
       finalErrorMessage = `AI Fallback HTTP Error ${lastError.status}: ${lastError.message}`;
     } else if (lastError?.message) {
