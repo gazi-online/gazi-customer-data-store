@@ -38,7 +38,17 @@ function normalizeDate(dateStr: string): string | undefined {
 
 export class DataNormalizer {
   static normalize(rawData: any): NormalizedData {
-    if (!rawData || typeof rawData !== 'object') return {};
+    if (!rawData) return {};
+
+    if (typeof rawData === 'string') {
+      try {
+        rawData = JSON.parse(rawData);
+      } catch {
+        return {};
+      }
+    }
+
+    if (typeof rawData !== 'object' || Array.isArray(rawData)) return {};
 
     const normalized: NormalizedData = {};
     
@@ -170,6 +180,7 @@ export class DataNormalizer {
       fullAddress = parts.join(', ');
       
       if (addressObj.city) normalized.city = toAiField(addressObj.city, conf.city);
+      if (addressObj.district) normalized.district = toAiField(addressObj.district, conf.district);
       if (addressObj.state) normalized.state = toAiField(addressObj.state, conf.state);
       if (addressObj.pincode) normalized.pincode = toAiField(addressObj.pincode, conf.pincode);
     } else if (typeof rawData.address === 'string') {

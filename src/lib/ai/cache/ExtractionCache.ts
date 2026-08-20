@@ -93,7 +93,14 @@ export class ExtractionCache {
       }
 
       const deserialStart = performance.now();
-      const resultJson = data.result_json;
+      let resultJson = data.result_json;
+      if (typeof resultJson === 'string') {
+        try {
+          resultJson = JSON.parse(resultJson);
+        } catch (err) {
+          console.warn("[ExtractionCache] Failed to deserialize cached result_json string:", err);
+        }
+      }
       jsonDeserializationMs = performance.now() - deserialStart;
 
       // Increment hit_count and update last_used_at

@@ -58,6 +58,10 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
       const rawData = JSON.parse(jsonText);
       const normalizedData = DataNormalizer.normalize(rawData);
       
+      if (Object.keys(normalizedData).length === 0) {
+        return toast.error("AI extracted a response, but no usable customer fields were found.");
+      }
+      
       // Check versioning (if this doc type already exists in queue)
       const existingVersions = jobs.filter(j => j.documentType === docType).length;
       
@@ -118,8 +122,25 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
       }
 
       toast.loading(`Finalizing result...`, { id: toastId });
-      const rawData = result.data;
+      let rawData = result.data;
+      if (typeof rawData === 'string') {
+        try {
+          rawData = JSON.parse(rawData);
+        } catch {
+          throw new Error("AI extraction returned invalid JSON format.");
+        }
+      }
+
+      if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) {
+        throw new Error("AI response could not be parsed into structured data.");
+      }
+
       const normalizedData = DataNormalizer.normalize(rawData);
+      
+      if (Object.keys(normalizedData).length === 0) {
+        toast.error("AI extracted a response, but no usable customer fields were found.", { id: toastId });
+        return;
+      }
       
       const combinedDocType = docTypesForExtraction.join(" + ");
       const existingVersions = jobs.filter(j => j.documentType === combinedDocType).length;

@@ -121,9 +121,18 @@ export async function extractDataFromDocuments(formData: FormData) {
       savedProviderMs = 4500; // Estimated API time saved
       console.log(`[AI Cache] ⚡ CACHE HIT requestId=${reqId} hash=${requestHash.substring(0, 8)} lookupMs=${cacheLookupMs.toFixed(2)}ms`);
       
+      let parsedCacheJson = cacheRes.resultJson;
+      if (typeof parsedCacheJson === 'string') {
+        try {
+          parsedCacheJson = JSON.parse(parsedCacheJson);
+        } catch (e) {
+          console.warn("[AI Cache] Failed to parse cached JSON string");
+        }
+      }
+
       extractionResult = {
         status: 'success',
-        parsedJson: cacheRes.resultJson,
+        parsedJson: parsedCacheJson,
         modelName: modelName,
         processingTimeMs: cacheLookupMs,
         inputTokens: 0,
@@ -277,6 +286,13 @@ export async function extractDataFromDocuments(formData: FormData) {
     // 14. revalidatePath / Router Refresh timing check
     const revalidateStart = performance.now();
     const revalidateWorkMs = performance.now() - revalidateStart;
+
+    if (extractionResult.status === 'failed' || !extractionResult.parsedJson) {
+      return {
+        success: false,
+        error: extractionResult.errorMessage || "AI extraction failed to extract valid data."
+      };
+    }
 
     // 13. Server Action Result Serialization
     const serializationStart = performance.now();
