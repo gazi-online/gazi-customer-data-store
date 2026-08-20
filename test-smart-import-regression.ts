@@ -24,6 +24,7 @@ async function runRegressionTests() {
   console.log("=================================================");
 
   let passCount = 0;
+  const TOTAL_TESTS = 10;
 
   // Test 1: Valid object response -> normalizedData non-empty
   const validObj = {
@@ -117,9 +118,67 @@ async function runRegressionTests() {
     console.error("❌ Test 7 [FAIL]");
   }
 
+  // Test 8: Voter ID-only extraction -> normalized & merged correctly
+  const voterObj = {
+    customer: { full_name: "Vikram Singh" },
+    documents: { voter_id: { number: "ABC1234567" } }
+  };
+  const normVoter = DataNormalizer.normalize(voterObj);
+  const voterJob: ImportJob = {
+    id: "job-voter-1",
+    documentType: "Voter ID",
+    provider: "gemini",
+    source: "file",
+    status: "completed",
+    rawResponse: voterObj,
+    normalizedData: normVoter,
+    version: 1
+  };
+  const mergeVoter = MergeEngine.merge([voterJob]);
+  if (normVoter.voter_id_number?.value === "ABC1234567" && mergeVoter.data.voter_id_number?.value === "ABC1234567") {
+    console.log("✅ Test 8: Voter ID-only extraction normalized & merged [PASS]");
+    passCount++;
+  } else {
+    console.error("❌ Test 8 [FAIL]");
+  }
+
+  // Test 9: Aadhaar + Voter ID merge -> both aadhaar_number & voter_id_number present
+  const mergeAadhaarVoter = MergeEngine.merge([testJob, voterJob]);
+  if (mergeAadhaarVoter.data.aadhaar_number?.value === "987654321098" && mergeAadhaarVoter.data.voter_id_number?.value === "ABC1234567") {
+    console.log("✅ Test 9: Aadhaar + Voter ID merge preserves both identity numbers [PASS]");
+    passCount++;
+  } else {
+    console.error("❌ Test 9 [FAIL]");
+  }
+
+  // Test 10: Conflict between two Voter ID values is surfaced
+  const voterObjConflict = {
+    customer: { full_name: "Vikram Singh" },
+    documents: { voter_id: { number: "XYZ9876543" } }
+  };
+  const normVoterConflict = DataNormalizer.normalize(voterObjConflict);
+  const voterJob2: ImportJob = {
+    id: "job-voter-2",
+    documentType: "Voter ID",
+    provider: "gemini",
+    source: "file",
+    status: "completed",
+    rawResponse: voterObjConflict,
+    normalizedData: normVoterConflict,
+    version: 2
+  };
+  const mergeVoterConflict = MergeEngine.merge([voterJob, voterJob2]);
+  const voterConflictFound = mergeVoterConflict.conflicts.some(c => c.field === "voter_id_number");
+  if (voterConflictFound) {
+    console.log("✅ Test 10: Conflict between two Voter ID values surfaced correctly [PASS]");
+    passCount++;
+  } else {
+    console.error("❌ Test 10 [FAIL]");
+  }
+
   console.log("-------------------------------------------------");
-  console.log(`TOTAL RESULT: ${passCount}/7 PASSED`);
-  if (passCount === 7) {
+  console.log(`TOTAL RESULT: ${passCount}/${TOTAL_TESTS} PASSED`);
+  if (passCount === TOTAL_TESTS) {
     console.log("🎉 ALL SMART IMPORT REGRESSION TESTS PASSED!");
   } else {
     process.exit(1);

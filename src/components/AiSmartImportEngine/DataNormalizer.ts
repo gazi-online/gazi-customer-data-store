@@ -142,6 +142,13 @@ export class DataNormalizer {
       normalized.pan_number = toAiField(cleanPan, conf.pan_number || (typeof pan === 'object' ? pan : undefined), 0.9);
     }
 
+    // Voter ID / EPIC Number
+    const voterId = rawData.documents?.voter_id?.number || rawData.documents?.voterId?.number || customer.voter_id_number || customer.voter_id || customer.voterId || customer.epic_number;
+    if (voterId) {
+      const cleanVoterId = typeof voterId === 'string' ? voterId.trim().toUpperCase() : voterId.value?.trim().toUpperCase();
+      normalized.voter_id_number = toAiField(cleanVoterId, conf.voter_id_number || conf.voter_id || (typeof voterId === 'object' ? voterId : undefined), 0.9);
+    }
+
     // Date of Birth
     const dob = customer.dob || customer.date_of_birth || customer.dateOfBirth;
     if (dob) {

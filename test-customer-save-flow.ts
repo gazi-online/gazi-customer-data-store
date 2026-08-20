@@ -178,6 +178,23 @@ async function runCustomerSaveFlowTestSuite() {
     caseJPassed
   );
 
+  // --- CASE K: Voter ID Auto-Fill Populates Form State ---
+  const aiVoterData = { voter_id_number: "ABC1234567" };
+  const formStateK: Record<string, any> = { ...manualForm };
+  Object.keys(aiVoterData).forEach(k => {
+    const val = (aiVoterData as any)[k];
+    if (val !== undefined && val !== null && val !== "") {
+      formStateK[k] = val;
+    }
+  });
+  recordCase(
+    "K",
+    "Voter ID Auto-Fill Populates Form State",
+    "ABC1234567",
+    formStateK.voter_id_number || "null",
+    formStateK.voter_id_number === "ABC1234567"
+  );
+
   console.log("\n==========================================================================");
   console.log("📊 TEST SUITE SUMMARY REPORT");
   console.log("==========================================================================\n");
@@ -192,7 +209,7 @@ async function runCustomerSaveFlowTestSuite() {
 
   const allPassed = testResults.every(t => t.status === 'PASS');
   console.log("\n==========================================================================");
-  console.log(`VERDICT: ${allPassed ? '✅ ALL 10 CUSTOMER SAVE FLOW TEST CASES PASSED!' : '❌ SOME TESTS FAILED'}`);
+  console.log(`VERDICT: ${allPassed ? '✅ ALL 11 CUSTOMER SAVE FLOW TEST CASES PASSED!' : '❌ SOME TESTS FAILED'}`);
   console.log("==========================================================================");
 
   if (!allPassed) process.exit(1);

@@ -33,6 +33,7 @@ const customerSchema = z.object({
   aadhaar_number: z.string().optional().or(z.literal("")),
   pan_number: z.string().optional().or(z.literal("")),
   gst_number: z.string().optional().or(z.literal("")),
+  voter_id_number: z.string().optional().or(z.literal("")),
   
   address: z.string().min(1, "Address is required"),
   city: z.string().optional().or(z.literal("")),
@@ -80,6 +81,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       aadhaar_number: initialData.aadhaar_number || "",
       pan_number: initialData.pan_number || "",
       gst_number: initialData.gst_number || "",
+      voter_id_number: initialData.voter_id_number || "",
       
       city: initialData.city || "",
       district: initialData.district || "",
@@ -206,6 +208,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         aadhaar_number: data.aadhaar_number === "" ? null : data.aadhaar_number,
         pan_number: data.pan_number === "" ? null : data.pan_number,
         gst_number: data.gst_number === "" ? null : data.gst_number,
+        voter_id_number: data.voter_id_number === "" ? null : data.voter_id_number,
       } as any;
 
       if (isEditing && initialData) {
@@ -390,7 +393,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         {/* Identity & Tax Details (India) */}
         <div>
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-2">Identity & Tax Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Aadhaar Number</label>
               <input {...register("aadhaar_number")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. 1234 5678 9012" />
@@ -404,6 +407,11 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">GST Number</label>
               <input {...register("gst_number")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow uppercase" placeholder="e.g. 22AAAAA0000A1Z5" />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Voter ID / EPIC Number</label>
+              <input {...register("voter_id_number")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow uppercase" placeholder="e.g. ABC1234567" />
             </div>
           </div>
         </div>

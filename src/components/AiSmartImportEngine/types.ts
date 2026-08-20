@@ -29,6 +29,7 @@ export interface NormalizedData {
   aadhaar_number?: AiField<string>;
   pan_number?: AiField<string>;
   gst_number?: AiField<string>;
+  voter_id_number?: AiField<string>;
   date_of_birth?: AiField<string>; // YYYY-MM-DD
   gender?: AiField<'male' | 'female' | 'other'>;
   address?: AiField<string>;

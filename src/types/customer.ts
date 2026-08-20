@@ -21,6 +21,7 @@ export interface Customer {
   aadhaar_number: string | null;
   pan_number: string | null;
   gst_number: string | null;
+  voter_id_number?: string | null;
   
   // Address
   address: string;
@@ -55,6 +56,7 @@ export interface CustomerFormData {
   aadhaar_number?: string;
   pan_number?: string;
   gst_number?: string;
+  voter_id_number?: string;
   
   address: string;
   city?: string;

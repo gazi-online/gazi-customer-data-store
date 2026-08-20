@@ -20,6 +20,7 @@ const FIELD_PRIORITY: Record<keyof NormalizedData, string[]> = {
   aadhaar_number: ['Aadhaar Card'],
   pan_number: ['PAN Card'],
   gst_number: ['GST Certificate'],
+  voter_id_number: ['Voter ID'],
   
   phone: [], // No strict priority, use whatever has it
   email: [],
