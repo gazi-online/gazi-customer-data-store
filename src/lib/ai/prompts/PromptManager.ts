@@ -26,9 +26,16 @@ export class PromptManager {
   }
 
   private static getDocumentPrompts(documentTypes: string[]): string {
-    if (documentTypes.length === 0) return '';
-    
-    let basePrompt = `Documents provided for this extraction: ${documentTypes.join(', ')}. Please extract relevant data based on these specific document types.`;
+    let basePrompt = `AUTOMATIC DOCUMENT TYPE DETECTION (CRITICAL):
+- Inspect the visual and text content of each provided image/file/page to automatically classify its document type into the 'detected_documents' array in JSON.
+- Detection must be derived strictly from document title, issuing authority, field labels, layout, and visual identifiers (e.g. Government of India, UIDAI, Income Tax Department, Election Commission of India, State Food & Supplies Dept, Bank Seal/Header, etc.). NEVER classify solely based on filename or file extension.
+- Taxonomy options: 'aadhaar_front', 'aadhaar_back', 'aadhaar_combined', 'pan_card', 'voter_id', 'ration_card', 'bank_passbook', 'bank_statement', 'cancelled_cheque', 'passport', 'driving_licence', 'generic_identity_document', 'generic_address_document', 'unknown'.
+- If a document cannot be confidently classified, set detected_type = 'unknown'. Do NOT fabricate a document type.
+- All uploaded documents belong to the SAME customer. Extract and merge their information into the unified customer schema.`;
+
+    if (documentTypes && documentTypes.length > 0) {
+      basePrompt += `\n\nDocuments provided for this extraction context: ${documentTypes.join(', ')}.`;
+    }
     
     basePrompt += `\n\nRELATIONSHIP MAPPING RULES (CRITICAL):
 - "S/O", "D/O" → Extract the name into 'father_name'.

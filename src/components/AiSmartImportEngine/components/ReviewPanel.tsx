@@ -365,6 +365,59 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
         )}
 
         <div>
+          {/* Auto Detected Documents Summary */}
+          {result.data.detected_documents && result.data.detected_documents.length > 0 && (
+            <div className="mb-6 space-y-3">
+              <h4 className="text-sm font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider border-b border-zinc-100 dark:border-zinc-800 pb-2 flex items-center justify-between">
+                <span>Auto-Detected Documents</span>
+                <span className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">
+                  {result.data.detected_documents.length} document(s) detected
+                </span>
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {result.data.detected_documents.map((doc, idx) => {
+                  const typeTitle = doc.detected_type
+                    .replace(/_/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase());
+                  const isUnknown = doc.detected_type === 'unknown';
+
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`p-3 rounded-lg border flex items-center justify-between ${
+                        isUnknown 
+                          ? 'border-amber-200 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/20'
+                          : 'border-indigo-100 bg-indigo-50/40 dark:border-indigo-900/40 dark:bg-indigo-950/20'
+                      }`}
+                    >
+                      <div>
+                        <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center">
+                          {typeTitle}
+                        </p>
+                        {doc.source_filename && (
+                          <p className="text-[10px] text-zinc-500 font-mono mt-0.5 truncate max-w-[150px]" title={doc.source_filename}>
+                            {doc.source_filename}
+                          </p>
+                        )}
+                        {isUnknown && (
+                          <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-medium">
+                            ⚠️ Document type could not be confidently identified.
+                          </p>
+                        )}
+                      </div>
+                      {!isUnknown && doc.confidence > 0 && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 shrink-0">
+                          {(doc.confidence * 100).toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Suggested Name Components Banner */}
           {nameSuggestion && (
             <div className="mb-6 p-4 rounded-xl bg-blue-50 border border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">

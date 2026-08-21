@@ -37,19 +37,29 @@ export async function extractDataFromDocuments(formData: FormData) {
       throw new Error("No files provided for extraction");
     }
 
+    if (files.length > 10) {
+      throw new Error("Maximum 10 documents allowed per import batch.");
+    }
+
     const fileDataArray = [];
     const originalImages: string[] = [];
     let approximateTotalImageSize = 0;
 
     for (const file of files) {
       approximateTotalImageSize += file.size;
+      const lowerName = file.name.toLowerCase();
+
+      if (lowerName.endsWith('.tif') || lowerName.endsWith('.tiff') || file.type.includes('tiff')) {
+        throw new Error(`File ${file.name}: TIFF format is not supported for this release. Please convert to PDF, JPG, PNG, or WEBP.`);
+      }
+
       if (file.size > 10 * 1024 * 1024) { // 10MB limit
-        throw new Error(`File ${file.name} exceeds 10MB limit`);
+        throw new Error(`File ${file.name} exceeds 10MB file size limit.`);
       }
       
       const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-      if (!allowedTypes.includes(file.type)) {
-        throw new Error(`File type ${file.type} is not supported. Use JPG, PNG, WEBP, or PDF.`);
+      if (!allowedTypes.includes(file.type) && !file.type.startsWith('image/')) {
+        throw new Error(`File type ${file.type || file.name} is not supported. Use JPG, PNG, WEBP, or PDF.`);
       }
 
       // Convert File to Base64 for the AI Provider

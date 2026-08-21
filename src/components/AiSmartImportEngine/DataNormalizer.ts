@@ -62,6 +62,14 @@ export class DataNormalizer {
       normalized.internal_conflicts = rawData.conflicts;
     }
 
+    if (Array.isArray(rawData.detected_documents)) {
+      normalized.detected_documents = rawData.detected_documents.map((d: any) => ({
+        detected_type: d.detected_type || d.type || 'unknown',
+        confidence: typeof d.confidence === 'number' ? d.confidence : 0.9,
+        source_filename: d.source_filename || d.filename
+      }));
+    }
+
     if (profilePhoto && profilePhoto.available) {
       normalized.profile_photo = {
         available: profilePhoto.available,

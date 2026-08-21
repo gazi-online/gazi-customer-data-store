@@ -31,7 +31,7 @@ export class ExtractionCache {
    */
   static computeRequestHash(params: {
     files: { base64Data: string; mimeType: string }[];
-    documentTypes: string[];
+    documentTypes?: string[];
     promptVersion: string;
     modelName: string;
   }): string {
@@ -40,7 +40,7 @@ export class ExtractionCache {
       return crypto.createHash('sha256').update(buffer).digest('hex');
     }).sort();
 
-    const orderedDocTypes = [...params.documentTypes].sort();
+    const orderedDocTypes = [...(params.documentTypes || [])].sort();
 
     const combinedString = [
       orderedDocTypes.join(','),

@@ -7,6 +7,12 @@ export type AiField<T> = {
   source_side?: string;
 };
 
+export interface DetectedDocument {
+  detected_type: string;
+  confidence: number;
+  source_filename?: string;
+}
+
 export interface NormalizedData {
   full_name?: AiField<string>;
   original_language_name?: AiField<string>;
@@ -40,6 +46,7 @@ export interface NormalizedData {
   post_office?: AiField<string>;
   country?: AiField<string>;
   internal_conflicts?: Conflict[];
+  detected_documents?: DetectedDocument[];
 }
 
 export interface ImportJob {

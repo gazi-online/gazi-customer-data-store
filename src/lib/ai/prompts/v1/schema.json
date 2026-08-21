@@ -73,5 +73,12 @@
       "source_side": "front|back|unknown",
       "confidence": 0.0
     }
-  }
+  },
+  "detected_documents": [
+    {
+      "detected_type": "aadhaar_front|aadhaar_back|aadhaar_combined|pan_card|voter_id|ration_card|bank_passbook|bank_statement|cancelled_cheque|passport|driving_licence|generic_identity_document|generic_address_document|unknown",
+      "confidence": 0.0,
+      "source_filename": "string"
+    }
+  ]
 }

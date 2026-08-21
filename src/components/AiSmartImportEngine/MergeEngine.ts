@@ -31,6 +31,7 @@ const FIELD_PRIORITY: Record<keyof NormalizedData, string[]> = {
   post_office: ['Aadhaar Card', 'Voter ID'],
   profile_photo: [], // Handled separately
   internal_conflicts: [], // Handled separately
+  detected_documents: [], // Handled separately
 };
 
 export class MergeEngine {
@@ -52,6 +53,7 @@ export class MergeEngine {
     allKeys.forEach(field => {
       if (field === 'profile_photo') return; // Handled separately at the end
       if (field === 'internal_conflicts') return; // Handled separately
+      if (field === 'detected_documents') return; // Handled separately
 
       // Collect all values provided by jobs for this field
       const options = validJobs
@@ -112,15 +114,29 @@ export class MergeEngine {
         // Apply Priority Rules to auto-resolve if possible
         const priorityList = FIELD_PRIORITY[field] || [];
         
-        // Sort options by Document Priority, then by Confidence
+        // Sort options by Document Priority, Side Priority (Back preferred for address), then Confidence
         options.sort((a, b) => {
-          const rankA = priorityList.indexOf(a.documentType);
-          const rankB = priorityList.indexOf(b.documentType);
-          
-          const validRankA = rankA !== -1 ? rankA : 999;
-          const validRankB = rankB !== -1 ? rankB : 999;
-          
-          if (validRankA !== validRankB) return validRankA - validRankB;
+          const getRank = (docType: string) => {
+            const index = priorityList.findIndex(p => docType.toLowerCase().includes(p.toLowerCase()) || p.toLowerCase().includes(docType.toLowerCase()));
+            return index !== -1 ? index : 999;
+          };
+
+          const rankA = getRank(a.documentType);
+          const rankB = getRank(b.documentType);
+
+          if (rankA !== rankB) return rankA - rankB;
+
+          // Side priority for address-related fields (Back side preferred)
+          const addressFields: (keyof NormalizedData)[] = ['address', 'city', 'district', 'state', 'pincode', 'post_office'];
+          if (addressFields.includes(field)) {
+            const sideA = (a.source_side || a.documentType || '').toLowerCase();
+            const sideB = (b.source_side || b.documentType || '').toLowerCase();
+            const isBackA = sideA.includes('back');
+            const isBackB = sideB.includes('back');
+            if (isBackA && !isBackB) return -1;
+            if (isBackB && !isBackA) return 1;
+          }
+
           return b.confidence - a.confidence;
         });
 
@@ -154,6 +170,17 @@ export class MergeEngine {
         return validRankA - validRankB;
       });
       data.profile_photo = validPhotoJobs[0].normalizedData!.profile_photo;
+    }
+
+    // Collect all detected documents across jobs
+    const allDetectedDocs: any[] = [];
+    validJobs.forEach(j => {
+      if (j.normalizedData?.detected_documents) {
+        allDetectedDocs.push(...j.normalizedData.detected_documents);
+      }
+    });
+    if (allDetectedDocs.length > 0) {
+      data.detected_documents = allDetectedDocs;
     }
 
     // Include internal conflicts from single documents (e.g. Aadhaar Front/Back discrepancies)

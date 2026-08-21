@@ -1,0 +1,37 @@
+﻿==========================================================================
+                      GCDS FULL BACKUP MANIFEST                           
+==========================================================================
+Backup Timestamp : 2026-08-21 11:09:35 +05:30
+Project Name     : gazi-customer-data-store
+Source Directory : c:\Users\Gazi Online\Desktop\PPPPPPPP\GCDS\gazi-customer-data-store
+Backup Target    : D:\GCDS_FULL_BACKUP_2026-08-21
+
+GIT METADATA:
+Git Branch       : main
+Git HEAD Hash    : 1c4f62ac804c58ab3a297df84414887f5338c13d
+
+LATEST 10 COMMITS:
+1c4f62a Add India PIN code address intelligence
+50a9a62 Bound OpenRouter fallback output tokens
+0b0cd38 Add Voter ID to Smart Import merged data
+338c9cf Fix Smart Import empty extraction handoff
+8f71f6e Complete Phase 10 reports and analytics suite
+4cf8164 Complete Phase 9 payments and billing UI
+a1a03de Add hardened payments and billing foundation
+af85880 Complete Phase 8 services workflow
+e2f75d1 Harden AI cache and optimize extraction pipeline
+f0ef609 Add secure AI extraction deduplication cache
+
+BACKUP ARTIFACT INVENTORY & METRICS:
+Uncompressed Project Copy Size : 4.25 MB (523 files)
+Git Repository Bundle Size     : 0.35 MB (GCDS_FULL_REPOSITORY.bundle)
+Zip Source Backup Size         : 3.35 MB (GCDS_SOURCE_BACKUP.zip)
+Live DB SQL Insert Dump Size   : 29.79 KB (live_data_insert_backup.sql)
+Live DB JSON Export Size       : 32.74 KB (live_data_tables.json)
+Storage Backup Count & Size    : 34 files (2155.43 KB)
+Secret Environment Present     : YES (SECRETS_DO_NOT_SHARE\.env.local)
+RESTORE_GUIDE.md Present       : YES
+
+CHECKSUMS GENERATED:
+SHA256SUMS.txt included in backup root.
+==========================================================================
