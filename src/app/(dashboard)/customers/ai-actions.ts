@@ -288,9 +288,18 @@ export async function extractDataFromDocuments(formData: FormData) {
     const revalidateWorkMs = performance.now() - revalidateStart;
 
     if (extractionResult.status === 'failed' || !extractionResult.parsedJson) {
+      let userFacingError = extractionResult.errorMessage || "AI extraction failed to extract valid data.";
+      
+      const isPrimaryQuotaOrRateLimit = primaryErrorCategory === 'RATE_LIMIT' || primaryErrorCategory === 'QUOTA';
+      const isFallbackQuotaOrRateLimit = extractionResult.errorCategory === 'QUOTA' || extractionResult.errorCategory === 'RATE_LIMIT';
+
+      if (isPrimaryQuotaOrRateLimit && isFallbackQuotaOrRateLimit) {
+        userFacingError = "Primary and backup AI quotas are temporarily unavailable. Please try again later.";
+      }
+
       return {
         success: false,
-        error: extractionResult.errorMessage || "AI extraction failed to extract valid data."
+        error: userFacingError
       };
     }
 

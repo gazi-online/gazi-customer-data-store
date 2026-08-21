@@ -1,6 +1,9 @@
 import { BaseAIProvider, AIExtractionResult, AIProviderOptions, FileData, AIErrorCategory } from './base';
 import { JSONValidator } from '../parser/validator';
 
+let quotaBlockedUntil = 0;
+const QUOTA_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+
 export class OpenRouterProvider extends BaseAIProvider {
   constructor() {
     super('openrouter');
@@ -17,6 +20,19 @@ export class OpenRouterProvider extends BaseAIProvider {
     const model = options?.model || 'openrouter/free';
     const maxRetries = options?.maxRetries || 2;
     const apiKey = process.env.OPENROUTER_API_KEY || '';
+
+    // In-process circuit breaker check
+    if (Date.now() < quotaBlockedUntil) {
+      console.log(`[OpenRouter] Circuit breaker active: skipping request (quota blocked until ${new Date(quotaBlockedUntil).toISOString()})`);
+      return {
+        rawResponse: "",
+        status: 'failed',
+        processingTimeMs: Date.now() - startTime,
+        modelName: model,
+        errorMessage: "Backup AI provider quota is unavailable. Please try again later.",
+        errorCategory: 'QUOTA'
+      };
+    }
 
     let attempt = 0;
     let lastError: any = null;
@@ -187,7 +203,7 @@ export class OpenRouterProvider extends BaseAIProvider {
           console.warn(`[OpenRouterProvider] Attempt ${attempt} failed with ${error.status}, retrying...`);
           await new Promise(r => setTimeout(r, 1000 * attempt));
         } else {
-          break; // Don't retry auth or bad request errors
+          break; // Don't retry auth, 402, or bad request errors
         }
       }
     }
@@ -196,8 +212,8 @@ export class OpenRouterProvider extends BaseAIProvider {
     const errStr = (lastError?.message || "").toLowerCase();
     
     if (lastError?.isTimeout || lastError?.name === 'AbortError' || errStr.includes("abort")) category = 'TIMEOUT';
-    else if (lastError?.status === 401 || lastError?.status === 403 || errStr.includes("key")) category = 'AUTHENTICATION';
-    else if (lastError?.status === 402 || lastError?.status === 429 || errStr.includes("rate limit") || errStr.includes("quota") || errStr.includes("credits") || errStr.includes("max_tokens")) category = 'QUOTA';
+    else if (lastError?.status === 402 || lastError?.status === 429 || errStr.includes("rate limit") || errStr.includes("quota") || errStr.includes("credits") || errStr.includes("insufficient") || errStr.includes("max_tokens")) category = 'QUOTA';
+    else if (lastError?.status === 401 || lastError?.status === 403 || errStr.includes("unauthorized") || errStr.includes("invalid key") || errStr.includes("missing key") || errStr.includes("api key")) category = 'AUTHENTICATION';
     else if (lastError?.status === 404 || errStr.includes("model")) category = 'MODEL_UNAVAILABLE';
     else if (lastError?.status >= 500) category = 'PROVIDER_ERROR';
     else if (errStr.includes("fetch") || errStr.includes("network") || errStr.includes("failed to fetch")) category = 'NETWORK';
@@ -210,6 +226,8 @@ export class OpenRouterProvider extends BaseAIProvider {
       finalErrorMessage = "AI service is temporarily unavailable. Please try again.";
     } else if (category === 'QUOTA' || lastError?.status === 402) {
       finalErrorMessage = "Backup AI provider quota is unavailable. Please try again later.";
+      // Trip circuit breaker for 5 minutes on HTTP 402 / QUOTA failure
+      quotaBlockedUntil = Date.now() + QUOTA_COOLDOWN_MS;
     } else if (lastError?.status) {
       finalErrorMessage = `AI Fallback HTTP Error ${lastError.status}: ${lastError.message}`;
     } else if (lastError?.message) {
