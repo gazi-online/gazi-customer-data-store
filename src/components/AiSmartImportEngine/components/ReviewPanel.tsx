@@ -1,10 +1,11 @@
 import { MergedResult, NormalizedData, Conflict } from "../types";
-import { AlertCircle, CheckCircle2, ChevronRight, Check, Activity, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronRight, Check, Activity, Loader2, UserCheck, Sparkles } from "lucide-react";
 import { useState, useEffect } from "react";
 import { getProfilePhotoSignedUrl, cropAndUploadProfilePhoto } from "@/app/(dashboard)/customers/ai-actions";
 import { IndiaPincodeProvider } from "@/lib/address/IndiaPincodeProvider";
 import { PincodeLookupResult } from "@/lib/address/address-types";
 import { toast } from "sonner";
+import { suggestNameComponentsFromFullName } from "../nameUtils";
 
 export function ReviewPanel({ 
   result, 
@@ -18,6 +19,7 @@ export function ReviewPanel({
   const [isCroppingPhoto, setIsCroppingPhoto] = useState<boolean>(false);
   const [pinRefData, setPinRefData] = useState<PincodeLookupResult | null>(null);
   const [pinStatus, setPinStatus] = useState<'idle' | 'loading' | 'verified' | 'mismatch' | 'failed'>('idle');
+  const [suggestionAccepted, setSuggestionAccepted] = useState<boolean>(false);
 
   const conflictFields = new Set(result.conflicts.map(c => c.field));
 
@@ -35,6 +37,11 @@ export function ReviewPanel({
     });
     return flat;
   });
+
+  const hasExplicitNameComponents = !!(result.data.first_name?.value && result.data.last_name?.value);
+  const nameSuggestion = (!hasExplicitNameComponents && resolvedData.full_name) 
+    ? suggestNameComponentsFromFullName(resolvedData.full_name) 
+    : null;
 
   const pincodeVal = resolvedData.pincode;
 
@@ -150,6 +157,18 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
     } finally {
       setIsCroppingPhoto(false);
     }
+  };
+
+  const handleApplyNameSuggestion = () => {
+    if (!nameSuggestion) return;
+    setResolvedData(prev => ({
+      ...prev,
+      first_name: nameSuggestion.first_name,
+      middle_name: nameSuggestion.middle_name,
+      last_name: nameSuggestion.last_name
+    }));
+    setSuggestionAccepted(true);
+    toast.success("Suggested name components applied for Auto Fill.");
   };
 
   const handleResolveConflict = (field: keyof NormalizedData, value: any) => {
@@ -346,6 +365,75 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
         )}
 
         <div>
+          {/* Suggested Name Components Banner */}
+          {nameSuggestion && (
+            <div className="mb-6 p-4 rounded-xl bg-blue-50 border border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h5 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                        Suggested Name Components
+                      </h5>
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                        Suggested from Full Name — please verify
+                      </span>
+                    </div>
+                    
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                      Original Full Name: <strong className="font-mono text-zinc-900 dark:text-zinc-100">{resolvedData.full_name}</strong>
+                    </p>
+
+                    <div className="mt-3 grid grid-cols-3 gap-3 bg-white/80 dark:bg-zinc-900/60 p-3 rounded-lg border border-blue-100 dark:border-blue-900/40 text-xs">
+                      <div>
+                        <span className="text-zinc-500 block text-[10px] uppercase font-bold">First Name</span>
+                        <span className="font-medium text-zinc-900 dark:text-zinc-100">{nameSuggestion.first_name || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 block text-[10px] uppercase font-bold">Middle Name</span>
+                        <span className="font-medium text-zinc-900 dark:text-zinc-100">{nameSuggestion.middle_name || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500 block text-[10px] uppercase font-bold">Last Name</span>
+                        <span className="font-medium text-zinc-900 dark:text-zinc-100">{nameSuggestion.last_name || '—'}</span>
+                      </div>
+                    </div>
+
+                    {!nameSuggestion.isReliable && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 font-medium">
+                        ⚠️ Unable to reliably suggest separate name components.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="shrink-0 self-start sm:self-center">
+                  <button
+                    type="button"
+                    onClick={handleApplyNameSuggestion}
+                    disabled={suggestionAccepted}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center shadow-sm ${
+                      suggestionAccepted
+                        ? 'bg-emerald-600 text-white cursor-default'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    {suggestionAccepted ? (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Applied to Review
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck className="h-3.5 w-3.5 mr-1.5" /> Use Suggested Name Components
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <h4 className="text-sm font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-2">
             Final Merged Data
           </h4>
