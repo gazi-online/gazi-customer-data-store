@@ -9,7 +9,12 @@ export class GeminiProvider extends BaseAIProvider {
 
   private getClient(): GoogleGenAI {
     return new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY || ''
+      apiKey: process.env.GEMINI_API_KEY || '',
+      httpOptions: {
+        retryOptions: {
+          attempts: 1 // 1 attempt total (0 SDK retries) — application owns retry policy
+        }
+      }
     });
   }
 
@@ -112,16 +117,21 @@ export class GeminiProvider extends BaseAIProvider {
         if (attempt === 0) primaryAttemptMs = currentAttemptDuration;
         else retryAttemptMs = currentAttemptDuration;
         
-        // Fast fail on auth, bad request, model missing or timeouts
+        const errMsg = (error?.message || "").toLowerCase();
+        const isQuotaOrRateLimit = error?.status === 429 || errMsg.includes("resource_exhausted") || errMsg.includes("quota exceeded") || errMsg.includes("429");
+
+        // Fast fail on auth, rate limit/quota, bad request, model missing or timeouts
         if (
-          error?.message?.includes("API key not valid") || 
+          isQuotaOrRateLimit ||
           error?.status === 400 || 
           error?.status === 403 || 
           error?.status === 404 ||
-          error?.isTimeout
+          error?.isTimeout ||
+          error?.message?.includes("API key not valid")
         ) {
            let cat = 'PROVIDER_ERROR';
-           if (error?.status === 403 || error?.message?.includes("API key")) cat = 'AUTHENTICATION';
+           if (isQuotaOrRateLimit) cat = 'RATE_LIMIT';
+           else if (error?.status === 403 || error?.message?.includes("API key")) cat = 'AUTHENTICATION';
            else if (error?.status === 404) cat = 'MODEL_UNAVAILABLE';
            else if (error?.isTimeout) cat = 'TIMEOUT';
 
