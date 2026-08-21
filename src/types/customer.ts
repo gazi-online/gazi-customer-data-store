@@ -29,6 +29,7 @@ export interface Customer {
   district: string | null;
   state: string | null;
   pincode: string | null;
+  post_office?: string | null;
   country: string | null;
   
   photo_url: string | null;
@@ -63,6 +64,7 @@ export interface CustomerFormData {
   district?: string;
   state?: string;
   pincode?: string;
+  post_office?: string;
   country?: string;
   
   photo_url?: string;

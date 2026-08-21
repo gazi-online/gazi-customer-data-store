@@ -190,6 +190,7 @@ export class DataNormalizer {
       if (addressObj.district) normalized.district = toAiField(addressObj.district, conf.district);
       if (addressObj.state) normalized.state = toAiField(addressObj.state, conf.state);
       if (addressObj.pincode) normalized.pincode = toAiField(addressObj.pincode, conf.pincode);
+      if (addressObj.post_office) normalized.post_office = toAiField(addressObj.post_office, conf.post_office);
     } else if (typeof rawData.address === 'string') {
       fullAddress = rawData.address;
     } else if (rawData.fullAddress) {
@@ -200,11 +201,28 @@ export class DataNormalizer {
       normalized.address = toAiField(fullAddress, conf.address);
     }
 
-    // Fallbacks if city/state weren't in address object
+    // Fallbacks if city/state/post_office/pincode weren't in address object
     if (!normalized.city && rawData.city) normalized.city = toAiField(rawData.city, conf.city);
     if (!normalized.state && rawData.state) normalized.state = toAiField(rawData.state, conf.state);
-    if (!normalized.pincode && (rawData.pincode || rawData.pinCode || rawData.postalCode || rawData.zip)) {
-      normalized.pincode = toAiField(rawData.pincode || rawData.pinCode || rawData.postalCode || rawData.zip, conf.pincode);
+    if (!normalized.post_office && (rawData.post_office || rawData.postOffice)) {
+      normalized.post_office = toAiField(rawData.post_office || rawData.postOffice, conf.post_office);
+    }
+    if (!normalized.pincode && (rawData.pincode || rawData.pinCode || rawData.postalCode || rawData.zip || customer.pincode || customer.pinCode)) {
+      normalized.pincode = toAiField(rawData.pincode || rawData.pinCode || rawData.postalCode || rawData.zip || customer.pincode || customer.pinCode, conf.pincode);
+    }
+
+    // Clean pincode digits
+    if (normalized.pincode?.value) {
+      const cleanPin = normalized.pincode.value.replace(/\D/g, '');
+      if (cleanPin.length === 6) {
+        normalized.pincode.value = cleanPin;
+      }
+    }
+
+    // Default country to India if rawData is non-empty
+    if (Object.keys(rawData).length > 0) {
+      const countryVal = rawData.country || customer.country;
+      normalized.country = toAiField(typeof countryVal === 'string' && countryVal.trim() ? countryVal.trim() : "India", conf.country, 0.95);
     }
 
     return normalized;

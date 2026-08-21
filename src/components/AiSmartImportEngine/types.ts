@@ -37,6 +37,7 @@ export interface NormalizedData {
   district?: AiField<string>;
   state?: AiField<string>;
   pincode?: AiField<string>;
+  post_office?: AiField<string>;
   country?: AiField<string>;
   internal_conflicts?: Conflict[];
 }

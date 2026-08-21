@@ -28,6 +28,7 @@ const FIELD_PRIORITY: Record<keyof NormalizedData, string[]> = {
   mother_name: ['Aadhaar Card', 'Passport', 'Voter ID'],
   marital_status: ['Passport', 'Aadhaar Card'],
   spouse_name: ['Aadhaar Card', 'Passport', 'Voter ID'],
+  post_office: ['Aadhaar Card', 'Voter ID'],
   profile_photo: [], // Handled separately
   internal_conflicts: [], // Handled separately
 };

@@ -14,6 +14,9 @@ import { v4 as uuidv4 } from "uuid";
 import { createCustomer, updateCustomer, checkDuplicateCustomer } from "@/app/(dashboard)/customers/actions";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { AiSmartImportEngine } from "../AiSmartImportEngine";
+import { IndiaPincodeProvider } from "@/lib/address/IndiaPincodeProvider";
+import { PincodeLookupResult } from "@/lib/address/address-types";
+import { useRef } from "react";
 
 const customerSchema = z.object({
   customer_code: z.string().optional().or(z.literal("")),
@@ -40,6 +43,7 @@ const customerSchema = z.object({
   district: z.string().optional().or(z.literal("")),
   state: z.string().optional().or(z.literal("")),
   pincode: z.string().optional().or(z.literal("")),
+  post_office: z.string().optional().or(z.literal("")),
   country: z.string().optional().or(z.literal("")),
   photo_url: z.string().optional(),
   photo_source: z.string().optional(),
@@ -87,7 +91,8 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       district: initialData.district || "",
       state: initialData.state || "",
       pincode: initialData.pincode || "",
-      country: initialData.country || "India",
+      post_office: initialData.post_office || "",
+      country: "India",
       photo_url: initialData.photo_url || undefined,
       photo_source: initialData.photo_source || undefined,
     } : {
@@ -105,6 +110,63 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   const maritalStatus = watch("marital_status");
   const photoSource = watch("photo_source");
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+
+  const [isPincodeLoading, setIsPincodeLoading] = useState(false);
+  const [pincodeError, setPincodeError] = useState<string | null>(null);
+  const [isManualAddressEdit, setIsManualAddressEdit] = useState(false);
+  const [postOfficeOptions, setPostOfficeOptions] = useState<string[]>([]);
+  const [localityOptions, setLocalityOptions] = useState<string[]>([]);
+  const [pinRef, setPinRef] = useState<{ state: string; district: string } | null>(null);
+  
+  const lookupReqIdRef = useRef(0);
+
+  const watchedPincode = watch("pincode");
+  const watchedState = watch("state");
+  const watchedDistrict = watch("district");
+
+  useEffect(() => {
+    const cleanPin = (watchedPincode || "").replace(/\D/g, "").trim();
+    if (cleanPin.length === 6) {
+      const currentReqId = ++lookupReqIdRef.current;
+      setIsPincodeLoading(true);
+      setPincodeError(null);
+
+      IndiaPincodeProvider.lookup(cleanPin).then(res => {
+        if (lookupReqIdRef.current !== currentReqId) return; // Prevent race conditions
+        setIsPincodeLoading(false);
+        if (res.success && res.data) {
+          setPinRef({ state: res.data.state, district: res.data.district });
+          
+          // Auto-fill state and district unless user is in manual override mode
+          if (!isManualAddressEdit) {
+            setValue("state", res.data.state, { shouldValidate: true, shouldDirty: true });
+            setValue("district", res.data.district, { shouldValidate: true, shouldDirty: true });
+            setValue("country", "India", { shouldValidate: true, shouldDirty: true });
+          }
+
+          const poNames = res.data.postOffices.map(po => po.name);
+          setPostOfficeOptions(poNames);
+          if (poNames.length === 1) {
+            setValue("post_office", poNames[0], { shouldValidate: true, shouldDirty: true });
+          }
+
+          setLocalityOptions(res.data.citiesOrLocalities);
+        } else {
+          setPincodeError("PIN code lookup unavailable. You can enter the address manually.");
+          setIsManualAddressEdit(true);
+        }
+      }).catch(() => {
+        if (lookupReqIdRef.current !== currentReqId) return;
+        setIsPincodeLoading(false);
+        setPincodeError("PIN code lookup unavailable. You can enter the address manually.");
+        setIsManualAddressEdit(true);
+      });
+    } else {
+      setPinRef(null);
+      setPostOfficeOptions([]);
+      setLocalityOptions([]);
+    }
+  }, [watchedPincode, setValue, isManualAddressEdit]);
 
   useEffect(() => {
     async function loadPhoto() {
@@ -209,6 +271,8 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         pan_number: data.pan_number === "" ? null : data.pan_number,
         gst_number: data.gst_number === "" ? null : data.gst_number,
         voter_id_number: data.voter_id_number === "" ? null : data.voter_id_number,
+        post_office: data.post_office === "" ? null : data.post_office,
+        country: "India",
       } as any;
 
       if (isEditing && initialData) {
@@ -441,37 +505,94 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
         {/* Address Details */}
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-2">Location Details</h2>
+          <div className="flex items-center justify-between mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-2">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Location Details</h2>
+            {pinRef && (
+              <button
+                type="button"
+                onClick={() => setIsManualAddressEdit(!isManualAddressEdit)}
+                className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+              >
+                {isManualAddressEdit ? "Lock to PIN reference" : "Edit manually"}
+              </button>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2 md:col-span-3">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Full Address <span className="text-red-500">*</span></label>
-              <textarea {...register("address")} rows={2} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="Enter full address" />
+              <textarea {...register("address")} rows={2} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="House / Flat No., Road, Landmark, Village details" />
               {errors.address && <p className="text-sm text-red-500">{errors.address.message}</p>}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">City</label>
-              <input {...register("city")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Mumbai" />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
+                <span>Pincode</span>
+                {isPincodeLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />}
+              </label>
+              <input {...register("pincode")} maxLength={6} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow font-mono" placeholder="e.g. 700001" />
+              {pincodeError && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{pincodeError}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">State</label>
+              <input 
+                {...register("state")} 
+                readOnly={!isManualAddressEdit && !!pinRef} 
+                className={`w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow ${!isManualAddressEdit && !!pinRef ? 'bg-zinc-100 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 cursor-not-allowed' : ''}`} 
+                placeholder="e.g. West Bengal" 
+              />
+              {isManualAddressEdit && pinRef && watchedState && watchedState.trim().toLowerCase() !== pinRef.state.trim().toLowerCase() && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Address differs from PIN code reference data.</p>
+              )}
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">District</label>
-              <input {...register("district")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Mumbai Suburban" />
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">State</label>
-              <input {...register("state")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Maharashtra" />
+              <input 
+                {...register("district")} 
+                readOnly={!isManualAddressEdit && !!pinRef} 
+                className={`w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow ${!isManualAddressEdit && !!pinRef ? 'bg-zinc-100 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 cursor-not-allowed' : ''}`} 
+                placeholder="e.g. Kolkata" 
+              />
+              {isManualAddressEdit && pinRef && watchedDistrict && watchedDistrict.trim().toLowerCase() !== pinRef.district.trim().toLowerCase() && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Address differs from PIN code reference data.</p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Pincode</label>
-              <input {...register("pincode")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. 400001" />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Post Office</label>
+              {postOfficeOptions.length > 0 ? (
+                <select {...register("post_office")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow">
+                  <option value="">Select Post Office</option>
+                  {postOfficeOptions.map(po => (
+                    <option key={po} value={po}>{po}</option>
+                  ))}
+                </select>
+              ) : (
+                <input {...register("post_office")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. G.P.O." />
+              )}
             </div>
-            
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">City / Locality</label>
+              {localityOptions.length > 0 ? (
+                <div>
+                  <input {...register("city")} list="locality-list" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Kolkata" />
+                  <datalist id="locality-list">
+                    {localityOptions.map(loc => (
+                      <option key={loc} value={loc} />
+                    ))}
+                  </datalist>
+                </div>
+              ) : (
+                <input {...register("city")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Kolkata" />
+              )}
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Country</label>
-              <input {...register("country")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. India" />
+              <input {...register("country")} readOnly className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-medium cursor-not-allowed" value="India" />
             </div>
           </div>
         </div>

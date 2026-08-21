@@ -2,6 +2,8 @@ import { MergedResult, NormalizedData, Conflict } from "../types";
 import { AlertCircle, CheckCircle2, ChevronRight, Check, Activity, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { getProfilePhotoSignedUrl, cropAndUploadProfilePhoto } from "@/app/(dashboard)/customers/ai-actions";
+import { IndiaPincodeProvider } from "@/lib/address/IndiaPincodeProvider";
+import { PincodeLookupResult } from "@/lib/address/address-types";
 import { toast } from "sonner";
 
 export function ReviewPanel({ 
@@ -14,6 +16,8 @@ export function ReviewPanel({
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [usePhoto, setUsePhoto] = useState<boolean>(false);
   const [isCroppingPhoto, setIsCroppingPhoto] = useState<boolean>(false);
+  const [pinRefData, setPinRefData] = useState<PincodeLookupResult | null>(null);
+  const [pinStatus, setPinStatus] = useState<'idle' | 'loading' | 'verified' | 'mismatch' | 'failed'>('idle');
 
   const conflictFields = new Set(result.conflicts.map(c => c.field));
 
@@ -31,6 +35,40 @@ export function ReviewPanel({
     });
     return flat;
   });
+
+  const pincodeVal = resolvedData.pincode;
+
+  useEffect(() => {
+    let isCurrent = true;
+    if (pincodeVal && String(pincodeVal).replace(/\D/g, '').length === 6) {
+      setPinStatus('loading');
+      IndiaPincodeProvider.lookup(String(pincodeVal)).then(res => {
+        if (!isCurrent) return;
+        if (res.success && res.data) {
+          setPinRefData(res.data);
+          const extState = (resolvedData.state || '').trim().toLowerCase();
+          const extDist = (resolvedData.district || '').trim().toLowerCase();
+          const refState = res.data.state.trim().toLowerCase();
+          const refDist = res.data.district.trim().toLowerCase();
+
+          const stateMismatch = extState && extState !== refState;
+          const distMismatch = extDist && extDist !== refDist;
+
+          if (stateMismatch || distMismatch) {
+            setPinStatus('mismatch');
+          } else {
+            setPinStatus('verified');
+          }
+        } else {
+          setPinStatus('failed');
+        }
+      });
+    } else {
+      setPinStatus('idle');
+      setPinRefData(null);
+    }
+    return () => { isCurrent = false; };
+  }, [pincodeVal, resolvedData.state, resolvedData.district]);
 
 const ALL_FIELDS: (keyof NormalizedData)[] = [
   'full_name',
@@ -55,6 +93,7 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
   'district',
   'state',
   'pincode',
+  'post_office',
   'country'
 ];
 
@@ -310,6 +349,58 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
           <h4 className="text-sm font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-2">
             Final Merged Data
           </h4>
+
+          {/* PIN Reference Validation Banner */}
+          {pinStatus === 'mismatch' && pinRefData && (
+            <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h5 className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                    Address Mismatch vs PIN Reference Data ({pinRefData.pincode})
+                  </h5>
+                  <div className="mt-2 text-xs space-y-2 text-amber-800 dark:text-amber-300">
+                    {resolvedData.state && resolvedData.state.trim().toLowerCase() !== pinRefData.state.trim().toLowerCase() && (
+                      <div className="flex items-center justify-between gap-4 p-2 bg-amber-100/50 dark:bg-amber-900/30 rounded-lg">
+                        <span>Extracted State: <strong className="font-mono text-zinc-900 dark:text-zinc-100">{resolvedData.state}</strong> | PIN Reference: <strong className="font-mono text-emerald-700 dark:text-emerald-400">{pinRefData.state}</strong></span>
+                        <div className="flex gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setResolvedData(prev => ({ ...prev, state: pinRefData.state }))}
+                            className="px-2.5 py-1 bg-amber-600 text-white rounded text-[11px] font-medium hover:bg-amber-700 transition-colors"
+                          >
+                            Use PIN Ref ({pinRefData.state})
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {resolvedData.district && resolvedData.district.trim().toLowerCase() !== pinRefData.district.trim().toLowerCase() && (
+                      <div className="flex items-center justify-between gap-4 p-2 bg-amber-100/50 dark:bg-amber-900/30 rounded-lg">
+                        <span>Extracted District: <strong className="font-mono text-zinc-900 dark:text-zinc-100">{resolvedData.district}</strong> | PIN Reference: <strong className="font-mono text-emerald-700 dark:text-emerald-400">{pinRefData.district}</strong></span>
+                        <div className="flex gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setResolvedData(prev => ({ ...prev, district: pinRefData.district }))}
+                            className="px-2.5 py-1 bg-amber-600 text-white rounded text-[11px] font-medium hover:bg-amber-700 transition-colors"
+                          >
+                            Use PIN Ref ({pinRefData.district})
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {pinStatus === 'verified' && pinRefData && (
+            <div className="mb-6 p-3 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>PIN Verified — State ({pinRefData.state}) and District ({pinRefData.district}) match India Post reference data for PIN {pinRefData.pincode}.</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-y-4 gap-x-6">
             {ALL_FIELDS.map((key) => {
               const original = (result.data as any)[key];
