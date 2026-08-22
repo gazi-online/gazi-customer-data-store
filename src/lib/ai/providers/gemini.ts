@@ -130,10 +130,17 @@ export class GeminiProvider extends BaseAIProvider {
           error?.message?.includes("API key not valid")
         ) {
            let cat = 'PROVIDER_ERROR';
-           if (isQuotaOrRateLimit) cat = 'RATE_LIMIT';
-           else if (error?.status === 403 || error?.message?.includes("API key")) cat = 'AUTHENTICATION';
-           else if (error?.status === 404) cat = 'MODEL_UNAVAILABLE';
-           else if (error?.isTimeout) cat = 'TIMEOUT';
+           let userErrMsg = error?.message || "Gemini API failed fast.";
+           if (isQuotaOrRateLimit) {
+             cat = 'RATE_LIMIT';
+             userErrMsg = "Gemini quota is temporarily unavailable. Please try again later.";
+           } else if (error?.status === 403 || error?.message?.includes("API key")) {
+             cat = 'AUTHENTICATION';
+           } else if (error?.status === 404) {
+             cat = 'MODEL_UNAVAILABLE';
+           } else if (error?.isTimeout) {
+             cat = 'TIMEOUT';
+           }
 
            return {
              rawResponse: "",
@@ -142,7 +149,7 @@ export class GeminiProvider extends BaseAIProvider {
              primaryAttemptMs,
              retryAttemptMs,
              modelName: model,
-             errorMessage: error?.message || "Gemini API failed fast.",
+             errorMessage: userErrMsg,
              errorCategory: cat as any
            };
         }
