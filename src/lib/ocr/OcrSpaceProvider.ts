@@ -7,6 +7,11 @@ export interface OcrSpaceResult {
   processingTimeMs: number;
   error?: string;
   errorCategory?: 'AUTHENTICATION' | 'FILE_LIMIT' | 'RATE_LIMIT' | 'PROCESSING_ERROR' | 'NETWORK';
+  submittedSizeBytes?: number;
+  wasCompressed?: boolean;
+  minQualityUsed?: number;
+  longEdgeResized?: boolean;
+  exifRotated?: boolean;
 }
 
 export interface OcrSpaceFile {
@@ -41,26 +46,119 @@ export class OcrSpaceProvider {
     let processBuffer = file.buffer;
     let filename = file.filename || "document.jpg";
     let mimeType = file.mimeType || "image/jpeg";
+    let wasCompressed = false;
+    let minQualityUsed = 100;
+    let longEdgeResized = false;
+    let exifRotated = false;
 
-    // Handle WEBP conversion to JPEG server-side using sharp
-    if (mimeType.includes("webp") || filename.toLowerCase().endsWith(".webp")) {
-      try {
-        processBuffer = await sharp(file.buffer).jpeg({ quality: 90 }).toBuffer();
-        filename = filename.replace(/\.webp$/i, ".jpg");
-        mimeType = "image/jpeg";
-      } catch (e: any) {
-        console.warn("[OcrSpaceProvider] WEBP to JPEG conversion warning:", e.message);
-      }
-    }
+    const lowerName = filename.toLowerCase();
+    const isPdf = mimeType.includes("pdf") || lowerName.endsWith(".pdf");
+    const isImage = mimeType.startsWith("image/") || /\.(jpg|jpeg|png|webp)$/i.test(filename);
 
-    if (processBuffer.length > maxFileSizeBytes) {
+    // 1. PDF strict 1 MB check
+    if (isPdf && processBuffer.length > maxFileSizeBytes) {
       const sizeMb = (processBuffer.length / (1024 * 1024)).toFixed(2);
       return {
         success: false,
         processingTimeMs: Date.now() - startTime,
-        error: `File size (${sizeMb} MB) exceeds the 1 MB OCR.space free plan limit.`,
+        error: `PDF file size (${sizeMb} MB) exceeds the 1 MB OCR.space free plan limit.`,
         errorCategory: "FILE_LIMIT"
       };
+    }
+
+    // 2. Server-side Image Optimization (~900 KB target) with Long-Edge Resizing & EXIF Auto-Rotation
+    if (isImage) {
+      const initialSize = processBuffer.length;
+      const targetMaxBytes = 900 * 1024; // 900 KB target
+      const isFormatConversionNeeded = mimeType.includes("webp") || mimeType.includes("png");
+
+      if (initialSize > targetMaxBytes || isFormatConversionNeeded) {
+        try {
+          exifRotated = true; // sharp .rotate() performs EXIF auto-orientation
+          const metadata = await sharp(file.buffer).rotate().metadata();
+          const origW = metadata.width || 0;
+          const origH = metadata.height || 0;
+          const longEdge = Math.max(origW, origH);
+
+          // Step 1: Quality 85, Long-edge 2048px max
+          let targetLongEdge = longEdge > 2048 ? 2048 : (longEdge > 0 ? longEdge : 2048);
+          if (longEdge > 2048) longEdgeResized = true;
+
+          let quality = 85;
+          minQualityUsed = quality;
+
+          let pipeline = sharp(file.buffer).rotate();
+          if (targetLongEdge < longEdge) {
+            pipeline = pipeline.resize({
+              width: origW >= origH ? targetLongEdge : undefined,
+              height: origH > origW ? targetLongEdge : undefined,
+              fit: 'inside',
+              withoutEnlargement: true
+            });
+          }
+
+          let compressed = await pipeline
+            .jpeg({ quality, mozjpeg: true })
+            .toBuffer();
+
+          // Step 2: If still > 900 KB, Quality 78, Long-edge 1800px max
+          if (compressed.length > targetMaxBytes) {
+            quality = 78;
+            minQualityUsed = quality;
+            targetLongEdge = Math.min(targetLongEdge, 1800);
+            if (longEdge > 1800) longEdgeResized = true;
+
+            compressed = await sharp(file.buffer)
+              .rotate()
+              .resize({
+                width: origW >= origH ? targetLongEdge : undefined,
+                height: origH > origW ? targetLongEdge : undefined,
+                fit: 'inside',
+                withoutEnlargement: true
+              })
+              .jpeg({ quality, mozjpeg: true })
+              .toBuffer();
+          }
+
+          // Step 3: If still > 900 KB, Quality 70 (floor), Long-edge 1600px max
+          if (compressed.length > targetMaxBytes) {
+            quality = 70; // Hard minimum quality floor for OCR text legibility
+            minQualityUsed = quality;
+            targetLongEdge = Math.min(targetLongEdge, 1600);
+            if (longEdge > 1600) longEdgeResized = true;
+
+            compressed = await sharp(file.buffer)
+              .rotate()
+              .resize({
+                width: origW >= origH ? targetLongEdge : undefined,
+                height: origH > origW ? targetLongEdge : undefined,
+                fit: 'inside',
+                withoutEnlargement: true
+              })
+              .jpeg({ quality, mozjpeg: true })
+              .toBuffer();
+          }
+
+          processBuffer = compressed;
+          const baseName = filename.replace(/\.(webp|png|jpeg|jpg)$/i, "");
+          filename = `${baseName}.jpg`;
+          mimeType = "image/jpeg";
+          wasCompressed = true;
+
+        } catch (e: any) {
+          console.warn("[OcrSpaceProvider] Image auto-compression warning:", e.message);
+        }
+      }
+
+      // Check if compressed image is still > 1 MB (oversized/uncompressible case)
+      if (processBuffer.length > maxFileSizeBytes) {
+        return {
+          success: false,
+          processingTimeMs: Date.now() - startTime,
+          error: "This image is too large for the current OCR.space plan. Try a smaller or lower-resolution image.",
+          errorCategory: "FILE_LIMIT"
+        };
+      }
     }
 
     try {
@@ -153,7 +251,12 @@ export class OcrSpaceProvider {
         success: true,
         text: combinedText,
         pages,
-        processingTimeMs: responseTimeMs
+        processingTimeMs: responseTimeMs,
+        submittedSizeBytes: processBuffer.length,
+        wasCompressed,
+        minQualityUsed,
+        longEdgeResized,
+        exifRotated
       };
 
     } catch (error: any) {

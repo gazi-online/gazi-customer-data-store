@@ -82,8 +82,15 @@ export const ProviderDocumentModal: React.FC<ProviderDocumentModalProps> = ({
 
     const newStaged: StagedFile[] = [];
     for (const f of selectedFiles) {
-      if (f.size > 1 * 1024 * 1024) {
-        toast.error(`File ${f.name} (${(f.size / (1024 * 1024)).toFixed(2)} MB) exceeds the 1 MB OCR.space free plan limit.`);
+      const lower = f.name.toLowerCase();
+      const isPdf = f.type === 'application/pdf' || lower.endsWith('.pdf');
+
+      if (isPdf && f.size > 1 * 1024 * 1024) {
+        toast.error(`PDF ${f.name} (${(f.size / (1024 * 1024)).toFixed(2)} MB) exceeds the 1 MB OCR.space free plan limit.`);
+        continue;
+      }
+      if (!isPdf && f.size > 10 * 1024 * 1024) {
+        toast.error(`Image ${f.name} (${(f.size / (1024 * 1024)).toFixed(2)} MB) exceeds the 10 MB maximum upload limit.`);
         continue;
       }
       let previewUrl: string | undefined = undefined;
@@ -257,7 +264,7 @@ export const ProviderDocumentModal: React.FC<ProviderDocumentModalProps> = ({
                   Select Customer Documents for OCR.space Extraction
                 </p>
                 <p className="text-[11px] text-zinc-500 mt-1 mb-3">
-                  Supported: JPG, PNG, WEBP, PDF (Max 1 MB per file, max 3 pages per PDF)
+                  Supported: JPG, PNG, WEBP, PDF (PDF Max 1 MB, Images auto-optimized &lt; 1 MB)
                 </p>
                 <label className="inline-flex items-center px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold rounded-lg cursor-pointer hover:opacity-90 transition-opacity">
                   <span>Choose Files…</span>
