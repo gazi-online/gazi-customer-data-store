@@ -9,6 +9,9 @@ import sharp from "sharp";
 import { v4 as uuidv4 } from "uuid";
 
 import crypto from "crypto";
+import { OcrSpaceProvider } from "@/lib/ocr/OcrSpaceProvider";
+import { DocumentClassifier } from "@/lib/ocr/DocumentClassifier";
+import { DocumentTextParser } from "@/lib/ocr/DocumentTextParser";
 
 export async function extractDataFromDocuments(formData: FormData) {
   const fullServerActionStart = performance.now();
@@ -594,4 +597,80 @@ export async function generateCustomerJsonWithProvider(formData: FormData) {
     };
   }
 }
+
+export async function processOcrSpaceDocument(formData: FormData) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const files = formData.getAll('files') as File[];
+    if (files.length === 0) {
+      throw new Error("No documents provided for OCR.space processing.");
+    }
+
+    if (files.length > 10) {
+      throw new Error("Maximum 10 documents allowed per import batch.");
+    }
+
+    const allParsedData: any[] = [];
+
+    for (const file of files) {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const ocrResult = await OcrSpaceProvider.extractText({
+        buffer,
+        filename: file.name,
+        mimeType: file.type
+      });
+
+      if (!ocrResult.success || !ocrResult.text) {
+        return {
+          success: false,
+          error: ocrResult.error || `OCR.space failed to read text from ${file.name}.`
+        };
+      }
+
+      const extractedText = ocrResult.text;
+      const classification = DocumentClassifier.classify(extractedText);
+      const detectedType = classification.documentType;
+      const parsedFields = DocumentTextParser.parse(extractedText, detectedType);
+
+      allParsedData.push(parsedFields);
+    }
+
+    if (allParsedData.length === 0) {
+      throw new Error("Could not parse customer data from OCR results.");
+    }
+
+    const firstParsed = allParsedData[0] || {};
+    const combinedJson = {
+      customer: firstParsed.customer || {},
+      address: firstParsed.address || {},
+      documents: firstParsed.documents || {},
+      detected_documents: allParsedData.flatMap(d => d.detected_documents || []),
+      confidence_summary: firstParsed.confidence_summary || { overall: 0.9, low_confidence_fields: [] }
+    };
+
+    if (allParsedData.length > 1) {
+      for (let i = 1; i < allParsedData.length; i++) {
+        const current = allParsedData[i];
+        if (current.customer) combinedJson.customer = { ...combinedJson.customer, ...current.customer };
+        if (current.address) combinedJson.address = { ...combinedJson.address, ...current.address };
+        if (current.documents) combinedJson.documents = { ...combinedJson.documents, ...current.documents };
+      }
+    }
+
+    return {
+      success: true,
+      data: combinedJson
+    };
+
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || "OCR.space document extraction failed."
+    };
+  }
+}
+
 

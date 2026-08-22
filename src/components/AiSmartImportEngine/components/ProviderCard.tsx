@@ -1,13 +1,13 @@
 import React from 'react';
-import { Sparkles, Cpu, Brain, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Sparkles, Cpu, Brain, FileSearch, ExternalLink, CheckCircle2 } from 'lucide-react';
 
 export interface ProviderConfig {
-  id: 'gemini' | 'openai' | 'claude' | 'local';
+  id: 'gemini_web' | 'chatgpt_web' | 'claude_web' | 'ocr_space';
   name: string;
   subtitle: string;
   badge?: string;
-  isCloud: boolean;
-  isConfigured: boolean;
+  isWeb: boolean;
+  webUrl?: string;
   icon: any;
   colorTheme: {
     bg: string;
@@ -23,12 +23,14 @@ interface ProviderCardProps {
   onSelect: (provider: ProviderConfig) => void;
 }
 
-export const PROVIDER_CONFIGS: Record<string, Omit<ProviderConfig, 'isConfigured'>> = {
-  gemini: {
-    id: 'gemini',
-    name: 'Gemini AI',
-    subtitle: 'Fast multimodal document extraction',
-    isCloud: true,
+export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
+  gemini_web: {
+    id: 'gemini_web',
+    name: 'Gemini Web',
+    subtitle: 'Use Gemini in your browser',
+    badge: 'Web AI',
+    isWeb: true,
+    webUrl: 'https://gemini.google.com/',
     icon: Sparkles,
     colorTheme: {
       bg: 'bg-indigo-50/50 dark:bg-indigo-950/30 hover:bg-indigo-100/60 dark:hover:bg-indigo-900/40',
@@ -38,11 +40,13 @@ export const PROVIDER_CONFIGS: Record<string, Omit<ProviderConfig, 'isConfigured
       badgeBg: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300'
     }
   },
-  openai: {
-    id: 'openai',
-    name: 'OpenAI GPT',
-    subtitle: 'Advanced vision/document extraction',
-    isCloud: true,
+  chatgpt_web: {
+    id: 'chatgpt_web',
+    name: 'ChatGPT Web',
+    subtitle: 'Use ChatGPT in your browser',
+    badge: 'Web AI',
+    isWeb: true,
+    webUrl: 'https://chatgpt.com/',
     icon: Cpu,
     colorTheme: {
       bg: 'bg-emerald-50/50 dark:bg-emerald-950/30 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/40',
@@ -52,11 +56,13 @@ export const PROVIDER_CONFIGS: Record<string, Omit<ProviderConfig, 'isConfigured
       badgeBg: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
     }
   },
-  claude: {
-    id: 'claude',
-    name: 'Claude AI',
-    subtitle: 'Document & vision extraction',
-    isCloud: true,
+  claude_web: {
+    id: 'claude_web',
+    name: 'Claude Web',
+    subtitle: 'Use Claude in your browser',
+    badge: 'Web AI',
+    isWeb: true,
+    webUrl: 'https://claude.ai/',
     icon: Brain,
     colorTheme: {
       bg: 'bg-amber-50/50 dark:bg-amber-950/30 hover:bg-amber-100/60 dark:hover:bg-amber-900/40',
@@ -66,13 +72,13 @@ export const PROVIDER_CONFIGS: Record<string, Omit<ProviderConfig, 'isConfigured
       badgeBg: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300'
     }
   },
-  local: {
-    id: 'local',
-    name: 'Local OCR',
-    subtitle: 'Offline • Free • Private',
-    badge: '100% Offline',
-    isCloud: false,
-    icon: ShieldCheck,
+  ocr_space: {
+    id: 'ocr_space',
+    name: 'OCR.space',
+    subtitle: 'Image & PDF text extraction',
+    badge: 'Hosted OCR',
+    isWeb: false,
+    icon: FileSearch,
     colorTheme: {
       bg: 'bg-sky-50/50 dark:bg-sky-950/30 hover:bg-sky-100/60 dark:hover:bg-sky-900/40',
       border: 'border-sky-200 dark:border-sky-800/60',
@@ -91,10 +97,7 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({ provider, onSelect }
     <button
       type="button"
       onClick={() => onSelect(provider)}
-      disabled={!provider.isConfigured}
-      className={`p-4 rounded-xl border transition-all text-left flex flex-col justify-between relative overflow-hidden group shadow-sm ${colorTheme.bg} ${colorTheme.border} ${
-        !provider.isConfigured ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'
-      }`}
+      className={`p-4 rounded-xl border transition-all text-left flex flex-col justify-between relative overflow-hidden group shadow-sm cursor-pointer hover:shadow-md ${colorTheme.bg} ${colorTheme.border}`}
     >
       <div className="flex items-start justify-between mb-3 w-full">
         <div className="flex items-center space-x-3">
@@ -114,13 +117,13 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({ provider, onSelect }
 
       <div className="flex items-center justify-between pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50 w-full mt-2">
         <div className="flex items-center space-x-1.5">
-          {provider.isConfigured ? (
-            <span className="inline-flex items-center text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="h-3 w-3 mr-1" /> Ready
+          {provider.isWeb ? (
+            <span className="inline-flex items-center text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
+              <ExternalLink className="h-3 w-3 mr-1" /> Browser AI
             </span>
           ) : (
-            <span className="inline-flex items-center text-[10px] font-semibold text-zinc-400 dark:text-zinc-500">
-              <AlertCircle className="h-3 w-3 mr-1" /> Not Configured
+            <span className="inline-flex items-center text-[10px] font-semibold text-sky-600 dark:text-sky-400">
+              <CheckCircle2 className="h-3 w-3 mr-1" /> Fast OCR
             </span>
           )}
         </div>
