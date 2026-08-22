@@ -67,8 +67,12 @@ export class LocalOcrEngine {
         this.initialWorkerLoadMs = Date.now() - startTime;
         return worker;
       } catch (err: any) {
-        console.error("Local OCR Worker initialization failed:", err.message);
-        throw new Error(`Local OCR initialization failed: ${err.message}. Ensure local assets in public/ocr/ are available.`);
+        const errorDetail = (err && (typeof err === 'string' ? err : err.message || (typeof err === 'object' && Object.keys(err).length > 0 ? JSON.stringify(err) : ''))) || '';
+        const cleanMessage = (errorDetail && errorDetail !== 'undefined' && errorDetail !== '[object Object]' && errorDetail !== '{}')
+          ? errorDetail
+          : "A required offline OCR asset is missing or failed to initialize.";
+        console.error("Local OCR Worker initialization failed:", cleanMessage);
+        throw new Error(`Local OCR could not start: ${cleanMessage}`);
       }
     })();
 
