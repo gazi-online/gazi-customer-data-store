@@ -29,6 +29,7 @@ export const ProviderDocumentModal: React.FC<ProviderDocumentModalProps> = ({
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [statusStage, setStatusStage] = useState<string>('');
   const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -80,6 +81,7 @@ export const ProviderDocumentModal: React.FC<ProviderDocumentModalProps> = ({
       return;
     }
 
+    setErrorMessage(null);
     const newStaged: StagedFile[] = [];
     for (const f of selectedFiles) {
       const lower = f.name.toLowerCase();
@@ -119,6 +121,7 @@ export const ProviderDocumentModal: React.FC<ProviderDocumentModalProps> = ({
     }
 
     setIsProcessing(true);
+    setErrorMessage(null);
     setStatusStage("Uploading document to server…");
 
     try {
@@ -142,7 +145,9 @@ export const ProviderDocumentModal: React.FC<ProviderDocumentModalProps> = ({
 
     } catch (err: any) {
       console.error("[OCR.space] Processing error:", err);
-      toast.error(err.message || "OCR.space document extraction failed.");
+      const msg = err.message || "OCR.space document extraction failed.";
+      setErrorMessage(msg);
+      toast.error(msg);
     } finally {
       setIsProcessing(false);
       setStatusStage('');
@@ -314,6 +319,22 @@ export const ProviderDocumentModal: React.FC<ProviderDocumentModalProps> = ({
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {errorMessage && !isProcessing && (
+                <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-xl flex items-center justify-between text-xs text-amber-900 dark:text-amber-200">
+                  <div className="pr-2">
+                    <p className="font-bold">Extraction Error</p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">{errorMessage}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleProcessOcrSpace}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors shrink-0 flex items-center space-x-1 shadow-sm"
+                  >
+                    <span>Try Again</span>
+                  </button>
                 </div>
               )}
 
