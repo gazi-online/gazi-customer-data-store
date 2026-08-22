@@ -506,3 +506,92 @@ export async function cropAndUploadProfilePhoto(formData: FormData) {
     return { success: false, error: error.message };
   }
 }
+
+export async function getAiProviderStatus(): Promise<{
+  gemini: boolean;
+  openai: boolean;
+  claude: boolean;
+  local: boolean;
+}> {
+  return {
+    gemini: !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 0,
+    openai: !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim().length > 0,
+    claude: !!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.trim().length > 0,
+    local: true,
+  };
+}
+
+export async function generateCustomerJsonWithProvider(formData: FormData) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const providerId = (formData.get("provider") as string || "gemini").toLowerCase();
+    const files = formData.getAll('files') as File[];
+
+    if (files.length === 0) {
+      throw new Error("No files provided for extraction");
+    }
+
+    if (files.length > 10) {
+      throw new Error("Maximum 10 documents allowed per import batch.");
+    }
+
+    const fileDataArray = [];
+    for (const file of files) {
+      if (file.size > 10 * 1024 * 1024) {
+        throw new Error(`File ${file.name} exceeds 10MB file size limit.`);
+      }
+      const buffer = await file.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString('base64');
+      fileDataArray.push({
+        mimeType: file.type,
+        base64Data: base64
+      });
+    }
+
+    const promptVersion = process.env.PROMPT_VERSION || 'v1';
+    const finalPrompt = PromptManager.generateFinalPrompt({
+      provider: providerId as any,
+      version: promptVersion as any,
+      documentTypes: []
+    });
+
+    const provider = AIProviderRegistry.getProvider(providerId);
+    const result = await provider.extractData(
+      "You are a highly accurate Document Extraction AI.",
+      finalPrompt,
+      fileDataArray
+    );
+
+    if (result.status === 'failed' || !result.parsedJson) {
+      return {
+        success: false,
+        error: result.errorMessage || `${providerId.toUpperCase()} extraction failed.`
+      };
+    }
+
+    const parsed = result.parsedJson;
+    const canonicalJson = {
+      customer: parsed.customer || {},
+      address: parsed.address || {},
+      documents: parsed.documents || {},
+      detected_documents: parsed.detected_documents || [],
+      confidence_summary: parsed.confidence_summary || { overall: 0.9, low_confidence_fields: [] }
+    };
+
+    return {
+      success: true,
+      data: canonicalJson,
+      provider: providerId,
+      model: result.modelName
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || "Failed to generate JSON with selected provider."
+    };
+  }
+}
+

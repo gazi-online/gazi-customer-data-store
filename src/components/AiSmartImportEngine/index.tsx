@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Bot, Play, UploadCloud, FileImage, Loader2, Trash2, FileText, Sparkles, CheckCircle2 } from "lucide-react";
+import { Bot, Play, UploadCloud, FileImage, Loader2, Trash2, FileText, Sparkles, CheckCircle2, Copy } from "lucide-react";
 import { ImportJob, MergedResult } from "./types";
 import { DataNormalizer } from "./DataNormalizer";
 import { MergeEngine } from "./MergeEngine";
 import { ReviewPanel } from "./components/ReviewPanel";
+import { JsonAiGenerator } from "./components/JsonAiGenerator";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { extractDataFromDocuments } from "@/app/(dashboard)/customers/ai-actions";
@@ -335,19 +336,48 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
             </div>
           ) : (
             <div className="space-y-4">
+              <JsonAiGenerator onJsonGenerated={(jsonStr) => setJsonText(jsonStr)} />
+              
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                  Customer Extraction JSON Editor
+                </label>
+                {jsonText.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(jsonText);
+                      toast.success("JSON copied to clipboard!");
+                    }}
+                    className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center"
+                  >
+                    <Copy className="w-3.5 h-3.5 mr-1" /> Copy JSON
+                  </button>
+                )}
+              </div>
+
               <textarea 
                 value={jsonText}
                 onChange={(e) => setJsonText(e.target.value)}
-                placeholder={`{\n  "full_name": "Rahul Kumar",\n  "date_of_birth": "1995-01-10"\n}`}
-                className="w-full p-4 bg-white dark:bg-zinc-900 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all min-h-[160px]"
+                placeholder={`{\n  "customer": {\n    "full_name": "Rahul Kumar",\n    "dob": "1995-01-10"\n  }\n}`}
+                className="w-full p-4 bg-white dark:bg-zinc-900 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all min-h-[220px]"
               />
-              <div className="flex justify-end">
+              <div className="flex justify-end space-x-3">
+                {jsonText.trim() && (
+                  <button 
+                    type="button" 
+                    onClick={() => setJsonText("")}
+                    className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-lg hover:bg-zinc-200 transition-colors font-semibold text-xs"
+                  >
+                    Clear Box
+                  </button>
+                )}
                 <button 
                   type="button" 
                   onClick={handleAddJson}
-                  className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-semibold text-xs shadow-sm"
+                  className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-semibold text-xs shadow-sm flex items-center"
                 >
-                  Parse Manual JSON
+                  <Bot className="w-4 h-4 mr-1.5" /> Parse & Review JSON
                 </button>
               </div>
             </div>

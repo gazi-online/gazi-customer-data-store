@@ -1,13 +1,17 @@
 import { BaseAIProvider } from './base';
 import { GeminiProvider } from './gemini';
+import { OpenAIProvider } from './openai';
+import { ClaudeProvider } from './claude';
 import { OpenRouterProvider } from './openrouter';
 
 export class AIProviderRegistry {
   private static providers: Map<string, BaseAIProvider> = new Map();
 
   static {
-    // Register defaults
+    // Register default providers
     this.register(new GeminiProvider());
+    this.register(new OpenAIProvider());
+    this.register(new ClaudeProvider());
     this.register(new OpenRouterProvider());
   }
 
