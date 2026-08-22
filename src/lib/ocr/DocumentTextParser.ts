@@ -72,6 +72,61 @@ export class DocumentTextParser {
       return line.replace(/[^A-Za-z\s.]/g, '').trim();
     };
 
+    // Centralized Hard Rejection Helper for Non-Person Headers, Titles, and Labels
+    const isNonPersonHeader = (line: string): boolean => {
+      if (!line || line.trim().length === 0) return true;
+
+      const u = line.toUpperCase().trim();
+
+      // Explicit phrase rejection list (English, Hindi, Bengali)
+      const HARD_REJECT_TERMS = [
+        'GOVERNMENT OF', 'GOVT OF', 'GOVT. OF', 'REPUBLIC OF INDIA', 'STATE GOVERNMENT',
+        'MINISTRY OF', 'DEPARTMENT OF', 'COMMISSION OF', 'AUTHORITY OF', 'INCOME TAX',
+        'ELECTION COMMISSION', 'UNIQUE IDENTIFICATION', 'UIDAI', 'AADHAAR', 'ADHAAR',
+        'ELECTOR PHOTO IDENTITY CARD', 'PERMANENT ACCOUNT NUMBER', 'PAN CARD',
+        'DRIVING LICENCE', 'PASSPORT', 'WEST BENGAL', 'GOVERNMENT OF WEST BENGAL',
+        'GOVT. OF WEST BENGAL', 'GOVERNMENT OF INDIA', 'GOVT OF INDIA', 'GOVT. OF INDIA',
+        'FOOD & SUPPLIES', 'KHADYA SURAKSHA', 'PASSBOOK', 'BANK STATEMENT', 'STATE BANK',
+        'SAVINGS BANK', 'HELP', 'WWW.', 'HTTP', 'HTTPS', 'AUTHORITY', 'ENROLMENT',
+        'भारत सरकार', 'पश्चिमबंग सरकार', 'पश्चिम बंगाल सरकार', 'राज्य सरकार', 'आयकर विभाग',
+        'निर्वाचन आयोग', 'चुनाव आयोग', 'राशन कार्ड', 'खाद्य विभाग', 'आधार',
+        'পশ্চিমবঙ্গ সরকার', 'ভারত সরকার', 'ইউনিক আইডেন্টিফিকেশন', 'অথরিটি অব ইন্ডিয়া',
+        'ইন্ডিয়া', 'নির্বাচন কমিশন', 'আয়কর বিভাগ', 'আধার'
+      ];
+
+      for (const term of HARD_REJECT_TERMS) {
+        if (u.includes(term.toUpperCase())) {
+          return true;
+        }
+      }
+
+      // Regex patterns for government/department/organization headers
+      const GOVT_PATTERNS = [
+        /\bgovt\b|\bgovernment\b/i,
+        /\bministry\b|\bdepartment\b|\bcommission\b|\bauthority\b/i,
+        /\belection commission\b|\bincome tax\b/i,
+        /\bपश्चिमबंग|\bपश्चिम बंगाल|\bপশ্চিমবঙ্গ/i,
+        /\bभारत सरकार|\bসরকার\b|\bआयकर\b|\bनिर्वाचन\b/i
+      ];
+
+      for (const pat of GOVT_PATTERNS) {
+        if (pat.test(line)) return true;
+      }
+
+      // Reject lines containing document labels or numbers > 3 digits
+      if (
+        /\b(DOB|Date of Birth|YOB|Year of Birth|जन्म तिथि|जन्म वर्ष|जन्म तारीख)\b/i.test(line) ||
+        /\b(MALE|FEMALE|TRANSGENDER|पुरुष|महिला|মহিলা)\b/i.test(line) ||
+        /\b(Address|पता|ঠিকানা|PIN|Pincode|Post Office)\b/i.test(line) ||
+        /\b(S\/O|D\/O|W\/O|H\/O|C\/O|Son of|Daughter of|Wife of|Husband of|Care of)\b/i.test(line) ||
+        /\d{4,}/.test(line)
+      ) {
+        return true;
+      }
+
+      return false;
+    };
+
     if (documentType.startsWith('aadhaar')) {
       // 1. Aadhaar Number
       const aadhaarMatch = cleanText.match(/\b[1-9][0-9]{3}\s?[0-9]{4}\s?[0-9]{4}\b/);
@@ -92,7 +147,7 @@ export class DocumentTextParser {
       }
 
       // 3. DOB / YOB
-      const dobMatch = cleanText.match(/\b(?:DOB|Date of Birth|DATE OF BIRTH|जन्म तिथि|জন্ম তারিখ)[:\s]*(\d{2}[\/\-.]\d{2}[\/\-.]\d{4})\b/i) ||
+      const dobMatch = cleanText.match(/\b(?:DOB|Date of Birth|DATE OF BIRTH|जन्म तिथि|जन्म तारीख)[:\s]*(\d{2}[\/\-.]\d{2}[\/\-.]\d{4})\b/i) ||
                        cleanText.match(/\b(\d{2}[\/\-.]\d{2}[\/\-.]\d{4})\b/);
       if (dobMatch) {
         const norm = normalizeDateStr(dobMatch[1]);
@@ -104,76 +159,74 @@ export class DocumentTextParser {
         }
       }
 
-      // 4. Aadhaar Name & Native Language Name Extraction (Front / Combined)
+      // 4. Aadhaar Name & Native Language Name Extraction using Contextual Scoring
       if (documentType === 'aadhaar_front' || documentType === 'aadhaar_combined') {
         let dobLineIdx = -1;
         let genderLineIdx = -1;
 
         for (let i = 0; i < lines.length; i++) {
           const u = lines[i].toUpperCase();
-          if (u.includes('DOB') || u.includes('DATE OF BIRTH') || u.includes('जन्म तिथि')) dobLineIdx = i;
-          if (u.includes('MALE') || u.includes('FEMALE') || u.includes('TRANSGENDER') || u.includes('पुरुष') || u.includes('महिला')) genderLineIdx = i;
+          if (u.includes('DOB') || u.includes('DATE OF BIRTH') || u.includes('जन्म तिथि') || u.includes('जन्म तारीख')) dobLineIdx = i;
+          if (u.includes('MALE') || u.includes('FEMALE') || u.includes('TRANSGENDER') || u.includes('पुरुष') || u.includes('महिला') || u.includes('মহিলা')) genderLineIdx = i;
         }
 
         const anchorIdx = dobLineIdx !== -1 ? dobLineIdx : (genderLineIdx !== -1 ? genderLineIdx : lines.length);
 
-        // Search lines above DOB / Gender anchor for name candidates
-        for (let i = 0; i < anchorIdx; i++) {
-          const line = lines[i];
-          const u = line.toUpperCase();
+        let bestLatinCandidate: { text: string; score: number } | null = null;
+        let bestNativeCandidate: { text: string; score: number } | null = null;
 
-          // Filter out header noise, UIDAI info, dates, and numbers
-          if (
-            u.includes('GOVERNMENT OF INDIA') || u.includes('BHARAT SARKAR') || u.includes('भारत सरकार') || u.includes('ইউনিক') ||
-            u.includes('আইডেন্টিফিকেশন') || u.includes('অথরিটি') || u.includes('ইন্ডিয়া') || u.includes('ভারত') ||
-            u.includes('UNIQUE IDENTIFICATION') || u.includes('UIDAI') || u.includes('AADHAAR') || u.includes('ADHAAR') ||
-            u.includes('DOB') || u.includes('MALE') || u.includes('FEMALE') || u.includes('ENROLMENT') || u.includes('HELP') ||
-            u.includes('WWW.') || u.includes('AUTHORITY') || /\d{4}/.test(line) || u.includes('S/O') || u.includes('D/O') || u.includes('W/O')
-          ) {
+        for (let i = 0; i < anchorIdx; i++) {
+          const rawLine = lines[i];
+          // Strip leading/trailing punctuation noise e.g. :: Reshma Khatun :: or -- Reshma Khatun !!
+          const line = rawLine.replace(/^[^\w\u0900-\u097F\u0980-\u09FF]+|[^\w\u0900-\u097F\u0980-\u09FF]+$/g, '').trim();
+
+          // HARD REJECTION of Government/Organization/Header text
+          if (isNonPersonHeader(line) || isNonPersonHeader(rawLine)) {
             continue;
           }
 
+          // Calculate Anchor Proximity Score
+          let proximityScore = 10;
+          if (dobLineIdx !== -1) {
+            const dist = dobLineIdx - i;
+            if (dist === 1) proximityScore += 100;
+            else if (dist === 2) proximityScore += 80;
+            else if (dist === 3) proximityScore += 50;
+          } else if (genderLineIdx !== -1) {
+            const dist = genderLineIdx - i;
+            if (dist === 1) proximityScore += 90;
+            else if (dist === 2) proximityScore += 70;
+          }
+
           // Native script candidate check
-          if (hasNativeScript(line) && !result.customer!.original_language_name) {
+          if (hasNativeScript(line)) {
             const cleanedNative = cleanNativeName(line);
             if (cleanedNative.length >= 3) {
-              result.customer!.original_language_name = cleanedNative;
+              const score = proximityScore + (cleanedNative.includes(' ') ? 20 : 10);
+              if (!bestNativeCandidate || score > bestNativeCandidate.score) {
+                bestNativeCandidate = { text: cleanedNative, score };
+              }
             }
           }
 
           // Latin / English script candidate check
-          if (/^[A-Za-z.\s\-]{2,50}$/.test(line) && !result.customer!.full_name) {
+          if (/^[A-Za-z.\s\-]{2,50}$/.test(line)) {
             const cleanedLatin = cleanLatinName(line);
-            if (cleanedLatin.length >= 3 && cleanedLatin.includes(' ')) {
-              result.customer!.full_name = cleanedLatin;
-            } else if (cleanedLatin.length >= 3 && !result.customer!.full_name) {
-              result.customer!.full_name = cleanedLatin;
+            if (cleanedLatin.length >= 3) {
+              const score = proximityScore + (cleanedLatin.includes(' ') ? 30 : 10);
+              if (!bestLatinCandidate || score > bestLatinCandidate.score) {
+                bestLatinCandidate = { text: cleanedLatin, score };
+              }
             }
           }
         }
 
-        // Fallback for full_name if anchor search didn't find multi-word name
-        if (!result.customer!.full_name) {
-          for (let i = 0; i < anchorIdx; i++) {
-            const line = lines[i];
-            const u = line.toUpperCase();
-            if (
-              u.includes('GOVERNMENT') || u.includes('INDIA') || u.includes('SARKAR') || u.includes('UIDAI') ||
-              u.includes('AADHAAR') || /\d/.test(line) || hasNativeScript(line)
-            ) {
-              continue;
-            }
-            const clean = cleanLatinName(line);
-            if (clean.length >= 3) {
-              result.customer!.full_name = clean;
-              break;
-            }
-          }
+        if (bestNativeCandidate && bestNativeCandidate.score > 0) {
+          result.customer!.original_language_name = bestNativeCandidate.text;
         }
 
-        // If only native script name was found and no Latin script name exists:
-        if (!result.customer!.full_name && result.customer!.original_language_name) {
-          // Do NOT fabricate English translation. Leave original_language_name as primary.
+        if (bestLatinCandidate && bestLatinCandidate.score > 0) {
+          result.customer!.full_name = bestLatinCandidate.text;
         }
       }
 
@@ -246,7 +299,7 @@ export class DocumentTextParser {
         if (norm) result.customer!.dob = norm;
       }
 
-      // 6. PAN NAME EXTRACTION (Distinguish Name vs Father's Name)
+      // 3. PAN NAME EXTRACTION (Distinguish Name vs Father's Name)
       let nameNext = false;
       let fatherNext = false;
 
@@ -256,14 +309,14 @@ export class DocumentTextParser {
 
         if (u.includes('NAME') && !u.includes('FATHER') && !u.includes('PERMANENT') && !u.includes('DEPARTMENT') && !u.includes('GOVT')) {
           const inlineVal = line.split(/[:\-]/)[1]?.trim();
-          if (inlineVal && /^[A-Za-z\s.]{3,40}$/.test(inlineVal)) {
+          if (inlineVal && !isNonPersonHeader(inlineVal) && /^[A-Za-z\s.]{3,40}$/.test(inlineVal)) {
             result.customer!.full_name = cleanLatinName(inlineVal);
           } else {
             nameNext = true;
           }
           continue;
         }
-        if (nameNext && /^[A-Za-z\s.]{3,40}$/.test(line) && !u.includes('INCOME') && !u.includes('INDIA')) {
+        if (nameNext && !isNonPersonHeader(line) && /^[A-Za-z\s.]{3,40}$/.test(line)) {
           result.customer!.full_name = cleanLatinName(line);
           nameNext = false;
           continue;
@@ -271,14 +324,14 @@ export class DocumentTextParser {
 
         if (u.includes("FATHER'S NAME") || u.includes("FATHER NAME")) {
           const inlineVal = line.split(/[:\-]/)[1]?.trim();
-          if (inlineVal && /^[A-Za-z\s.]{3,40}$/.test(inlineVal)) {
+          if (inlineVal && !isNonPersonHeader(inlineVal) && /^[A-Za-z\s.]{3,40}$/.test(inlineVal)) {
             result.customer!.father_name = cleanLatinName(inlineVal);
           } else {
             fatherNext = true;
           }
           continue;
         }
-        if (fatherNext && /^[A-Za-z\s.]{3,40}$/.test(line)) {
+        if (fatherNext && !isNonPersonHeader(line) && /^[A-Za-z\s.]{3,40}$/.test(line)) {
           result.customer!.father_name = cleanLatinName(line);
           fatherNext = false;
           continue;
@@ -287,10 +340,8 @@ export class DocumentTextParser {
 
       // Fallback: If full_name not extracted via label, search non-header lines after INCOME TAX DEPARTMENT / GOVT. OF INDIA
       if (!result.customer!.full_name) {
-        const panHeaderNoise = ['INCOME', 'TAX', 'DEPARTMENT', 'GOVT', 'GOVERNMENT', 'INDIA', 'PERMANENT', 'ACCOUNT', 'NUMBER'];
         const nameCandidates = lines.filter(l => {
-          const u = l.toUpperCase();
-          if (panHeaderNoise.some(n => u.includes(n))) return false;
+          if (isNonPersonHeader(l)) return false;
           if (/\d/.test(l)) return false;
           return /^[A-Za-z\s.]{3,40}$/.test(l);
         });
@@ -309,26 +360,26 @@ export class DocumentTextParser {
         result.documents!.voter_id = { number: epicMatch[0] };
       }
 
-      // 7. VOTER NAME EXTRACTION
+      // 2. VOTER NAME EXTRACTION
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const u = line.toUpperCase();
 
-        if ((u.includes("ELECTOR'S NAME") || u.includes("NAME") || line.includes("नाम")) && !u.includes("FATHER") && !u.includes("HUSBAND") && !u.includes("ELECTION")) {
+        if ((u.includes("ELECTOR'S NAME") || u.includes("NAME") || line.includes("नाम")) && !u.includes("FATHER") && !u.includes("HUSBAND") && !u.includes("ELECTION") && !u.includes("COMMISSION")) {
           const val = line.split(/[:\-]/)[1]?.trim() || lines[i + 1]?.trim();
-          if (val && /^[A-Za-z\s.]{3,40}$/.test(val)) {
+          if (val && !isNonPersonHeader(val) && /^[A-Za-z\s.]{3,40}$/.test(val)) {
             result.customer!.full_name = cleanLatinName(val);
           }
         }
         if (u.includes("FATHER'S NAME") || u.includes("FATHER NAME") || line.includes("पिता का नाम")) {
           const val = line.split(/[:\-]/)[1]?.trim() || lines[i + 1]?.trim();
-          if (val && /^[A-Za-z\s.]{3,40}$/.test(val)) {
+          if (val && !isNonPersonHeader(val) && /^[A-Za-z\s.]{3,40}$/.test(val)) {
             result.customer!.father_name = cleanLatinName(val);
           }
         }
         if (u.includes("HUSBAND'S NAME") || u.includes("HUSBAND NAME") || line.includes("पति का नाम")) {
           const val = line.split(/[:\-]/)[1]?.trim() || lines[i + 1]?.trim();
-          if (val && /^[A-Za-z\s.]{3,40}$/.test(val)) {
+          if (val && !isNonPersonHeader(val) && /^[A-Za-z\s.]{3,40}$/.test(val)) {
             result.customer!.spouse_name = cleanLatinName(val);
           }
         }

@@ -197,15 +197,73 @@ const fixI = DocumentTextParser.parse(`
 report("Fixture I: full_name extracted despite OCR punctuation noise", fixI.customer?.full_name === 'Reshma Khatun', fixI);
 
 console.log("--------------------------------------------------------------------------");
-console.log("📄 FIXTURE J: Native Script Only Name");
-const fixJ = DocumentTextParser.parse(`
-  भारत सरकार
-  रेशमा खातून
+console.log("📄 FIXTURE K: Government of West Bengal Header Hard Rejection");
+const fixK = DocumentTextParser.parse(`
+  Government of West Bengal
+  Reshma Khatun
+  DOB: 01/01/1990
+  FEMALE
+  1234 5678 9012
+`, 'aadhaar_front');
+report("Fixture K: full_name is Reshma Khatun, NOT Government of West Bengal", fixK.customer?.full_name === 'Reshma Khatun', fixK);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 FIXTURE L: Bengali Government Header Hard Rejection");
+const fixL = DocumentTextParser.parse(`
+  পশ্চিমবঙ্গ সরকার
+  রেশমা খাতুন
+  Reshma Khatun
   DOB: 01/01/1990
   FEMALE
 `, 'aadhaar_front');
-report("Fixture J: original_language_name preserved", fixJ.customer?.original_language_name === 'रेशमा खातून', fixJ);
-report("Fixture J: full_name NOT fabricated as fake English string", fixJ.customer?.full_name === undefined, fixJ);
+report("Fixture L: original_language_name is রেশমা খাতুন, NOT পশ্চিমবঙ্গ সরকার", fixL.customer?.original_language_name === 'রেশমা খাতুন', fixL);
+report("Fixture L: full_name is Reshma Khatun", fixL.customer?.full_name === 'Reshma Khatun', fixL);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 FIXTURE M: Hindi Government Header Hard Rejection");
+const fixM = DocumentTextParser.parse(`
+  भारत सरकार
+  पश्चिमबंग सरकार
+  रेशमा खातून
+  Reshma Khatun
+  DOB: 01/01/1990
+  FEMALE
+`, 'aadhaar_front');
+report("Fixture M: original_language_name is रेशमा खातून, NOT भारत सरकार or पश्चिमबंग सरकार", fixM.customer?.original_language_name === 'रेशमा खातून', fixM);
+report("Fixture M: full_name is Reshma Khatun", fixM.customer?.full_name === 'Reshma Khatun', fixM);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 FIXTURE N: PAN Income Tax Department Heading Hard Rejection");
+const fixN = DocumentTextParser.parse(`
+  INCOME TAX DEPARTMENT
+  GOVT. OF INDIA
+  Reshma Khatun
+  Mohammad Ali
+  DOB: 01/01/1990
+  ABCDE1234F
+`, 'pan_card');
+report("Fixture N: full_name is Reshma Khatun, NOT INCOME TAX DEPARTMENT or GOVT OF INDIA", fixN.customer?.full_name === 'Reshma Khatun', fixN);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 FIXTURE O: Voter Election Commission Heading Hard Rejection");
+const fixO = DocumentTextParser.parse(`
+  ELECTION COMMISSION OF INDIA
+  Government of West Bengal
+  Name: Reshma Khatun
+  Father's Name: Mohammad Ali
+  EPIC: WB1234567
+`, 'voter_id');
+report("Fixture O: full_name is Reshma Khatun, NOT Election Commission or Government of West Bengal", fixO.customer?.full_name === 'Reshma Khatun', fixO);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 FIXTURE P: No Valid Person Name Safety (Leaves full_name null/undefined)");
+const fixP = DocumentTextParser.parse(`
+  GOVERNMENT OF INDIA
+  UNIQUE IDENTIFICATION AUTHORITY OF INDIA
+  DOB: 01/01/1990
+  FEMALE
+`, 'aadhaar_front');
+report("Fixture P: full_name is undefined when no valid person name exists (no guessing)", fixP.customer?.full_name === undefined, fixP);
 
 console.log("==========================================================================");
 console.log(`PARSER TEST RESULT: ${passCount} PASSED, ${failCount} FAILED`);
