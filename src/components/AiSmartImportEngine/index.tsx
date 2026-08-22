@@ -9,6 +9,7 @@ import { ReviewPanel } from "./components/ReviewPanel";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { extractDataFromDocuments } from "@/app/(dashboard)/customers/ai-actions";
+import { LocalOcrEngine } from "@/lib/ocr/LocalOcrEngine";
 
 interface AiSmartImportEngineProps {
   onAutoFill: (data: Record<string, any>) => void;
@@ -110,66 +111,76 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
     const toastId = toast.loading("Preparing documents...");
 
     try {
-      const formData = new FormData();
-      stagedFiles.forEach(sf => {
-        formData.append('files', sf.file);
-      });
+      const newJobs: ImportJob[] = [];
 
-      toast.loading("Detecting document types & extracting...", { id: toastId });
-      const result = await extractDataFromDocuments(formData);
+      for (let i = 0; i < stagedFiles.length; i++) {
+        const sf = stagedFiles[i];
+        toast.loading(`Processing file ${i + 1} of ${stagedFiles.length} (${sf.file.name})…`, { id: toastId });
 
-      if (!result.success || 'error' in result) {
-        throw new Error((result as { error?: string }).error || "Failed to extract data");
+        const startTime = Date.now();
+        const { parsedFields } = await LocalOcrEngine.processFile(sf.file, 'eng', (progress) => {
+          if (progress.detail) {
+            toast.loading(`[${sf.file.name}] ${progress.stage} - ${progress.detail}`, { id: toastId });
+          } else {
+            toast.loading(`[${sf.file.name}] ${progress.stage}`, { id: toastId });
+          }
+        });
+
+        const elapsed = Date.now() - startTime;
+
+        const rawData = {
+          customer: parsedFields.customer,
+          address: parsedFields.address,
+          documents: parsedFields.documents,
+          detected_documents: parsedFields.detected_documents,
+          diagnostic_data: parsedFields.diagnostic_data
+        };
+
+        const normalizedData = DataNormalizer.normalize(rawData);
+        const docType = parsedFields.detected_documents?.[0]?.detected_type || 'unknown';
+
+        newJobs.push({
+          id: uuidv4(),
+          documentType: docType,
+          provider: 'manual',
+          source: 'file',
+          frontFile: sf.file,
+          status: 'completed',
+          rawResponse: rawData,
+          normalizedData,
+          version: 1,
+          perfSummary: {
+            provider: 'Local Tesseract.js OCR',
+            model: 'browser-wasm-v5',
+            documentCount: 1,
+            imagePrepTime: 0,
+            primaryAttemptDuration: elapsed,
+            fallbackAttemptDuration: 0,
+            apiTime: elapsed,
+            jsonParseTime: 0,
+            normalizationTime: 0,
+            dbLogTime: 0,
+            totalTime: elapsed
+          }
+        });
       }
 
-      toast.loading("Merging customer data...", { id: toastId });
-      let rawData = result.data;
-      if (typeof rawData === 'string') {
-        try {
-          rawData = JSON.parse(rawData);
-        } catch {
-          throw new Error("AI extraction returned invalid JSON format.");
-        }
-      }
-
-      if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) {
-        throw new Error("AI response could not be parsed into structured data.");
-      }
-
-      const normalizedData = DataNormalizer.normalize(rawData);
-
-      if (Object.keys(normalizedData).length === 0) {
-        toast.error("AI extracted a response, but no usable customer fields were found.", { id: toastId });
+      if (newJobs.length === 0) {
+        toast.error("No valid document data extracted", { id: toastId });
         return;
       }
 
-      const docSummaryTitle = stagedFiles.length === 1 
-        ? stagedFiles[0].file.name 
-        : `${stagedFiles.length} Customer Documents Batch`;
-
-      const newJob: ImportJob = {
-        id: uuidv4(),
-        documentType: docSummaryTitle,
-        provider: 'gemini',
-        source: 'file',
-        frontFile: stagedFiles[0]?.file,
-        status: 'completed',
-        rawResponse: rawData,
-        normalizedData,
-        version: 1,
-        perfSummary: result.perfSummary
-      };
-
-      const updatedJobs = [newJob, ...jobs];
+      toast.loading("Merging customer data...", { id: toastId });
+      const updatedJobs = [...newJobs, ...jobs];
       setJobs(updatedJobs);
       setStagedFiles([]);
-      
+
       const merged = MergeEngine.merge(updatedJobs);
       setMergedResult(merged);
 
-      toast.success("Extraction complete — Ready for review", { id: toastId });
+      toast.success("Local OCR Extraction complete — Ready for review", { id: toastId });
     } catch (error: any) {
-      toast.error(error.message || "Failed to extract data", { id: toastId });
+      toast.error(error.message || "Failed to process documents locally", { id: toastId });
     } finally {
       setIsExtracting(false);
     }
