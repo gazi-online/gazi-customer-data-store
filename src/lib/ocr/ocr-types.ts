@@ -2,6 +2,10 @@ export interface OcrPageResult {
   pageNumber: number;
   text: string;
   confidence: number;
+  selectedVariant?: 'ORIGINAL' | 'CONTRAST' | 'THRESHOLD';
+  originalConfidence?: number;
+  processedConfidence?: number;
+  qualityScore?: number;
 }
 
 export interface OcrDocumentResult {

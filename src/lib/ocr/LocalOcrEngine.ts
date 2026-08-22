@@ -2,7 +2,17 @@ import { createWorker, Worker } from 'tesseract.js';
 import { PdfRenderer } from './PdfRenderer';
 import { DocumentClassifier } from './DocumentClassifier';
 import { DocumentTextParser } from './DocumentTextParser';
-import { OcrDocumentResult, OcrProgress, ParsedDocumentFields } from './ocr-types';
+import { ImagePreprocessor } from './ImagePreprocessor';
+import { OcrDocumentResult, OcrProgress, ParsedDocumentFields, OcrPageResult } from './ocr-types';
+
+export interface OcrVariantEvaluation {
+  variant: 'ORIGINAL' | 'CONTRAST' | 'THRESHOLD';
+  text: string;
+  confidence: number;
+  qualityScore: number;
+  classification: ReturnType<typeof DocumentClassifier.classify>;
+  parsedFields: ReturnType<typeof DocumentTextParser.parse>;
+}
 
 export class LocalOcrEngine {
   private static workerPromise: Promise<Worker> | null = null;
@@ -14,6 +24,54 @@ export class LocalOcrEngine {
   public static pdfWorkerLocation: 'LOCAL' | 'CDN' = 'LOCAL';
   public static isFullyOffline: boolean = true;
   public static initialWorkerLoadMs: number = 0;
+
+  public static evaluateVariant(
+    variant: 'ORIGINAL' | 'CONTRAST' | 'THRESHOLD',
+    text: string,
+    confidence: number,
+    filename: string
+  ): OcrVariantEvaluation {
+    const cleanText = text || '';
+    const classification = DocumentClassifier.classify(cleanText);
+    const parsedFields = DocumentTextParser.parse(cleanText, classification.documentType, filename);
+
+    let qualityScore = confidence * 30; // Max 30 points from raw confidence
+
+    // Document type classification bonus (30 points)
+    if (classification.documentType !== 'unknown') {
+      qualityScore += classification.confidence * 30;
+    }
+
+    // Extracted identity fields bonus (15 points per field)
+    let extractedFieldCount = 0;
+    if (parsedFields.documents?.aadhaar?.number) extractedFieldCount++;
+    if (parsedFields.documents?.pan?.number) extractedFieldCount++;
+    if (parsedFields.documents?.voter_id?.number) extractedFieldCount++;
+    if (parsedFields.customer?.full_name) extractedFieldCount++;
+    if (parsedFields.customer?.dob) extractedFieldCount++;
+    if (parsedFields.customer?.father_name) extractedFieldCount++;
+    if (parsedFields.customer?.spouse_name) extractedFieldCount++;
+    if (parsedFields.address?.pincode) extractedFieldCount++;
+
+    qualityScore += extractedFieldCount * 15;
+
+    // Alphanumeric density bonus (up to 15 points)
+    const totalChars = cleanText.length;
+    if (totalChars > 10) {
+      const alphaNumChars = cleanText.replace(/[^A-Za-z0-9]/g, '').length;
+      const density = alphaNumChars / totalChars;
+      qualityScore += density * 15;
+    }
+
+    return {
+      variant,
+      text: cleanText,
+      confidence,
+      qualityScore,
+      classification,
+      parsedFields
+    };
+  }
 
   public static async getWorker(lang: string = 'eng', onProgress?: (status: string) => void): Promise<Worker> {
     if (this.workerPromise && this.activeLang === lang) {
@@ -44,22 +102,18 @@ export class LocalOcrEngine {
       };
 
       if (isBrowser) {
-        // Enforce STRICT local-only asset paths in browser without CDN fallback
         options.workerPath = '/ocr/worker/worker.min.js';
         options.corePath = '/ocr/core';
         options.langPath = '/ocr/lang';
         options.cachePath = '/ocr/lang';
         options.gzip = true;
       } else {
-        // Node.js test environment local asset paths
         try {
           const path = require('path');
           options.langPath = path.join(process.cwd(), 'public', 'ocr', 'lang');
           options.cachePath = path.join(process.cwd(), 'public', 'ocr', 'lang');
           options.gzip = true;
-        } catch {
-          // fallback if path require unavailable
-        }
+        } catch {}
       }
 
       try {
@@ -91,25 +145,72 @@ export class LocalOcrEngine {
 
     if (onProgress) onProgress({ stage: `Reading document text (${filename})...` });
 
-    const startTime = Date.now();
-    const ret = await worker.recognize(imageSource);
+    // PASS 1: Original Image
+    const retA = await worker.recognize(imageSource);
+    const textA = retA.data.text || '';
+    const confA = (retA.data.confidence || 0) / 100;
+    const evalA = this.evaluateVariant('ORIGINAL', textA, confA, filename);
 
-    const text = ret.data.text || '';
-    const confidence = (ret.data.confidence || 0) / 100;
+    let bestEval = evalA;
 
-    if (onProgress) onProgress({ stage: 'Detecting document type...' });
-    const classification = DocumentClassifier.classify(text);
+    // Fast-path: If Original Image is already good (classified & confidence >= 0.55 & quality >= 45), skip preprocessing!
+    const isOriginalGood = evalA.classification.documentType !== 'unknown' && evalA.confidence >= 0.55 && evalA.qualityScore >= 45;
 
-    if (onProgress) onProgress({ stage: 'Extracting fields...' });
-    const parsedFields = DocumentTextParser.parse(text, classification.documentType, filename);
+    if (!isOriginalGood) {
+      // PASS 2: Adaptive Contrast + Grayscale Preprocessing
+      if (onProgress) onProgress({ stage: `Enhancing image contrast for local OCR (${filename})...` });
+      try {
+        const processedSrcB = await ImagePreprocessor.processVariantB(imageSource);
+        const retB = await worker.recognize(processedSrcB);
+        const textB = retB.data.text || '';
+        const confB = (retB.data.confidence || 0) / 100;
+        const evalB = this.evaluateVariant('CONTRAST', textB, confB, filename);
+
+        if (evalB.qualityScore > bestEval.qualityScore) {
+          bestEval = evalB;
+        }
+      } catch (err) {
+        // Fallback gracefully to Original if canvas preprocessing is unavailable
+      }
+
+      // PASS 3: Threshold Binarization ONLY IF B is still poor (unclassified & quality score < 30)
+      if (bestEval.classification.documentType === 'unknown' && bestEval.qualityScore < 30) {
+        if (onProgress) onProgress({ stage: `Applying adaptive thresholding (${filename})...` });
+        try {
+          const processedSrcC = await ImagePreprocessor.processVariantC(imageSource);
+          const retC = await worker.recognize(processedSrcC);
+          const textC = retC.data.text || '';
+          const confC = (retC.data.confidence || 0) / 100;
+          const evalC = this.evaluateVariant('THRESHOLD', textC, confC, filename);
+
+          if (evalC.qualityScore > bestEval.qualityScore) {
+            bestEval = evalC;
+          }
+        } catch (err) {
+          // Fallback gracefully
+        }
+      }
+    }
+
+    const { text, confidence, variant, parsedFields } = bestEval;
     parsedFields.confidence_summary = {
       overall: confidence,
       low_confidence_fields: confidence < 0.6 ? ['all'] : []
     };
 
+    const pageResult: OcrPageResult = {
+      pageNumber: 1,
+      text,
+      confidence,
+      selectedVariant: variant,
+      originalConfidence: confA,
+      processedConfidence: confidence,
+      qualityScore: bestEval.qualityScore
+    };
+
     const ocrResult: OcrDocumentResult = {
       filename,
-      pages: [{ pageNumber: 1, text, confidence }],
+      pages: [pageResult],
       fullText: text,
       averageConfidence: confidence
     };
@@ -139,7 +240,7 @@ export class LocalOcrEngine {
       return this.processSingleImage(sourceToProcess, filename, lang, onProgress);
     }
 
-    // PDF Processing: Render every page to image/canvas locally
+    // PDF Processing: Render each page locally and apply adaptive OCR
     if (onProgress) onProgress({ stage: 'Rendering PDF pages locally...' });
 
     let buffer: ArrayBuffer;
@@ -159,7 +260,7 @@ export class LocalOcrEngine {
       if (onProgress) onProgress({ stage: 'Initializing Local OCR worker...', detail: msg });
     });
 
-    const ocrPages = [];
+    const ocrPages: OcrPageResult[] = [];
     let fullText = '';
     let totalConf = 0;
 
@@ -175,11 +276,48 @@ export class LocalOcrEngine {
 
       let text = '';
       let conf = 0.85;
+      let selectedVariant: 'ORIGINAL' | 'CONTRAST' | 'THRESHOLD' = 'ORIGINAL';
 
       if (page.dataUrl) {
-        const ret = await worker.recognize(page.dataUrl);
-        text = ret.data.text || '';
-        conf = (ret.data.confidence || 0) / 100;
+        const retA = await worker.recognize(page.dataUrl);
+        const textA = retA.data.text || '';
+        const confA = (retA.data.confidence || 0) / 100;
+        const evalA = this.evaluateVariant('ORIGINAL', textA, confA, filename);
+
+        let bestEval = evalA;
+        const isOriginalGood = evalA.classification.documentType !== 'unknown' && evalA.confidence >= 0.55 && evalA.qualityScore >= 45;
+
+        if (!isOriginalGood) {
+          try {
+            const processedSrcB = await ImagePreprocessor.processVariantB(page.dataUrl);
+            const retB = await worker.recognize(processedSrcB);
+            const textB = retB.data.text || '';
+            const confB = (retB.data.confidence || 0) / 100;
+            const evalB = this.evaluateVariant('CONTRAST', textB, confB, filename);
+
+            if (evalB.qualityScore > bestEval.qualityScore) {
+              bestEval = evalB;
+            }
+          } catch {}
+
+          if (bestEval.classification.documentType === 'unknown' && bestEval.qualityScore < 30) {
+            try {
+              const processedSrcC = await ImagePreprocessor.processVariantC(page.dataUrl);
+              const retC = await worker.recognize(processedSrcC);
+              const textC = retC.data.text || '';
+              const confC = (retC.data.confidence || 0) / 100;
+              const evalC = this.evaluateVariant('THRESHOLD', textC, confC, filename);
+
+              if (evalC.qualityScore > bestEval.qualityScore) {
+                bestEval = evalC;
+              }
+            } catch {}
+          }
+        }
+
+        text = bestEval.text;
+        conf = bestEval.confidence;
+        selectedVariant = bestEval.variant;
       } else if (page.rawTextFallback) {
         text = page.rawTextFallback;
         conf = 0.9;
@@ -188,7 +326,8 @@ export class LocalOcrEngine {
       ocrPages.push({
         pageNumber: page.pageNumber,
         text,
-        confidence: conf
+        confidence: conf,
+        selectedVariant
       });
       fullText += `--- Page ${page.pageNumber} ---\n` + text + '\n';
       totalConf += conf;
