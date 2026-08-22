@@ -180,20 +180,25 @@ export class DataNormalizer {
     }
 
     // Address fields
-    // If address is an object from the Universal Schema, format it into a string
     let fullAddress = '';
     if (typeof addressObj === 'object' && addressObj !== null && !Array.isArray(addressObj) && !('confidence' in addressObj)) {
-      // It's the Universal Schema address object
-      const parts = [
-        addressObj.house,
-        addressObj.street,
-        addressObj.landmark,
-        addressObj.village,
-        addressObj.post_office
-      ].filter(Boolean);
-      
-      fullAddress = parts.join(', ');
-      
+      if (addressObj.full_address) {
+        fullAddress = addressObj.full_address;
+      } else if (addressObj.address) {
+        fullAddress = addressObj.address;
+      } else if (addressObj.line1) {
+        fullAddress = [addressObj.line1, addressObj.line2, addressObj.city, addressObj.state].filter(Boolean).join(', ');
+      } else {
+        const parts = [
+          addressObj.house,
+          addressObj.street,
+          addressObj.landmark,
+          addressObj.village,
+          addressObj.post_office
+        ].filter(Boolean);
+        fullAddress = parts.join(', ');
+      }
+
       if (addressObj.city) normalized.city = toAiField(addressObj.city, conf.city);
       if (addressObj.district) normalized.district = toAiField(addressObj.district, conf.district);
       if (addressObj.state) normalized.state = toAiField(addressObj.state, conf.state);
