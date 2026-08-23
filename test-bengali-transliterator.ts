@@ -1,23 +1,28 @@
-﻿/**
+/**
  * test-bengali-transliterator.ts
  *
- * Test suite for BengaliNameTransliterator and the Bengali suggestion
- * flow in ReviewPanel (logic layer).
+ * Regression test for the Bengali script detection utility (isBengaliScript)
+ * and the shared name safety guard (isNonPersonNameCandidate).
+ *
+ * NOTE: The phonetic TOKEN_DICT / suggestBengaliNames engine has been removed
+ * as of the Google Input Tools migration. Production Bengali suggestions now
+ * come from GoogleInputToolsProvider → /api/bengali-suggestions.
+ * Mocked tests for that flow are in test-google-input-tools.ts.
  *
  * Run: npx tsx test-bengali-transliterator.ts
  */
 
-import { suggestBengaliNames, isBengaliScript } from './src/lib/names/BengaliNameTransliterator';
+import { isBengaliScript } from './src/lib/names/BengaliNameTransliterator';
 import { isNonPersonNameCandidate } from './src/lib/names/nameSafety';
 
 console.log("==========================================================================");
-console.log("🧪 BENGALI NAME TRANSLITERATOR TEST SUITE");
+console.log("🧪 BENGALI SCRIPT DETECTION & NAME SAFETY TEST SUITE");
 console.log("==========================================================================");
 
 let passed = 0;
 let failed = 0;
 
-function assert(condition: boolean, testName: string, actual?: any) {
+function assert(condition: boolean, testName: string, actual?: unknown) {
   if (condition) {
     console.log(`✅ [PASS] ${testName}`);
     passed++;
@@ -28,197 +33,124 @@ function assert(condition: boolean, testName: string, actual?: any) {
 }
 
 // ---------------------------------------------------------------------------
-// CASE A: Document Bengali name exists → no transliteration needed
-//         (simulated by checking isBengaliScript detection)
+// CASE A: Bengali script detection — positive cases
 // ---------------------------------------------------------------------------
 console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE A: Bengali document name detection");
-const docName = "রেশমা খাতুন";
-assert(isBengaliScript(docName) === true, "A: রেশমা খাতুন detected as Bengali script", docName);
-// If docNativeName is Bengali, ReviewPanel should NOT call suggestBengaliNames
-// We verify that by confirming suggestBengaliNames returns [] for Bengali input
-const sugA = suggestBengaliNames(docName);
-assert(sugA.length === 0, "A: suggestBengaliNames returns [] for already-Bengali input (no re-transliteration)", sugA);
+console.log("📄 CASE A: Bengali script detection — positive");
+assert(isBengaliScript("রেশমা খাতুন") === true, "A: রেশমা খাতুন = Bengali", null);
+assert(isBengaliScript("মোহাম্মদ") === true, "A: মোহাম্মদ = Bengali", null);
+assert(isBengaliScript("সুমন চক্রবর্তী") === true, "A: সুমন চক্রবর্তী = Bengali", null);
+assert(isBengaliScript("পশ্চিমবঙ্গ সরকার") === true, "A: Bengali govt header = Bengali script", null);
+assert(isBengaliScript("অরিন্দম বোস") === true, "A: অরিন্দম বোস = Bengali", null);
 
 // ---------------------------------------------------------------------------
-// CASE B: English-only — Reshma Khatun
+// CASE B: Bengali script detection — negative cases (Latin/Devanagari/empty)
 // ---------------------------------------------------------------------------
 console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE B: English-only 'Reshma Khatun'");
-const sugB = suggestBengaliNames("Reshma Khatun");
-assert(sugB.length >= 1, "B: At least 1 suggestion for 'Reshma Khatun'", sugB);
-assert(sugB.length <= 3, "B: At most 3 suggestions", sugB.length);
-assert(sugB[0].value.includes("রেশমা"), "B: First suggestion includes রেশমা", sugB[0].value);
-assert(sugB[0].value.includes("খাতুন"), "B: First suggestion includes খাতুন", sugB[0].value);
-assert(sugB.every(s => s.value.trim().length > 0), "B: All suggestion values are non-empty", sugB);
+console.log("📄 CASE B: Bengali script detection — negative");
+assert(isBengaliScript("Reshma Khatun") === false, "B: Latin = NOT Bengali", null);
+assert(isBengaliScript("Mohammad Islam Gazi") === false, "B: Latin = NOT Bengali", null);
+assert(isBengaliScript("रेशमा खातून") === false, "B: Hindi Devanagari = NOT Bengali", null);
+assert(isBengaliScript("भारत सरकार") === false, "B: Hindi = NOT Bengali", null);
+assert(isBengaliScript("") === false, "B: Empty = NOT Bengali", null);
+assert(isBengaliScript("   ") === false, "B: Whitespace = NOT Bengali", null);
 
 // ---------------------------------------------------------------------------
-// CASE C: Mohammad Islam Gazi — multiple distinct suggestions
+// CASE C: Document Bengali name → ReviewPanel must NOT re-transliterate
+//         (logic: hasDocBengaliName = isBengaliScript(docNativeName))
 // ---------------------------------------------------------------------------
 console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE C: 'Mohammad Islam Gazi'");
-const sugC = suggestBengaliNames("Mohammad Islam Gazi");
-assert(sugC.length >= 1, "C: At least 1 suggestion", sugC);
-assert(sugC.length <= 3, "C: At most 3 suggestions", sugC.length);
-// Check distinctness
-const valuesC = sugC.map(s => s.value);
-const uniqueC = new Set(valuesC);
-assert(uniqueC.size === valuesC.length, "C: All suggestions are distinct (no duplicates)", valuesC);
-// All must contain Islam transliteration
-assert(sugC.every(s => s.value.includes("ইসলাম")), "C: All suggestions contain ইসলাম", valuesC);
-// Must not invent a completely different person's name
-assert(sugC.every(s => !s.value.includes("রহমান") || valuesC.length > 1), "C: No obviously wrong person name injected", valuesC);
+console.log("📄 CASE C: Document Bengali name → ReviewPanel flow (isBengaliScript guard)");
+const docNativeName = "রেশমা খাতুন";
+const hasDocBengaliName = isBengaliScript(docNativeName);
+assert(hasDocBengaliName === true, "C: Document Bengali name → hasDocBengaliName = true", docNativeName);
+// When hasDocBengaliName === true, ReviewPanel skips the Google Input Tools fetch.
+// Verified in test-google-input-tools.ts Case H.
 
 // ---------------------------------------------------------------------------
-// CASE D: Single token — Gazi
+// CASE D: Hindi native name → NOT treated as Bengali (distinct script guard)
 // ---------------------------------------------------------------------------
 console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE D: Single token 'Gazi'");
-const sugD = suggestBengaliNames("Gazi");
-assert(sugD.length >= 1, "D: At least 1 suggestion for single token", sugD);
-assert(sugD.length <= 3, "D: At most 3 suggestions", sugD.length);
-// Must not fabricate a second token
-sugD.forEach((s, idx) => {
-  const tokenCount = s.value.trim().split(/\s+/).length;
-  assert(tokenCount === 1, `D.${idx}: Output has exactly 1 token (no fabricated token)`, s.value);
-});
-assert(sugD[0].value === "গাজী" || sugD[0].value === "গাজি", "D: First suggestion is গাজী or গাজি", sugD[0].value);
+console.log("📄 CASE D: Hindi ≠ Bengali (Devanagari is a different Unicode block)");
+const hindiDocName = "रेशमा खातून";
+assert(isBengaliScript(hindiDocName) === false, "D: Hindi Devanagari NOT detected as Bengali", hindiDocName);
+// When false → hasDocBengaliName = false → ReviewPanel fetches Bengali suggestions
+// from Google Input Tools using English full_name. Not tested here (requires HTTP mock).
 
 // ---------------------------------------------------------------------------
-// CASE E: Existing manual Bengali name — protected
-//         (ReviewPanel logic: hasDocBengaliName === true → no suggestion shown)
+// CASE E: Government / header strings → hard rejected
 // ---------------------------------------------------------------------------
 console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE E: Existing manual Bengali value protection");
-const manualBengali = "রেশমা খাতুন";
-// isBengaliScript === true means ReviewPanel will set hasDocBengaliName = true
-// and bengaliSuggestions will be empty → no overwrite possible
-const sugE = suggestBengaliNames(manualBengali);
-assert(isBengaliScript(manualBengali) === true, "E: Manual Bengali value detected as Bengali", manualBengali);
-assert(sugE.length === 0, "E: No suggestions generated when value is already Bengali", sugE);
+console.log("📄 CASE E: Government / header strings → isNonPersonNameCandidate");
+
+// English government headers
+assert(isNonPersonNameCandidate("Government of West Bengal") === true, "E: English govt header rejected", null);
+assert(isNonPersonNameCandidate("GOVERNMENT OF INDIA") === true, "E: ALL_CAPS govt header rejected", null);
+assert(isNonPersonNameCandidate("Election Commission of India") === true, "E: Election Commission rejected", null);
+assert(isNonPersonNameCandidate("Income Tax Department") === true, "E: Income Tax Dept rejected", null);
+assert(isNonPersonNameCandidate("Ministry of Finance") === true, "E: Ministry rejected", null);
+assert(isNonPersonNameCandidate("Government Sarkar Department") === true, "E: Mixed English govt header rejected", null);
+
+// Bengali government headers
+assert(isNonPersonNameCandidate("পশ্চিমবঙ্গ সরকার") === true, "E: Bengali গভ header পশ্চিমবঙ্গ rejected", null);
+assert(isNonPersonNameCandidate("ভারত সরকার") === true, "E: Bengali ভারত সরকার rejected", null);
+assert(isNonPersonNameCandidate("নির্বাচন কমিশন") === true, "E: Bengali election commission rejected", null);
+
+// Hindi government headers
+assert(isNonPersonNameCandidate("भारत सरकार") === true, "E: Hindi भारत सरकार rejected", null);
+assert(isNonPersonNameCandidate("पश्चिमबंग सरकार") === true, "E: Hindi पश्चिमबंग सरकार rejected", null);
+assert(isNonPersonNameCandidate("आयकर विभाग") === true, "E: Hindi income tax rejected", null);
 
 // ---------------------------------------------------------------------------
-// CASE F: full_name changes → old suggestion invalidated
-//         (simulated by checking the stale guard logic)
+// CASE F: Legitimate person names → NOT rejected
 // ---------------------------------------------------------------------------
 console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE F: Stale suggestion guard (full_name change simulation)");
-const sugF1 = suggestBengaliNames("Reshma Khatun");
-const sugF2 = suggestBengaliNames("Mohammad Islam Gazi");
-assert(sugF1[0]?.value !== sugF2[0]?.value, "F: Different full_name yields different suggestions (stale guard relevant)", {f1: sugF1[0]?.value, f2: sugF2[0]?.value});
-// The UI state bengaliSuggestionForName would differ → ReviewPanel resets selection
+console.log("📄 CASE F: Legitimate person names → isNonPersonNameCandidate = false");
+
+assert(isNonPersonNameCandidate("Rina Sarkar") === false, "F: Rina Sarkar NOT rejected (surname safety)", null);
+assert(isNonPersonNameCandidate("Reshma Khatun") === false, "F: Reshma Khatun NOT rejected", null);
+assert(isNonPersonNameCandidate("Mohammad Islam Gazi") === false, "F: Mohammad Islam Gazi NOT rejected", null);
+assert(isNonPersonNameCandidate("Suman Chakraborty") === false, "F: Suman Chakraborty NOT rejected", null);
+assert(isNonPersonNameCandidate("Arindam Bose") === false, "F: Arindam Bose NOT rejected", null);
+assert(isNonPersonNameCandidate("Sudip Mandal") === false, "F: Sudip Mandal NOT rejected", null);
+assert(isNonPersonNameCandidate("Tanmoy Ghosh") === false, "F: Tanmoy Ghosh NOT rejected", null);
+assert(isNonPersonNameCandidate("Priya Das") === false, "F: Priya Das NOT rejected", null);
 
 // ---------------------------------------------------------------------------
-// CASE G: Government of West Bengal → []
+// CASE G: Degenerate / edge inputs → rejected
 // ---------------------------------------------------------------------------
 console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE G: Government of West Bengal → rejected");
-const sugG = suggestBengaliNames("Government of West Bengal");
-assert(sugG.length === 0, "G: 'Government of West Bengal' returns [] (hard rejected)", sugG);
-assert(isNonPersonNameCandidate("Government of West Bengal") === true, "G: isNonPersonNameCandidate('Government of West Bengal') = true", null);
+console.log("📄 CASE G: Degenerate inputs → rejected");
+
+assert(isNonPersonNameCandidate("") === true, "G: Empty string rejected", null);
+assert(isNonPersonNameCandidate("   ") === true, "G: Whitespace-only rejected", null);
+assert(isNonPersonNameCandidate("DOB: 01/01/1990") === true, "G: DOB label rejected", null);
+assert(isNonPersonNameCandidate("MALE") === true, "G: Gender label rejected", null);
+assert(isNonPersonNameCandidate("Address: 123 Main St") === true, "G: Address label rejected", null);
+assert(isNonPersonNameCandidate("1234567890123") === true, "G: Long number rejected", null);
 
 // ---------------------------------------------------------------------------
-// CASE H: পশ্চিমবঙ্গ সরকার → []
+// CASE H: Stale selection guard — different names have different cache keys
+//         (ensures ReviewPanel sequence-ID logic is meaningful)
 // ---------------------------------------------------------------------------
 console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE H: পশ্চিমবঙ্গ সরকার → rejected");
-const sugH = suggestBengaliNames("পশ্চিমবঙ্গ সরকার");
-assert(sugH.length === 0, "H: 'পশ্চিমবঙ্গ সরকার' returns [] (Bengali script, but hard rejected before that)", sugH);
-assert(isNonPersonNameCandidate("পশ্চিমবঙ্গ সরকার") === true, "H: isNonPersonNameCandidate('পশ্চিমবঙ্গ সরকার') = true", null);
+console.log("📄 CASE H: Different names → different cache keys (stale guard basis)");
+
+const nameA = "Reshma Khatun";
+const nameB = "Mohammad Islam Gazi";
+const keyA = nameA.trim().toLowerCase();
+const keyB = nameB.trim().toLowerCase();
+assert(keyA !== keyB, "H: Reshma Khatun and Mohammad Islam Gazi have distinct cache keys", { keyA, keyB });
 
 // ---------------------------------------------------------------------------
-// CASE I: भारत सरकार → []
-// ---------------------------------------------------------------------------
-console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE I: भारत सरकार → rejected");
-const sugI = suggestBengaliNames("भारत सरकार");
-assert(sugI.length === 0, "I: 'भारत सरकार' returns [] (Hindi govt header)", sugI);
-assert(isNonPersonNameCandidate("भारत सरकार") === true, "I: isNonPersonNameCandidate('भारत सरकार') = true", null);
-
-// ---------------------------------------------------------------------------
-// CASE J: null/empty full_name → []
-// ---------------------------------------------------------------------------
-console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE J: null/empty full_name → []");
-assert(suggestBengaliNames("").length === 0, "J: Empty string returns []", null);
-assert(suggestBengaliNames("  ").length === 0, "J: Whitespace-only returns []", null);
-// TypeScript won't allow null directly but guard handles it
-assert(suggestBengaliNames(null as any).length === 0, "J: null returns []", null);
-
-// ---------------------------------------------------------------------------
-// CASE K: Deduplication — same output from dictionary and phonetic
-// ---------------------------------------------------------------------------
-console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE K: Deduplication");
-const sugK = suggestBengaliNames("Reshma Khatun");
-const valuesK = sugK.map(s => s.value);
-const uniqueK = new Set(valuesK);
-assert(uniqueK.size === valuesK.length, "K: No duplicate Bengali suggestions (deduped)", valuesK);
-
-// ---------------------------------------------------------------------------
-// CASE L: Accepted suggestion → original_language_name populated
-//         (logic simulation — no React state, just verify the value is correct)
-// ---------------------------------------------------------------------------
-console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE L: Accepted suggestion value correctness");
-const sugL = suggestBengaliNames("Reshma Khatun");
-assert(sugL.length >= 1, "L: Has at least 1 suggestion to accept", sugL);
-// Simulate: user selects sugL[0], bengaliSuggestionAccepted = true
-const acceptedValue = sugL[0].value;
-assert(typeof acceptedValue === 'string' && acceptedValue.length > 0, "L: Accepted suggestion value is a non-empty string", acceptedValue);
-assert(isBengaliScript(acceptedValue), "L: Accepted suggestion value is Bengali script", acceptedValue);
-
-// ---------------------------------------------------------------------------
-// CASE M: Unaccepted suggestion → original_language_name absent
-//         (logic simulation — in ReviewPanel, delete finalData.original_language_name)
-// ---------------------------------------------------------------------------
-console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE M: Unaccepted suggestion does NOT auto-populate");
-// Simulate resolvedData after merge (no manual original_language_name)
-const simulatedResolvedData: Record<string, any> = { full_name: "Reshma Khatun" };
-// bengaliSuggestionAccepted = false → ReviewPanel deletes original_language_name
-const finalData = { ...simulatedResolvedData };
-const bengaliSuggestionAccepted = false;
-if (!bengaliSuggestionAccepted) {
-  delete finalData.original_language_name;
-}
-assert(!('original_language_name' in finalData), "M: Unaccepted suggestion NOT in finalData", finalData);
-
-// ---------------------------------------------------------------------------
-// CASE N: Hindi source name + English full_name
-//         Hindi is NOT Bengali → ReviewPanel should show Bengali suggestions
-// ---------------------------------------------------------------------------
-console.log("--------------------------------------------------------------------------");
-console.log("📄 CASE N: Hindi source name ≠ Bengali");
-const hindiName = "रेशमा खातून";
-assert(isBengaliScript(hindiName) === false, "N: Hindi Devanagari is NOT detected as Bengali script", hindiName);
-// Since isBengaliScript returns false, hasDocBengaliName = false
-// → ReviewPanel will show Bengali suggestions from full_name
-const sugN = suggestBengaliNames("Reshma Khatun");
-assert(sugN.length >= 1, "N: Bengali suggestions available when doc name is Hindi", sugN);
-assert(sugN[0].value.includes("রেশমা") || sugN[0].value.length > 0, "N: Bengali suggestion value is non-empty", sugN[0].value);
-
-// ---------------------------------------------------------------------------
-// ADDITIONAL: Max 3 suggestions guard
-// ---------------------------------------------------------------------------
-console.log("--------------------------------------------------------------------------");
-console.log("📄 ADDITIONAL: Max suggestions = 3 guard");
-const sugMax = suggestBengaliNames("Mohammad Islam Gazi");
-assert(sugMax.length <= 3, "MAX: Total suggestions never exceed 3", sugMax.length);
-
-// ---------------------------------------------------------------------------
-// ADDITIONAL: isBengaliScript utility
-// ---------------------------------------------------------------------------
-console.log("--------------------------------------------------------------------------");
-console.log("📄 ADDITIONAL: isBengaliScript utility");
-assert(isBengaliScript("রেশমা") === true, "isBengaliScript: Bengali string returns true", null);
-assert(isBengaliScript("Reshma") === false, "isBengaliScript: Latin string returns false", null);
-assert(isBengaliScript("रेशमा") === false, "isBengaliScript: Devanagari returns false (not Bengali)", null);
-assert(isBengaliScript("") === false, "isBengaliScript: Empty string returns false", null);
-
+// SUMMARY
 // ---------------------------------------------------------------------------
 console.log("==========================================================================");
 console.log(`BENGALI TRANSLITERATOR TEST RESULT: ${passed} PASSED, ${failed} FAILED`);
 console.log("==========================================================================");
+console.log("");
+console.log("ℹ️  NOTE: Phonetic engine tests (suggestBengaliNames) have been removed.");
+console.log("   Production Bengali suggestions now come from Google Input Tools.");
+console.log("   See test-google-input-tools.ts for the full mocked test suite.");
 
 if (failed > 0) process.exit(1);
