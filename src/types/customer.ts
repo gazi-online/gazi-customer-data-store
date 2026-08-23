@@ -34,6 +34,7 @@ export interface Customer {
   
   photo_url: string | null;
   photo_source: string | null;
+  original_language_name: string | null;
   status: CustomerStatus;
   created_at: string;
   updated_at: string;
@@ -69,5 +70,6 @@ export interface CustomerFormData {
   
   photo_url?: string;
   photo_source?: string;
+  original_language_name?: string;
   status: CustomerStatus;
 }

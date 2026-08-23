@@ -1,11 +1,12 @@
 import { MergedResult, NormalizedData, Conflict } from "../types";
-import { AlertCircle, CheckCircle2, ChevronRight, Check, Activity, Loader2, UserCheck, Sparkles } from "lucide-react";
-import { useState, useEffect } from "react";
+import { AlertCircle, CheckCircle2, ChevronRight, Check, Loader2, UserCheck, Sparkles, Languages } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
 import { getProfilePhotoSignedUrl, cropAndUploadProfilePhoto } from "@/app/(dashboard)/customers/ai-actions";
 import { IndiaPincodeProvider } from "@/lib/address/IndiaPincodeProvider";
 import { PincodeLookupResult } from "@/lib/address/address-types";
 import { toast } from "sonner";
 import { suggestNameComponentsFromFullName } from "../nameUtils";
+import { suggestBengaliNames, isBengaliScript, BengaliNameSuggestion } from "@/lib/names/BengaliNameTransliterator";
 
 export function ReviewPanel({ 
   result, 
@@ -20,6 +21,11 @@ export function ReviewPanel({
   const [pinRefData, setPinRefData] = useState<PincodeLookupResult | null>(null);
   const [pinStatus, setPinStatus] = useState<'idle' | 'loading' | 'verified' | 'mismatch' | 'failed'>('idle');
   const [suggestionAccepted, setSuggestionAccepted] = useState<boolean>(false);
+  // Bengali transliteration suggestion state
+  const [selectedBengaliIdx, setSelectedBengaliIdx] = useState<number | null>(null);
+  const [bengaliSuggestionAccepted, setBengaliSuggestionAccepted] = useState<boolean>(false);
+  // Track which full_name the current Bengali selection was computed for (stale guard)
+  const [bengaliSuggestionForName, setBengaliSuggestionForName] = useState<string | null>(null);
 
   const conflictFields = new Set(result.conflicts.map(c => c.field));
 
@@ -42,6 +48,21 @@ export function ReviewPanel({
   const nameSuggestion = (!hasExplicitNameComponents && resolvedData.full_name) 
     ? suggestNameComponentsFromFullName(resolvedData.full_name) 
     : null;
+
+  // --- Bengali name logic ---
+  // Document-derived Bengali name: original_language_name from the extraction result
+  const docNativeName: string | undefined = result.data.original_language_name?.value;
+  // A document Bengali name is valid only if it contains Bengali Unicode and is not a header
+  const hasDocBengaliName = !!(docNativeName && isBengaliScript(docNativeName));
+  // Bengali suggestions: only when no valid Bengali doc name and full_name is Latin/non-Bengali
+  const bengaliSuggestions: BengaliNameSuggestion[] = useMemo(() => {
+    if (hasDocBengaliName) return [];
+    const fn = resolvedData.full_name;
+    if (!fn || isBengaliScript(fn)) return [];
+    return suggestBengaliNames(fn);
+  }, [hasDocBengaliName, resolvedData.full_name]);
+  // Invalidate selection when full_name changes or suggestions are recomputed
+  const currentFullName: string | undefined = resolvedData.full_name;
 
   const pincodeVal = resolvedData.pincode;
 
@@ -76,6 +97,15 @@ export function ReviewPanel({
     }
     return () => { isCurrent = false; };
   }, [pincodeVal, resolvedData.state, resolvedData.district]);
+
+  // Invalidate Bengali suggestion when full_name changes
+  useEffect(() => {
+    if (currentFullName !== bengaliSuggestionForName) {
+      setSelectedBengaliIdx(null);
+      setBengaliSuggestionAccepted(false);
+      setBengaliSuggestionForName(currentFullName ?? null);
+    }
+  }, [currentFullName, bengaliSuggestionForName]);
 
 const ALL_FIELDS: (keyof NormalizedData)[] = [
   'full_name',
@@ -188,6 +218,30 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
     }
 
     const finalData = { ...resolvedData };
+
+    // --- Bengali original_language_name safety ---
+    // Only allow original_language_name in finalData if:
+    //   A) it came from the document (hasDocBengaliName), OR
+    //   B) user explicitly accepted a generated suggestion (bengaliSuggestionAccepted)
+    //      AND that suggestion belongs to the current full_name (stale guard)
+    if (!hasDocBengaliName) {
+      const suggestionIsStillValid =
+        bengaliSuggestionAccepted &&
+        selectedBengaliIdx !== null &&
+        bengaliSuggestions[selectedBengaliIdx] !== undefined &&
+        bengaliSuggestionForName === currentFullName;
+
+      if (suggestionIsStillValid) {
+        finalData.original_language_name = bengaliSuggestions[selectedBengaliIdx!].value;
+      } else {
+        // Do NOT auto-populate from an unaccepted suggestion.
+        // Drop any extraction-derived non-Bengali value (e.g. Hindi) from this field
+        // since the UI contract expects Bengali here.
+        delete finalData.original_language_name;
+      }
+    }
+    // If hasDocBengaliName: resolvedData already contains the document value — pass through unchanged.
+
     if (result.data.profile_photo?.storage_path && usePhoto) {
       finalData.photo_source = result.data.profile_photo.storage_path;
     }
@@ -213,52 +267,6 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
       </div>
 
       <div className="p-6">
-        {process.env.NODE_ENV === 'development' && result.jobs && result.jobs.some(j => j.perfSummary) && (
-          <div className="mb-6 space-y-4">
-             <h4 className="text-sm font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider border-b border-indigo-100 dark:border-indigo-900/30 pb-2 flex items-center">
-               <Activity className="h-4 w-4 mr-2" /> Performance Summary (Dev Only)
-             </h4>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               {result.jobs.filter(j => j.perfSummary).map((job, idx) => (
-                 <div key={idx} className="bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 rounded-lg p-4 font-mono text-[11px] md:text-xs text-indigo-900 dark:text-indigo-200 shadow-sm">
-                     <div className="flex items-center justify-between font-bold mb-2 uppercase text-indigo-700 dark:text-indigo-400 border-b border-indigo-200 dark:border-indigo-800/50 pb-1">
-                       <span>{job.documentType}</span>
-                       {job.perfSummary!.cacheHit ? (
-                         <span className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2 py-0.5 rounded-full text-[10px] normal-case font-bold flex items-center">
-                           ⚡ Cache Hit (Saved ~{(job.perfSummary!.savedProviderMs! / 1000).toFixed(1)}s)
-                         </span>
-                       ) : (
-                         <span className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 px-2 py-0.5 rounded-full text-[10px] normal-case font-semibold">
-                           🔍 Cache Miss
-                         </span>
-                       )}
-                     </div>
-                     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                       <span>Provider:</span> <span className="font-semibold text-right">{job.perfSummary!.provider}</span>
-                       <span>Model:</span> <span className="font-semibold text-right">{job.perfSummary!.model}</span>
-                       <span>Docs Count:</span> <span className="font-semibold text-right">{job.perfSummary!.documentCount}</span>
-                       <hr className="col-span-2 border-indigo-200/50 dark:border-indigo-800/50 my-1" />
-                       <span>Cache Lookup:</span> <span className="font-semibold text-right text-emerald-600 dark:emerald-400">{job.perfSummary!.cacheLookupMs || 0} ms</span>
-                       {job.perfSummary!.cacheWriteMs !== undefined && job.perfSummary!.cacheWriteMs > 0 && (
-                         <><span>Cache Write:</span> <span className="font-semibold text-right">{job.perfSummary!.cacheWriteMs} ms</span></>
-                       )}
-                       <span>Primary Attempt:</span> <span className="font-semibold text-right">{job.perfSummary!.primaryAttemptDuration} ms</span>
-                       {job.perfSummary!.fallbackAttemptDuration > 0 && (
-                          <><span>Fallback Attempt:</span> <span className="font-semibold text-right text-amber-600 dark:text-amber-400">{job.perfSummary!.fallbackAttemptDuration} ms</span></>
-                       )}
-                       <hr className="col-span-2 border-indigo-200/50 dark:border-indigo-800/50 my-1" />
-                       <span>Image Prep:</span> <span className="font-semibold text-right">{job.perfSummary!.imagePrepTime} ms</span>
-                       <span>JSON Parse:</span> <span className="font-semibold text-right">{job.perfSummary!.jsonParseTime} ms</span>
-                       <span>Normalization:</span> <span className="font-semibold text-right">{job.perfSummary!.normalizationTime} ms</span>
-                       <span>DB Logging:</span> <span className="font-semibold text-right">{job.perfSummary!.dbLogTime} ms</span>
-                       <hr className="col-span-2 border-indigo-200/50 dark:border-indigo-800/50 my-1" />
-                       <span className="font-bold">Total Pipeline:</span> <span className="font-bold text-right text-indigo-600 dark:text-indigo-300">{job.perfSummary!.totalTime} ms</span>
-                     </div>
-                 </div>
-               ))}
-             </div>
-           </div>
-         )}
 
         {result.conflicts.length > 0 && (
           <div className="mb-6 space-y-4">
@@ -482,6 +490,132 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
                       </>
                     )}
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ============================================================
+              BENGALI ORIGINAL-LANGUAGE NAME SECTION
+              ============================================================ */}
+
+          {/* Case A: Document already contains a valid Bengali person name */}
+          {hasDocBengaliName && docNativeName && (
+            <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800">
+              <div className="flex items-start gap-3">
+                <Languages className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <h5 className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+                      Original Language Name
+                    </h5>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 uppercase tracking-wide">
+                      From document
+                    </span>
+                  </div>
+                  <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100 font-mono">
+                    {docNativeName}
+                  </p>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1">
+                    Exact spelling preserved from OCR. Will be used in Confirm &amp; Auto Fill.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Case B: No Bengali doc name, but full_name exists → show suggestions */}
+          {!hasDocBengaliName && bengaliSuggestions.length > 0 && (
+            <div className="mb-6 p-4 rounded-xl bg-violet-50 border border-violet-200 dark:bg-violet-950/20 dark:border-violet-800">
+              <div className="flex items-start gap-3">
+                <Languages className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <h5 className="text-sm font-semibold text-violet-900 dark:text-violet-200">
+                      Original Language Name
+                    </h5>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900 text-violet-800 dark:text-violet-200 uppercase tracking-wide">
+                      Not found in Bengali in document
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-violet-700 dark:text-violet-300 mb-3">
+                    Suggested Bengali spellings for <strong className="font-mono text-zinc-900 dark:text-zinc-100">{resolvedData.full_name}</strong>
+                    {' '}— select one and click <em>Use Selected Bengali Name</em> to accept.
+                  </p>
+
+                  <div className="space-y-2 mb-3">
+                    {bengaliSuggestions.map((sug, idx) => (
+                      <label
+                        key={idx}
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedBengaliIdx === idx && !bengaliSuggestionAccepted
+                            ? 'border-violet-500 bg-violet-100 dark:bg-violet-900/40 ring-1 ring-violet-500'
+                            : bengaliSuggestionAccepted && selectedBengaliIdx === idx
+                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 ring-1 ring-emerald-500'
+                            : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-violet-50 dark:hover:bg-violet-900/20'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="bengali_name_suggestion"
+                          disabled={bengaliSuggestionAccepted}
+                          checked={selectedBengaliIdx === idx}
+                          onChange={() => {
+                            setSelectedBengaliIdx(idx);
+                            setBengaliSuggestionAccepted(false);
+                          }}
+                          className="text-violet-600 focus:ring-violet-500 shrink-0"
+                        />
+                        <div className="flex-1">
+                          <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{sug.value}</span>
+                          <span className="ml-2 text-[10px] uppercase font-medium text-zinc-400 dark:text-zinc-500">
+                            {sug.reason} · {Math.round(sug.confidence * 100)}%
+                          </span>
+                        </div>
+                        {bengaliSuggestionAccepted && selectedBengaliIdx === idx && (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                        )}
+                      </label>
+                    ))}
+                  </div>
+
+                  {!bengaliSuggestionAccepted ? (
+                    <button
+                      type="button"
+                      disabled={selectedBengaliIdx === null}
+                      onClick={() => {
+                        if (selectedBengaliIdx === null) return;
+                        setBengaliSuggestionAccepted(true);
+                        setBengaliSuggestionForName(currentFullName ?? null);
+                        toast.success('Bengali name accepted — will be used in Confirm & Auto Fill.');
+                      }}
+                      className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center shadow-sm ${
+                        selectedBengaliIdx === null
+                          ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed dark:bg-zinc-700 dark:text-zinc-500'
+                          : 'bg-violet-600 text-white hover:bg-violet-700'
+                      }`}
+                    >
+                      <Languages className="h-3.5 w-3.5 mr-1.5" />
+                      Use Selected Bengali Name
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center">
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Accepted — will be used in Auto Fill
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBengaliSuggestionAccepted(false);
+                          setSelectedBengaliIdx(null);
+                        }}
+                        className="text-[11px] text-zinc-500 hover:text-red-600 underline ml-2"
+                      >
+                        Undo
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -228,6 +228,17 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         return;
       }
 
+      // Do not overwrite a manually entered original_language_name.
+      // The user's explicit native-script entry always takes priority over
+      // any document-derived or accepted transliteration suggestion.
+      if (
+        field === 'original_language_name' &&
+        currentValues.original_language_name &&
+        String(currentValues.original_language_name).trim().length > 0
+      ) {
+        return;
+      }
+
       // Only populate non-empty approved AI fields
       if (data[field] !== undefined && data[field] !== null && data[field] !== "") {
         setValue(field as any, data[field], { shouldValidate: true, shouldDirty: true });

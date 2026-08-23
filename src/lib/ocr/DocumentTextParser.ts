@@ -1,4 +1,5 @@
 import { ParsedDocumentFields } from './ocr-types';
+import { isNonPersonNameCandidate } from '../names/nameSafety';
 
 export class DocumentTextParser {
   static parse(text: string, documentType: string, filename?: string): ParsedDocumentFields {
@@ -72,60 +73,9 @@ export class DocumentTextParser {
       return line.replace(/[^A-Za-z\s.]/g, '').trim();
     };
 
-    // Centralized Hard Rejection Helper for Non-Person Headers, Titles, and Labels
-    const isNonPersonHeader = (line: string): boolean => {
-      if (!line || line.trim().length === 0) return true;
-
-      const u = line.toUpperCase().trim();
-
-      // Explicit phrase rejection list (English, Hindi, Bengali)
-      const HARD_REJECT_TERMS = [
-        'GOVERNMENT OF', 'GOVT OF', 'GOVT. OF', 'REPUBLIC OF INDIA', 'STATE GOVERNMENT',
-        'MINISTRY OF', 'DEPARTMENT OF', 'COMMISSION OF', 'AUTHORITY OF', 'INCOME TAX',
-        'ELECTION COMMISSION', 'UNIQUE IDENTIFICATION', 'UIDAI', 'AADHAAR', 'ADHAAR',
-        'ELECTOR PHOTO IDENTITY CARD', 'PERMANENT ACCOUNT NUMBER', 'PAN CARD',
-        'DRIVING LICENCE', 'PASSPORT', 'WEST BENGAL', 'GOVERNMENT OF WEST BENGAL',
-        'GOVT. OF WEST BENGAL', 'GOVERNMENT OF INDIA', 'GOVT OF INDIA', 'GOVT. OF INDIA',
-        'FOOD & SUPPLIES', 'KHADYA SURAKSHA', 'PASSBOOK', 'BANK STATEMENT', 'STATE BANK',
-        'SAVINGS BANK', 'HELP', 'WWW.', 'HTTP', 'HTTPS', 'AUTHORITY', 'ENROLMENT',
-        'भारत सरकार', 'पश्चिमबंग सरकार', 'पश्चिम बंगाल सरकार', 'राज्य सरकार', 'आयकर विभाग',
-        'निर्वाचन आयोग', 'चुनाव आयोग', 'राशन कार्ड', 'खाद्य विभाग', 'आधार',
-        'পশ্চিমবঙ্গ সরকার', 'ভারত সরকার', 'ইউনিক আইডেন্টিফিকেশন', 'অথরিটি অব ইন্ডিয়া',
-        'ইন্ডিয়া', 'নির্বাচন কমিশন', 'আয়কর বিভাগ', 'আধার'
-      ];
-
-      for (const term of HARD_REJECT_TERMS) {
-        if (u.includes(term.toUpperCase())) {
-          return true;
-        }
-      }
-
-      // Regex patterns for government/department/organization headers
-      const GOVT_PATTERNS = [
-        /\bgovt\b|\bgovernment\b/i,
-        /\bministry\b|\bdepartment\b|\bcommission\b|\bauthority\b/i,
-        /\belection commission\b|\bincome tax\b/i,
-        /\bपश्चिमबंग|\bपश्चिम बंगाल|\bপশ্চিমবঙ্গ/i,
-        /\bभारत सरकार|\bসরকার\b|\bआयकर\b|\bनिर्वाचन\b/i
-      ];
-
-      for (const pat of GOVT_PATTERNS) {
-        if (pat.test(line)) return true;
-      }
-
-      // Reject lines containing document labels or numbers > 3 digits
-      if (
-        /\b(DOB|Date of Birth|YOB|Year of Birth|जन्म तिथि|जन्म वर्ष|जन्म तारीख)\b/i.test(line) ||
-        /\b(MALE|FEMALE|TRANSGENDER|पुरुष|महिला|মহিলা)\b/i.test(line) ||
-        /\b(Address|पता|ঠিকানা|PIN|Pincode|Post Office)\b/i.test(line) ||
-        /\b(S\/O|D\/O|W\/O|H\/O|C\/O|Son of|Daughter of|Wife of|Husband of|Care of)\b/i.test(line) ||
-        /\d{4,}/.test(line)
-      ) {
-        return true;
-      }
-
-      return false;
-    };
+    // Centralized Hard Rejection Helper — delegates to shared nameSafety utility
+    // so DocumentTextParser and BengaliNameTransliterator use the same rule set.
+    const isNonPersonHeader = (line: string): boolean => isNonPersonNameCandidate(line);
 
     if (documentType.startsWith('aadhaar')) {
       // 1. Aadhaar Number
