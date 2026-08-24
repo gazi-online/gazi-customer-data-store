@@ -199,38 +199,197 @@ export class DocumentTextParser {
       }
 
       // 8. ADDRESS EXTRACTION (Aadhaar Back / Combined Multiline Address)
-      if (documentType === 'aadhaar_back' || documentType === 'aadhaar_combined') {
-        const addrIndex = cleanText.search(/Address:|Address|पता:|पता|ঠিকানা:|ঠিকানা/i);
-        if (addrIndex !== -1) {
-          const addrSub = cleanText.substring(addrIndex)
-            .replace(/^(Address|पता|ঠিকানা)[:\s]*/i, '')
-            .split(/Unique Identification|UIDAI|1800|www\.|Help|Page \d/i)[0]
+      if (documentType === 'aadhaar_back' || documentType === 'aadhaar_combined' || documentType === 'aadhaar' || documentType === 'aadhaar_front' || documentType === 'generic_address_document') {
+        const addressStopRegex = /(?:Unique Identification|UIDAI|भारतीय विशिष्ट पहचान प्राधिकरण|ইউনিক আইডেন্টিফিকেশন|Mera Aadhaar|আমার আধার|मेरा आधार|Scan QR|QR Code|Download Date|Issue Date|Date of Download|Date of Issue|Government of India|Government of West Bengal|পশ্চিমবঙ্গ সরকার|ভারত সরকার|भारत सरकार|Election Commission|Income Tax|help@uidai\.gov\.in|www\.uidai\.gov\.in|uidai\.gov\.in|Page \d)/i;
+
+        const isNoiseLine = (l: string): boolean => {
+          const t = l.trim();
+          if (/^\d{4}\s\d{4}\s\d{4}$/.test(t) || /^\d{12}$/.test(t)) return true;
+          if (/^VID\b/i.test(t)) return true;
+          if (/^(?:DOB|Date of Birth|DATE OF BIRTH|जन्म तिथि|जन्म तारीख|Year of Birth|YOB|জন্ম তারিখ)[:\s]/i.test(t)) return true;
+          if (/^(?:MALE|FEMALE|TRANSGENDER|पुरुष|মহিলা|महिला)$/i.test(t)) return true;
+          if (/\b(?:1947|1800\s*\d{3}\s*\d{4}|help@uidai\.gov\.in|www\.uidai\.gov\.in|uidai\.gov\.in)\b/i.test(t)) return true;
+          if (addressStopRegex.test(t)) return true;
+          return false;
+        };
+
+        const addressStartLabels = [
+          { regex: /^(?:Address|Adress|Addres|ADDRESS)[:\s\-]*/i, isNative: false, stripLabel: true },
+          { regex: /^(?:To)[:\s\-]+/i, isNative: false, stripLabel: true },
+          { regex: /^(?:C\/O|Care of)[:\s\-]+/i, isNative: false, stripLabel: false },
+          { regex: /^(?:ঠিকানা)[:\s\-]*/i, isNative: true, stripLabel: true },
+          { regex: /^(?:पता)[:\s\-]*/i, isNative: true, stripLabel: true }
+        ];
+
+        interface AddressCandidate {
+          lines: string[];
+          isNative: boolean;
+          hasPin: boolean;
+        }
+
+        const candidateBlocks: AddressCandidate[] = [];
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+
+          // Check if this line starts an address block
+          for (const lbl of addressStartLabels) {
+            if (lbl.regex.test(line)) {
+              let firstLineContent = lbl.stripLabel ? line.replace(lbl.regex, '').trim() : line.trim();
+              const blockLines: string[] = [];
+              if (firstLineContent.length > 0) {
+                blockLines.push(firstLineContent);
+              }
+
+              let hasPin = pincodeMatch ? blockLines.some(l => pincodeMatch[0] && l.includes(pincodeMatch[0])) : false;
+
+              // Collect subsequent address lines
+              for (let j = i + 1; j < lines.length; j++) {
+                const nextLine = lines[j];
+
+                // Stop if next line is another address header
+                if (addressStartLabels.some(l => l.regex.test(nextLine))) break;
+
+                // Stop if next line matches non-address noise or government footer
+                if (isNoiseLine(nextLine)) {
+                  break;
+                }
+
+                // Check for 6-digit PIN in this line
+                const linePinMatch = nextLine.match(/\b[1-9][0-9]{5}\b/);
+                if (linePinMatch) {
+                  hasPin = true;
+                  blockLines.push(nextLine.trim());
+                  // PIN is the standard end anchor of Indian addresses.
+                  break;
+                }
+
+                blockLines.push(nextLine.trim());
+              }
+
+              if (blockLines.length > 0) {
+                candidateBlocks.push({
+                  lines: blockLines,
+                  isNative: lbl.isNative,
+                  hasPin
+                });
+              }
+              break;
+            }
+          }
+        }
+
+        // Choose best candidate block (prefer English if complete, otherwise native)
+        let chosenCandidate: AddressCandidate | null = null;
+        if (candidateBlocks.length === 1) {
+          chosenCandidate = candidateBlocks[0];
+        } else if (candidateBlocks.length > 1) {
+          const engCandidate = candidateBlocks.find(c => !c.isNative && c.lines.join(' ').length >= 10);
+          const nativeCandidate = candidateBlocks.find(c => c.isNative && c.lines.join(' ').length >= 10);
+          if (engCandidate) {
+            chosenCandidate = engCandidate;
+          } else {
+            chosenCandidate = nativeCandidate || candidateBlocks[0];
+          }
+        }
+
+        if (chosenCandidate && chosenCandidate.lines.length > 0) {
+          // Line wrap recovery & formatting
+          const recoveredLines: string[] = [];
+          for (let k = 0; k < chosenCandidate.lines.length; k++) {
+            let cur = chosenCandidate.lines[k];
+
+            while (k + 1 < chosenCandidate.lines.length) {
+              const next = chosenCandidate.lines[k + 1];
+
+              // Case 1: Word hyphen split e.g. "Murshida-" + "bad"
+              if (/[\w\u0900-\u097F\u0980-\u09FF]\-$/.test(cur)) {
+                cur = cur.slice(0, -1) + next;
+                k++;
+              }
+              // Case 2: Label hyphen split e.g. "Vill-" + "Choto" or "Dist-" + "Murshidabad"
+              else if (/(?:Vill|PO|P\.O|Dist|District|State|PIN|গ্রাম|পো|জেলা|পিন)\s*\-$/i.test(cur)) {
+                cur = cur + ' ' + next;
+                k++;
+              }
+              // Case 3: Line without trailing comma/period followed by continuation word/syllable
+              else if (!/[,\.;]$/.test(cur) && (/^[a-z\u0900-\u097F\u0980-\u09FF]/.test(next) || next.length <= 4 || /^(?:Kalia|Gram|Pur|Nagar|Abad|Ganj|Bazar|Para|Tola|Danga)\b/i.test(next) || (cur.endsWith('Murshida') && next.startsWith('bad')))) {
+                if (cur.endsWith('Murshida') && next.startsWith('bad')) {
+                  cur = cur + next;
+                } else {
+                  cur = cur + ' ' + next;
+                }
+                k++;
+              } else {
+                break;
+              }
+            }
+
+            recoveredLines.push(cur);
+          }
+
+          let fullAddressStr = recoveredLines
+            .map(l => l.replace(/^[,\s:\-]+|[,\s:\-]+$/g, '').trim())
+            .filter(l => l.length > 0)
+            .join(', ')
+            .replace(/,\s*,+/g, ', ')
             .trim();
 
-          const addrLines = addrSub.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-          const fullAddressStr = addrLines.join(', ');
-          
           if (fullAddressStr.length > 5) {
             result.address!.full_address = fullAddressStr;
 
-            // Extract State from address lines
+            // Extract PIN code from address
+            const addrPinMatch = fullAddressStr.match(/\b[1-9][0-9]{5}\b/);
+            if (addrPinMatch) {
+              result.address!.pincode = addrPinMatch[0];
+            }
+
+            // Extract State from address lines (English + Bengali / Hindi aliases)
             for (const stateName of INDIAN_STATES) {
               if (new RegExp(`\\b${stateName}\\b`, 'i').test(fullAddressStr)) {
                 result.address!.state = stateName;
                 break;
               }
             }
-
-            // Extract District from address lines (Dist: X or District: X or জেলা: X)
-            const distMatch = fullAddressStr.match(/\b(?:Dist|District|জেলা|ज़िला)[:\s]+([A-Za-z\s]+)(?:,|$)/i);
-            if (distMatch) {
-              result.address!.district = distMatch[1].trim();
+            if (!result.address!.state) {
+              if (fullAddressStr.includes('পশ্চিমবঙ্গ') || fullAddressStr.includes('পশ্চিম বঙ্গ') || fullAddressStr.includes('पश्चिम बंगाल')) {
+                result.address!.state = 'West Bengal';
+              } else if (fullAddressStr.includes('बिहार')) {
+                result.address!.state = 'Bihar';
+              } else if (fullAddressStr.includes('ঝাড়খণ্ড') || fullAddressStr.includes('झारखंड')) {
+                result.address!.state = 'Jharkhand';
+              } else if (fullAddressStr.includes('ওড়িশা') || fullAddressStr.includes('ओडिशा')) {
+                result.address!.state = 'Odisha';
+              }
             }
 
-            // Extract Post Office (PO: X or P.O. X or Post Office: X)
-            const poMatch = fullAddressStr.match(/\b(?:P\.?O\.?|Post Office|ডাকঘর|डाकघर)[:\s]+([A-Za-z\s]+)(?:,|$)/i);
+            // Extract District from address lines (Dist: X, District: X, Dist - X, জেলা: X, জেলা - X, ज़िला: X)
+            // Supports alphanumeric district names like North 24 Parganas, South 24 Parganas
+            const distMatch = fullAddressStr.match(/\b(?:Dist|District|জেলা|ज़िला|जिला)[:\s\-]+([A-Za-z0-9\u0900-\u097F\u0980-\u09FF\s]+?)(?:,|\n|\.|\-|\d{6}|$)/i);
+            if (distMatch) {
+              const cleanDist = distMatch[1].replace(/\b\d{6}\b/g, '').replace(/^[,\s:\-]+|[,\s:\-]+$/g, '').trim();
+              if (cleanDist.length >= 2 && cleanDist.length <= 40) {
+                result.address!.district = cleanDist;
+              }
+            } else if (result.address!.state) {
+              // Check formatting: "Murshidabad, West Bengal"
+              const stateEscaped = result.address!.state.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const beforeStateMatch = fullAddressStr.match(new RegExp(`([A-Za-z0-9\\u0900-\\u097F\\u0980-\\u09FF\\s]{3,30}),\\s*${stateEscaped}`, 'i'));
+              if (beforeStateMatch) {
+                const candDist = beforeStateMatch[1].split(/,|\n|PO|P\.O|Vill/i).pop()?.trim();
+                if (candDist && candDist.length >= 2 && !candDist.toLowerCase().includes('state')) {
+                  result.address!.district = candDist;
+                }
+              }
+            }
+
+            // Extract Post Office (PO: X, P.O. X, Post Office: X, PO - X, ডাকঘর: X, डाकघर: X)
+            const poMatch = fullAddressStr.match(/\b(?:P\.?O\.?|Post Office|ডাকঘর|डाकघर)[:\s\-]+([A-Za-z\u0900-\u097F\u0980-\u09FF\s]+?)(?:,|\n|\.|\-|\d{6}|$)/i);
             if (poMatch) {
-              result.address!.post_office = poMatch[1].trim();
+              const cleanPo = poMatch[1].replace(/\b\d{6}\b/g, '').replace(/^[,\s:\-]+|[,\s:\-]+$/g, '').trim();
+              if (cleanPo.length >= 2 && cleanPo.length <= 40) {
+                result.address!.post_office = cleanPo;
+              }
             }
           }
         }

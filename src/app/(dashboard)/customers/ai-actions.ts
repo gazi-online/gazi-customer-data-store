@@ -642,23 +642,50 @@ export async function processOcrSpaceDocument(formData: FormData) {
       throw new Error("Could not parse customer data from OCR results.");
     }
 
+    const combinedCustomer: Record<string, any> = {};
+    const combinedAddress: Record<string, any> = {};
+    const combinedDocuments: Record<string, any> = {};
+
+    for (const parsed of allParsedData) {
+      if (parsed.customer) {
+        Object.entries(parsed.customer).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== '') {
+            if (!combinedCustomer[k] || (typeof v === 'string' && v.length > String(combinedCustomer[k]).length)) {
+              combinedCustomer[k] = v;
+            }
+          }
+        });
+      }
+
+      if (parsed.address) {
+        Object.entries(parsed.address).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== '') {
+            const detectedDocType = parsed.detected_documents?.[0]?.detected_type || '';
+            const isBack = detectedDocType.includes('back') || detectedDocType.includes('combined');
+            if (isBack || !combinedAddress[k] || (typeof v === 'string' && v.length > String(combinedAddress[k]).length)) {
+              combinedAddress[k] = v;
+            }
+          }
+        });
+      }
+
+      if (parsed.documents) {
+        Object.entries(parsed.documents).forEach(([k, v]) => {
+          if (v && (v as any).number) {
+            combinedDocuments[k] = v;
+          }
+        });
+      }
+    }
+
     const firstParsed = allParsedData[0] || {};
     const combinedJson = {
-      customer: firstParsed.customer || {},
-      address: firstParsed.address || {},
-      documents: firstParsed.documents || {},
+      customer: combinedCustomer,
+      address: combinedAddress,
+      documents: combinedDocuments,
       detected_documents: allParsedData.flatMap(d => d.detected_documents || []),
       confidence_summary: firstParsed.confidence_summary || { overall: 0.9, low_confidence_fields: [] }
     };
-
-    if (allParsedData.length > 1) {
-      for (let i = 1; i < allParsedData.length; i++) {
-        const current = allParsedData[i];
-        if (current.customer) combinedJson.customer = { ...combinedJson.customer, ...current.customer };
-        if (current.address) combinedJson.address = { ...combinedJson.address, ...current.address };
-        if (current.documents) combinedJson.documents = { ...combinedJson.documents, ...current.documents };
-      }
-    }
 
     return {
       success: true,

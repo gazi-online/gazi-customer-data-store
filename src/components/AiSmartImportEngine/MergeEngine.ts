@@ -115,9 +115,20 @@ export class MergeEngine {
         const priorityList = FIELD_PRIORITY[field] || [];
         
         // Sort options by Document Priority, Side Priority (Back preferred for address), then Confidence
+        const addressFields: (keyof NormalizedData)[] = ['address', 'city', 'district', 'state', 'pincode', 'post_office'];
+
         options.sort((a, b) => {
           const getRank = (docType: string) => {
-            const index = priorityList.findIndex(p => docType.toLowerCase().includes(p.toLowerCase()) || p.toLowerCase().includes(docType.toLowerCase()));
+            const cleanDoc = docType.toLowerCase().replace(/_/g, ' ');
+            const index = priorityList.findIndex(p => {
+              const cleanP = p.toLowerCase().replace(/_/g, ' ');
+              return cleanDoc.includes(cleanP) || cleanP.includes(cleanDoc) ||
+                (cleanDoc.includes('aadhaar') && cleanP.includes('aadhaar')) ||
+                (cleanDoc.includes('voter') && cleanP.includes('voter')) ||
+                (cleanDoc.includes('pan') && cleanP.includes('pan')) ||
+                (cleanDoc.includes('passport') && cleanP.includes('passport')) ||
+                (cleanDoc.includes('driving') && cleanP.includes('driving'));
+            });
             return index !== -1 ? index : 999;
           };
 
@@ -127,7 +138,6 @@ export class MergeEngine {
           if (rankA !== rankB) return rankA - rankB;
 
           // Side priority for address-related fields (Back side preferred)
-          const addressFields: (keyof NormalizedData)[] = ['address', 'city', 'district', 'state', 'pincode', 'post_office'];
           if (addressFields.includes(field)) {
             const sideA = (a.source_side || a.documentType || '').toLowerCase();
             const sideB = (b.source_side || b.documentType || '').toLowerCase();
@@ -140,14 +150,23 @@ export class MergeEngine {
           return b.confidence - a.confidence;
         });
 
-        // Even with priority, if the top two priorities are identical, we should let the user decide.
-        // But for now, we register a conflict so the ReviewPanel can present it.
-        conflicts.push({
-          field,
-          options
-        });
+        // Check if top option has clear back-side priority over non-back options for address fields
+        const topIsBack = addressFields.includes(field) &&
+          ((options[0].source_side || options[0].documentType || '').toLowerCase().includes('back'));
+        const secondIsBack = addressFields.includes(field) &&
+          ((options[1].source_side || options[1].documentType || '').toLowerCase().includes('back'));
+
+        const hasClearBackPriority = topIsBack && !secondIsBack;
+
+        if (!hasClearBackPriority) {
+          // Register conflict so the ReviewPanel can present it
+          conflicts.push({
+            field,
+            options
+          });
+        }
         
-        // Auto-assign the highest priority one for now, ReviewPanel will allow changing it
+        // Auto-assign the highest priority one
         data[field] = { 
           value: options[0].value, 
           confidence: options[0].confidence,

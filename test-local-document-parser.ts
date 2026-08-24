@@ -1,4 +1,5 @@
 import { DocumentTextParser } from './src/lib/ocr/DocumentTextParser';
+import { DocumentClassifier } from './src/lib/ocr/DocumentClassifier';
 import { DataNormalizer } from './src/components/AiSmartImportEngine/DataNormalizer';
 import { MergeEngine } from './src/components/AiSmartImportEngine/MergeEngine';
 
@@ -264,6 +265,210 @@ const fixP = DocumentTextParser.parse(`
   FEMALE
 `, 'aadhaar_front');
 report("Fixture P: full_name is undefined when no valid person name exists (no guessing)", fixP.customer?.full_name === undefined, fixP);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 ADDRESS FIXTURE A: Standard English multiline Aadhaar back");
+const addrFixA = DocumentTextParser.parse(`
+  Address:
+  123 Station Road, Ward No 4
+  PO: Park Street, Dist: Kolkata
+  State: West Bengal - 700001
+  UIDAI 1947
+`, 'aadhaar_back');
+report("Address A: full_address extracted multiline", addrFixA.address?.full_address?.includes('123 Station Road') === true, addrFixA);
+report("Address A: pincode extracted", addrFixA.address?.pincode === '700001', addrFixA);
+report("Address A: state extracted", addrFixA.address?.state === 'West Bengal', addrFixA);
+report("Address A: district extracted", addrFixA.address?.district === 'Kolkata', addrFixA);
+report("Address A: post_office extracted", addrFixA.address?.post_office === 'Park Street', addrFixA);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 ADDRESS FIXTURE B: C/O multiline address");
+const addrFixB = DocumentTextParser.parse(`
+  Address:
+  C/O Abdul Karim,
+  Village ABC,
+  P.O. XYZ,
+  P.S. Example,
+  District - Murshidabad,
+  West Bengal - 742123
+`, 'aadhaar_back');
+report("Address B: full_address preserves C/O text", addrFixB.address?.full_address?.includes('C/O Abdul Karim') === true, addrFixB);
+report("Address B: C/O does NOT infer father_name", addrFixB.customer?.father_name === undefined, addrFixB);
+report("Address B: C/O does NOT infer spouse_name", addrFixB.customer?.spouse_name === undefined, addrFixB);
+report("Address B: district extracted with hyphen syntax", addrFixB.address?.district === 'Murshidabad', addrFixB);
+report("Address B: pincode extracted", addrFixB.address?.pincode === '742123', addrFixB);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 ADDRESS FIXTURE C: Bengali/English mixed address");
+const addrFixC = DocumentTextParser.parse(`
+  ঠিকানা:
+  এস/ও: আবদুল করিম,
+  গ্রাম- নতুন গ্রাম,
+  পো- রানি নগর,
+  জেলা- মুর্শিদাবাদ,
+  পিন- 742308
+  Address:
+  S/O: Abdul Karim,
+  Vill- Nutan Gram,
+  PO- Raninagar,
+  District- Murshidabad,
+  West Bengal - 742308
+`, 'aadhaar_back');
+report("Address C: clean non-duplicated address selected", addrFixC.address?.full_address?.includes('Nutan Gram') === true, addrFixC);
+report("Address C: no duplicate concatenated Bengali+English text", !addrFixC.address?.full_address?.includes('ঠিকানা'), addrFixC);
+report("Address C: district extracted", addrFixC.address?.district === 'Murshidabad', addrFixC);
+report("Address C: state extracted", addrFixC.address?.state === 'West Bengal', addrFixC);
+report("Address C: pincode extracted", addrFixC.address?.pincode === '742308', addrFixC);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 ADDRESS FIXTURE D: Hindi/English mixed address");
+const addrFixD = DocumentTextParser.parse(`
+  पता:
+  केयर ऑफ: सुरेश कुमार,
+  ग्राम- कंकड़बाग,
+  जिला- पटना,
+  बिहार - 800020
+  Address:
+  C/O: Suresh Kumar,
+  Vill- Kankarbagh,
+  Dist- Patna,
+  State: Bihar - 800020
+`, 'aadhaar_back');
+report("Address D: address extracted cleanly", addrFixD.address?.full_address?.includes('Kankarbagh') === true, addrFixD);
+report("Address D: district extracted", addrFixD.address?.district === 'Patna', addrFixD);
+report("Address D: state extracted", addrFixD.address?.state === 'Bihar', addrFixD);
+report("Address D: pincode extracted", addrFixD.address?.pincode === '800020', addrFixD);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 ADDRESS FIXTURE E: address line wrapping");
+const addrFixE = DocumentTextParser.parse(`
+  Address:
+  Vill- Choto
+  Kalia,
+  P.O.- Beldanga,
+  Dist- Murshida
+  bad,
+  West Bengal - 742133
+`, 'aadhaar_back');
+report("Address E: line wrapped village recovered", addrFixE.address?.full_address?.includes('Choto Kalia') === true, addrFixE);
+report("Address E: line wrapped district recovered", addrFixE.address?.full_address?.includes('Murshidabad') === true || addrFixE.address?.district === 'Murshidabad', addrFixE);
+report("Address E: district parsed", addrFixE.address?.district === 'Murshidabad', addrFixE);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 ADDRESS FIXTURE F: PIN on separate final line");
+const addrFixF = DocumentTextParser.parse(`
+  Address:
+  House 42, Station Road,
+  Krishnanagar,
+  District- Nadia,
+  West Bengal
+  741101
+`, 'aadhaar_back');
+report("Address F: full_address includes street and PIN", addrFixF.address?.full_address?.includes('House 42') === true && addrFixF.address?.full_address?.includes('741101') === true, addrFixF);
+report("Address F: pincode parsed", addrFixF.address?.pincode === '741101', addrFixF);
+report("Address F: district parsed", addrFixF.address?.district === 'Nadia', addrFixF);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 ADDRESS FIXTURE G: district / state / PIN same line");
+const addrFixG = DocumentTextParser.parse(`
+  Address:
+  PO- Barrackpore, District- North 24 Parganas, State- West Bengal - 700120
+`, 'aadhaar_back');
+report("Address G: full_address parsed", addrFixG.address?.full_address?.includes('Barrackpore') === true, addrFixG);
+report("Address G: district parsed", addrFixG.address?.district === 'North 24 Parganas', addrFixG);
+report("Address G: state parsed", addrFixG.address?.state === 'West Bengal', addrFixG);
+report("Address G: pincode parsed", addrFixG.address?.pincode === '700120', addrFixG);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 ADDRESS FIXTURE H: Aadhaar front + back priority");
+const normFrontH = DataNormalizer.normalize({
+  customer: { full_name: 'Dipika Roy', dob: '1992-05-15', gender: 'female' },
+  address: { pincode: '700001' }
+});
+const normBackH = DataNormalizer.normalize({
+  customer: {},
+  address: { full_address: 'C/O Abdul Karim, Village ABC, PO XYZ, District - Murshidabad, West Bengal - 742123', pincode: '742123', state: 'West Bengal', district: 'Murshidabad' }
+});
+const mergeResultH = MergeEngine.merge([
+  { id: '1', documentType: 'aadhaar_front', provider: 'manual', source: 'file', status: 'completed', normalizedData: normFrontH, version: 1 },
+  { id: '2', documentType: 'aadhaar_back', provider: 'manual', source: 'file', status: 'completed', normalizedData: normBackH, version: 1 }
+]);
+report("Address H: Aadhaar Back address takes priority", mergeResultH.data.address?.value?.includes('Village ABC') === true, mergeResultH);
+report("Address H: Back district takes priority", mergeResultH.data.district?.value === 'Murshidabad', mergeResultH);
+report("Address H: No blocking false conflict for address", !mergeResultH.conflicts.some(c => c.field === 'address'), mergeResultH);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 ADDRESS FIXTURE I: noisy UIDAI footer after address");
+const addrFixI = DocumentTextParser.parse(`
+  Address:
+  S/O: Abdul Karim,
+  Vill- Nutan Gram, PO- Raninagar,
+  District- Murshidabad,
+  West Bengal - 742308
+  Unique Identification Authority of India
+  1947 help@uidai.gov.in www.uidai.gov.in
+  Mera Aadhaar Meri Pehchan
+  1234 5678 9012
+`, 'aadhaar_back');
+report("Address I: full_address does NOT contain UIDAI header", !addrFixI.address?.full_address?.includes('Unique Identification'), addrFixI);
+report("Address I: full_address does NOT contain 1947", !addrFixI.address?.full_address?.includes('1947'), addrFixI);
+report("Address I: full_address does NOT contain 12-digit Aadhaar number", !addrFixI.address?.full_address?.includes('1234 5678 9012'), addrFixI);
+report("Address I: full_address does NOT contain website/email", !addrFixI.address?.full_address?.includes('www.uidai.gov.in'), addrFixI);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 ADDRESS FIXTURE J: no address present -> null/undefined, no guessing");
+const addrFixJ = DocumentTextParser.parse(`
+  GOVERNMENT OF INDIA
+  Reshma Khatun
+  DOB: 01/01/1990
+  FEMALE
+  1234 5678 9012
+`, 'aadhaar_front');
+report("Address J: full_address is undefined when no address present", addrFixJ.address?.full_address === undefined, addrFixJ);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 CLASSIFIER AUDIT: Generic bill with Address & PIN NOT classified as Aadhaar");
+const genericBillText = `
+  ELECTRICITY BILL
+  Consumer Name: Subhash Roy
+  Address: Flat 4A, Green Park Apartment, Station Road
+  Kolkata - 700016
+  Amount Due: 1500
+`;
+const classGeneric = DocumentClassifier.classify(genericBillText);
+report("Generic Bill: NOT classified as aadhaar_back", classGeneric.documentType !== 'aadhaar_back' && classGeneric.documentType !== 'aadhaar_combined', classGeneric);
+report("Generic Bill: classified as generic_address_document or unknown", classGeneric.documentType === 'generic_address_document' || classGeneric.documentType === 'unknown', classGeneric);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 MERGEENGINE AUDIT: Non-address conflicts are strictly preserved");
+const normFrontConf = DataNormalizer.normalize({
+  customer: { full_name: 'Person A', dob: '1990-01-01' },
+  address: { full_address: '123 Station Road, Kolkata - 700001' }
+});
+const normBackConf = DataNormalizer.normalize({
+  customer: { full_name: 'Person B' },
+  address: { full_address: '123 Station Road, Ward 4, Kolkata - 700001', pincode: '700001' }
+});
+const mergeConfResult = MergeEngine.merge([
+  { id: '1', documentType: 'aadhaar_front', provider: 'manual', source: 'file', status: 'completed', normalizedData: normFrontConf, version: 1 },
+  { id: '2', documentType: 'aadhaar_back', provider: 'manual', source: 'file', status: 'completed', normalizedData: normBackConf, version: 1 }
+]);
+report("MergeEngine Scope: full_name conflict is PRESERVED (not suppressed)", mergeConfResult.conflicts.some(c => c.field === 'full_name'), mergeConfResult);
+report("MergeEngine Scope: address priority selects back address cleanly", mergeConfResult.data.address?.value?.includes('Ward 4') === true, mergeConfResult);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 DISTRICT AUDIT: District with digits & numbers safety");
+const fixNorth24 = DocumentTextParser.parse(`
+  Address:
+  Vill- Belgharia, Dist- North 24 Parganas, West Bengal - 700056
+`, 'aadhaar_back');
+report("District Audit: North 24 Parganas extracted with digits", fixNorth24.address?.district === 'North 24 Parganas', fixNorth24);
+
+const fixNoFabricatedDist = DocumentTextParser.parse(`
+  Address:
+  123 Station Road, District 742123, West Bengal
+`, 'aadhaar_back');
+report("District Audit: District with only 6-digit PIN does not fabricate district", fixNoFabricatedDist.address?.district === undefined || fixNoFabricatedDist.address?.district !== '742123', fixNoFabricatedDist);
 
 console.log("==========================================================================");
 console.log(`PARSER TEST RESULT: ${passCount} PASSED, ${failCount} FAILED`);

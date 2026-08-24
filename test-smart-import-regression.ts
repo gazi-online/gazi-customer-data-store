@@ -24,7 +24,7 @@ async function runRegressionTests() {
   console.log("=================================================");
 
   let passCount = 0;
-  const TOTAL_TESTS = 10;
+  const TOTAL_TESTS = 13;
 
   // Test 1: Valid object response -> normalizedData non-empty
   const validObj = {
@@ -174,6 +174,99 @@ async function runRegressionTests() {
     passCount++;
   } else {
     console.error("❌ Test 10 [FAIL]");
+  }
+
+  // Test 11: Multiline Aadhaar back parser -> DataNormalizer -> MergeEngine -> Final Merged Data contains address, district, state, pincode
+  const { DocumentTextParser } = await import('./src/lib/ocr/DocumentTextParser');
+  const rawBackOcr = `
+    Address:
+    C/O Abdul Karim,
+    Village ABC,
+    P.O. XYZ,
+    District - Murshidabad,
+    West Bengal - 742123
+  `;
+  const parsedBack = DocumentTextParser.parse(rawBackOcr, 'aadhaar_back');
+  const normBack = DataNormalizer.normalize(parsedBack);
+  const backJob: ImportJob = {
+    id: "job-aadhaar-back",
+    documentType: "Aadhaar Card Back",
+    provider: "manual",
+    source: "file",
+    status: "completed",
+    rawResponse: parsedBack,
+    normalizedData: normBack,
+    version: 1
+  };
+  const mergeBack = MergeEngine.merge([backJob]);
+  if (
+    mergeBack.data.address?.value?.includes("C/O Abdul Karim") &&
+    mergeBack.data.address?.value?.includes("Village ABC") &&
+    mergeBack.data.district?.value === "Murshidabad" &&
+    mergeBack.data.state?.value === "West Bengal" &&
+    mergeBack.data.pincode?.value === "742123"
+  ) {
+    console.log("✅ Test 11: Multiline Aadhaar back parsed -> normalized -> merged with full address, district, state, PIN [PASS]");
+    passCount++;
+  } else {
+    console.error("❌ Test 11 [FAIL]", mergeBack.data);
+  }
+
+  // Test 12: Aadhaar Front + Back multi-doc -> Aadhaar Back address wins cleanly without conflict
+  const rawFrontOcr = `
+    GOVERNMENT OF INDIA
+    Reshma Khatun
+    DOB: 01/01/1990
+    FEMALE
+    1234 5678 9012
+  `;
+  const parsedFront = DocumentTextParser.parse(rawFrontOcr, 'aadhaar_front');
+  const normFront = DataNormalizer.normalize(parsedFront);
+  const frontJob: ImportJob = {
+    id: "job-aadhaar-front",
+    documentType: "Aadhaar Card Front",
+    provider: "manual",
+    source: "file",
+    status: "completed",
+    rawResponse: parsedFront,
+    normalizedData: normFront,
+    version: 1
+  };
+  const mergeFrontBack = MergeEngine.merge([frontJob, backJob]);
+  if (
+    mergeFrontBack.data.full_name?.value === "Reshma Khatun" &&
+    mergeFrontBack.data.aadhaar_number?.value === "123456789012" &&
+    mergeFrontBack.data.address?.value?.includes("C/O Abdul Karim") &&
+    mergeFrontBack.data.district?.value === "Murshidabad" &&
+    !mergeFrontBack.conflicts.some(c => c.field === "address")
+  ) {
+    console.log("✅ Test 12: Aadhaar Front + Back merge gives back address priority without blocking conflict [PASS]");
+    passCount++;
+  } else {
+    console.error("❌ Test 12 [FAIL]", mergeFrontBack.data);
+  }
+
+  // Test 13: Null extraction from Front does not erase valid Back address
+  const emptyAddressFront = DataNormalizer.normalize({ customer: { full_name: "Reshma Khatun" }, address: {} });
+  const frontEmptyJob: ImportJob = {
+    id: "job-front-empty",
+    documentType: "Aadhaar Card Front",
+    provider: "manual",
+    source: "file",
+    status: "completed",
+    rawResponse: {},
+    normalizedData: emptyAddressFront,
+    version: 1
+  };
+  const mergeNullProtect = MergeEngine.merge([frontEmptyJob, backJob]);
+  if (
+    mergeNullProtect.data.address?.value?.includes("C/O Abdul Karim") &&
+    mergeNullProtect.data.pincode?.value === "742123"
+  ) {
+    console.log("✅ Test 13: Null/empty front address does not erase valid back address [PASS]");
+    passCount++;
+  } else {
+    console.error("❌ Test 13 [FAIL]", mergeNullProtect.data);
   }
 
   console.log("-------------------------------------------------");

@@ -104,34 +104,69 @@ export class DocumentClassifier {
     }
 
     // Aadhaar Back specific indicators
-    if (upperText.includes('ADDRESS:') || upperText.includes('ADDRESS') || cleanText.includes('पता:') || cleanText.includes('पता')) {
+    if (
+      upperText.includes('ADDRESS:') || upperText.includes('ADDRESS') || upperText.includes('ADRESS') ||
+      cleanText.includes('पता:') || cleanText.includes('पता') ||
+      cleanText.includes('ঠিকানা:') || cleanText.includes('ঠিকানা')
+    ) {
       aadhaarBackScore += 0.4;
       signals.push('Found: Address label');
     }
-    if (/\b(S\/O|D\/O|W\/O|C\/O|CARE OF)\b/.test(upperText) || cleanText.includes('आत्मज') || cleanText.includes('पत्नी') || cleanText.includes('पुत्र')) {
+    if (
+      /\b(S\/O|D\/O|W\/O|H\/O|C\/O|CARE OF|SON OF|DAUGHTER OF|WIFE OF|HUSBAND OF)\b/.test(upperText) ||
+      cleanText.includes('আত্মজ') || cleanText.includes('কন্যা') || cleanText.includes('স্ত্রী') ||
+      cleanText.includes('স্বামী') || cleanText.includes('পুত্র') || cleanText.includes('पत्नी') ||
+      cleanText.includes('पिता') || cleanText.includes('पति')
+    ) {
       aadhaarBackScore += 0.3;
       signals.push('Found: Relationship label (S/O, W/O, C/O)');
     }
-    if (pincodeRegex.test(upperText) && (upperText.includes('STATE') || upperText.includes('DIST') || upperText.includes('PO:'))) {
+    if (
+      (pincodeRegex.test(upperText) || upperText.includes('PIN')) &&
+      (upperText.includes('STATE') || upperText.includes('DIST') || upperText.includes('PO:') ||
+       upperText.includes('VILL') || upperText.includes('POST') ||
+       cleanText.includes('জেলা') || cleanText.includes('ডাকঘর') || cleanText.includes('গ্রাম') ||
+       cleanText.includes('राज्य') || cleanText.includes('ज़िला') || cleanText.includes('जिला'))
+    ) {
       aadhaarBackScore += 0.3;
       signals.push('Found: Pincode and location terms');
     }
+    if (upperText.includes('1947') || upperText.includes('HELP@UIDAI') || upperText.includes('WWW.UIDAI.GOV.IN')) {
+      aadhaarBackScore += 0.2;
+      signals.push('Found: UIDAI helpline / website footer');
+    }
 
-    if (aadhaarFrontScore >= 0.5 && aadhaarBackScore >= 0.4) {
-      return { documentType: 'aadhaar_combined', confidence: Math.min(1.0, (aadhaarFrontScore + aadhaarBackScore) / 2), signals };
-    }
-    if (aadhaarFrontScore >= 0.4 && aadhaarFrontScore >= aadhaarBackScore) {
-      return { documentType: 'aadhaar_front', confidence: Math.min(1.0, aadhaarFrontScore), signals };
-    }
-    if (aadhaarBackScore >= 0.4) {
-      return { documentType: 'aadhaar_back', confidence: Math.min(1.0, aadhaarBackScore), signals };
+    const hasAadhaarSignal = (
+      upperText.includes('AADHAAR') || upperText.includes('AADHAA') || cleanText.includes('आधार') || cleanText.includes('আধার') ||
+      upperText.includes('UNIQUE IDENTIFICATION') || upperText.includes('UIDAI') || cleanText.includes('ইউনিক আইডেন্টিফিকেশন') || cleanText.includes('भारतीय विशिष्ट पहचान प्राधिकरण') ||
+      upperText.includes('GOVERNMENT OF INDIA') || upperText.includes('BHARAT SARKAR') || cleanText.includes('भारत सरकार') ||
+      upperText.includes('1947') || upperText.includes('HELP@UIDAI') || upperText.includes('WWW.UIDAI.GOV.IN') || upperText.includes('MERA AADHAAR') || cleanText.includes('আমার আধার') ||
+      (aadhaarMatch && !upperText.includes('ACCOUNT NUMBER') && !upperText.includes('A/C'))
+    );
+
+    const hasFrontSpecifics = dobRegex.test(cleanText) || upperText.includes('MALE') || upperText.includes('FEMALE') || cleanText.includes('पुरुष') || cleanText.includes('महिला') || cleanText.includes('মহিলা');
+    const hasBackSpecifics = aadhaarBackScore >= 0.4;
+
+    if (hasAadhaarSignal) {
+      if (hasFrontSpecifics && hasBackSpecifics) {
+        return { documentType: 'aadhaar_combined', confidence: Math.min(1.0, (aadhaarFrontScore + aadhaarBackScore) / 2), signals };
+      }
+      if (hasBackSpecifics && (aadhaarBackScore >= aadhaarFrontScore || !hasFrontSpecifics)) {
+        return { documentType: 'aadhaar_back', confidence: Math.min(1.0, aadhaarBackScore), signals };
+      }
+      if (aadhaarFrontScore >= 0.4) {
+        return { documentType: 'aadhaar_front', confidence: Math.min(1.0, aadhaarFrontScore), signals };
+      }
+      if (aadhaarBackScore >= 0.4) {
+        return { documentType: 'aadhaar_back', confidence: Math.min(1.0, aadhaarBackScore), signals };
+      }
     }
 
     // 9. Generic ID vs Generic Address vs Unknown
     if (/\b(IDENTITY CARD|PHOTO ID|GOVT ID)\b/.test(upperText)) {
       return { documentType: 'generic_identity_document', confidence: 0.4, signals: ['Found generic identity keywords'] };
     }
-    if (pincodeRegex.test(upperText) && (upperText.includes('ROAD') || upperText.includes('STREET') || upperText.includes('VILLAGE'))) {
+    if (pincodeRegex.test(upperText) && (upperText.includes('ROAD') || upperText.includes('STREET') || upperText.includes('VILLAGE') || upperText.includes('ADDRESS'))) {
       return { documentType: 'generic_address_document', confidence: 0.4, signals: ['Found generic address keywords'] };
     }
 
