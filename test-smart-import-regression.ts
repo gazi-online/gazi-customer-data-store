@@ -24,7 +24,7 @@ async function runRegressionTests() {
   console.log("=================================================");
 
   let passCount = 0;
-  const TOTAL_TESTS = 13;
+  const TOTAL_TESTS = 14;
 
   // Test 1: Valid object response -> normalizedData non-empty
   const validObj = {
@@ -267,6 +267,34 @@ async function runRegressionTests() {
     passCount++;
   } else {
     console.error("❌ Test 13 [FAIL]", mergeNullProtect.data);
+  }
+
+  // Test 14: Aadhaar with mobile number -> normalized & merged into MergedResult.data.phone
+  const rawPhoneOcr = `
+    GOVERNMENT OF INDIA
+    Reshma Khatun
+    DOB: 01/01/1990
+    Mobile: 9876543210
+    1234 5678 9012
+  `;
+  const parsedPhone = DocumentTextParser.parse(rawPhoneOcr, 'aadhaar_front');
+  const normPhone = DataNormalizer.normalize(parsedPhone);
+  const phoneJob: ImportJob = {
+    id: "job-phone-test",
+    documentType: "Aadhaar Card Front",
+    provider: "manual",
+    source: "file",
+    status: "completed",
+    rawResponse: parsedPhone,
+    normalizedData: normPhone,
+    version: 1
+  };
+  const mergePhone = MergeEngine.merge([phoneJob]);
+  if (mergePhone.data.phone?.value === "9876543210") {
+    console.log("✅ Test 14: Aadhaar mobile parsed -> normalized -> merged into primary phone [PASS]");
+    passCount++;
+  } else {
+    console.error("❌ Test 14 [FAIL]", mergePhone.data);
   }
 
   console.log("-------------------------------------------------");

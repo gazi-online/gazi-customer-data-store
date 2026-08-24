@@ -38,6 +38,7 @@ export interface ParsedDocumentFields {
     spouse_name?: string;
     mother_name?: string;
     original_language_name?: string;
+    phone?: string;
   };
   address?: {
     full_address?: string;

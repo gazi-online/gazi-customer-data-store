@@ -195,6 +195,67 @@ async function runCustomerSaveFlowTestSuite() {
     formStateK.voter_id_number === "ABC1234567"
   );
 
+  // Helper simulating CustomerForm handleAutoFill logic
+  function simulateAutoFill(currentValues: Record<string, any>, aiData: Record<string, any>) {
+    const nextState = { ...currentValues };
+    Object.keys(aiData).forEach(field => {
+      if (field === 'photo_source' && currentValues.photo_source && currentValues.photo_source.length > 0) return;
+      if (field === 'original_language_name' && currentValues.original_language_name && String(currentValues.original_language_name).trim().length > 0) return;
+      if (field === 'phone' && currentValues.phone && String(currentValues.phone).trim().length > 0) return;
+      if (aiData[field] !== undefined && aiData[field] !== null && aiData[field] !== "") {
+        nextState[field] = aiData[field];
+      }
+    });
+    const finalPrimaryPhone = (currentValues.phone && String(currentValues.phone).trim().length > 0)
+      ? String(currentValues.phone).trim()
+      : (aiData.phone ? String(aiData.phone).trim() : "");
+    const currentWhatsapp = (currentValues.whatsapp || "").trim();
+    if (finalPrimaryPhone && !currentWhatsapp) {
+      nextState.whatsapp = finalPrimaryPhone;
+    }
+    return nextState;
+  }
+
+  // --- CASE L: Aadhaar Phone populates primary & copies to empty WhatsApp ---
+  const formStateL = simulateAutoFill({ phone: "", whatsapp: "" }, { phone: "9876543210" });
+  recordCase(
+    "L",
+    "Primary Phone -> WhatsApp Auto-Fill (Empty WhatsApp)",
+    "phone=9876543210, whatsapp=9876543210",
+    `phone=${formStateL.phone}, whatsapp=${formStateL.whatsapp}`,
+    formStateL.phone === "9876543210" && formStateL.whatsapp === "9876543210"
+  );
+
+  // --- CASE M: Manual WhatsApp is protected from auto-fill overwrite ---
+  const formStateM = simulateAutoFill({ phone: "", whatsapp: "9123456780" }, { phone: "9876543210" });
+  recordCase(
+    "M",
+    "Manual WhatsApp Protection (Existing WhatsApp Preserved)",
+    "whatsapp=9123456780",
+    `whatsapp=${formStateM.whatsapp}`,
+    formStateM.phone === "9876543210" && formStateM.whatsapp === "9123456780"
+  );
+
+  // --- CASE N: Manual Primary Phone is protected & copied to empty WhatsApp ---
+  const formStateN = simulateAutoFill({ phone: "9800011122", whatsapp: "" }, { phone: "9899999999" });
+  recordCase(
+    "N",
+    "Manual Primary Phone Protection & WhatsApp Copy",
+    "phone=9800011122, whatsapp=9800011122",
+    `phone=${formStateN.phone}, whatsapp=${formStateN.whatsapp}`,
+    formStateN.phone === "9800011122" && formStateN.whatsapp === "9800011122"
+  );
+
+  // --- CASE O: No Phone in Aadhaar -> No WhatsApp fabricated ---
+  const formStateO = simulateAutoFill({ phone: "", whatsapp: "" }, { full_name: "Reshma Khatun" });
+  recordCase(
+    "O",
+    "No Phone Fabricated When Missing",
+    "phone=empty, whatsapp=empty",
+    `phone=${formStateO.phone || 'empty'}, whatsapp=${formStateO.whatsapp || 'empty'}`,
+    !formStateO.phone && !formStateO.whatsapp
+  );
+
   console.log("\n==========================================================================");
   console.log("📊 TEST SUITE SUMMARY REPORT");
   console.log("==========================================================================\n");
@@ -209,7 +270,7 @@ async function runCustomerSaveFlowTestSuite() {
 
   const allPassed = testResults.every(t => t.status === 'PASS');
   console.log("\n==========================================================================");
-  console.log(`VERDICT: ${allPassed ? '✅ ALL 11 CUSTOMER SAVE FLOW TEST CASES PASSED!' : '❌ SOME TESTS FAILED'}`);
+  console.log(`VERDICT: ${allPassed ? `✅ ALL ${testResults.length} CUSTOMER SAVE FLOW TEST CASES PASSED!` : '❌ SOME TESTS FAILED'}`);
   console.log("==========================================================================");
 
   if (!allPassed) process.exit(1);

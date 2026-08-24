@@ -470,6 +470,72 @@ const fixNoFabricatedDist = DocumentTextParser.parse(`
 `, 'aadhaar_back');
 report("District Audit: District with only 6-digit PIN does not fabricate district", fixNoFabricatedDist.address?.district === undefined || fixNoFabricatedDist.address?.district !== '742123', fixNoFabricatedDist);
 
+console.log("--------------------------------------------------------------------------");
+console.log("📄 PHONE AUDIT: Aadhaar mobile extraction & safety");
+const fixPhoneA = DocumentTextParser.parse(`
+  GOVERNMENT OF INDIA
+  Reshma Khatun
+  DOB: 01/01/1990
+  Mobile: 9876543210
+  1234 5678 9012
+`, 'aadhaar_front');
+report("Phone Audit: standard 10-digit mobile extracted", fixPhoneA.customer?.phone === '9876543210', fixPhoneA);
+
+const fixPhoneB = DocumentTextParser.parse(`
+  GOVERNMENT OF INDIA
+  Reshma Khatun
+  Mob: +91 98765 43210
+  1234 5678 9012
+`, 'aadhaar_front');
+report("Phone Audit: +91 prefix and space normalized to 10 digits", fixPhoneB.customer?.phone === '9876543210', fixPhoneB);
+
+const fixPhoneC = DocumentTextParser.parse(`
+  GOVERNMENT OF INDIA
+  Reshma Khatun
+  1234 5678 9012
+  VID: 1234 5678 9012 3456
+`, 'aadhaar_front');
+report("Phone Audit: Aadhaar 12-digit & VID numbers NOT extracted as phone", fixPhoneC.customer?.phone === undefined, fixPhoneC);
+
+const fixPhoneE = DocumentTextParser.parse(`
+  GOVERNMENT OF INDIA
+  Reshma Khatun
+  Doc Ref: 1234567890
+`, 'aadhaar_front');
+report("Phone Audit: 10-digit number starting with 1-5 NOT extracted as mobile", fixPhoneE.customer?.phone === undefined, fixPhoneE);
+
+const fixPhoneF = DocumentTextParser.parse(`
+  GOVERNMENT OF INDIA
+  Reshma Khatun
+  Noise: 9999999999
+`, 'aadhaar_front');
+report("Phone Audit: 10 identical digits NOT extracted as mobile", fixPhoneF.customer?.phone === undefined, fixPhoneF);
+
+const fixPhoneG = DocumentTextParser.parse(`
+  GOVERNMENT OF INDIA
+  Reshma Khatun
+  Contact: 98765 43210
+`, 'aadhaar_front');
+report("Phone Audit: Contact label with space extracted cleanly", fixPhoneG.customer?.phone === '9876543210', fixPhoneG);
+
+console.log("--------------------------------------------------------------------------");
+console.log("📄 PHONE MERGE AUDIT: Duplicate vs Conflicting Phone");
+const normFrontSamePhone = DataNormalizer.normalize({ customer: { phone: '9876543210' } });
+const normBackSamePhone = DataNormalizer.normalize({ customer: { phone: '9876543210' } });
+const mergeSamePhone = MergeEngine.merge([
+  { id: '1', documentType: 'aadhaar_front', provider: 'manual', source: 'file', status: 'completed', normalizedData: normFrontSamePhone, version: 1 },
+  { id: '2', documentType: 'aadhaar_back', provider: 'manual', source: 'file', status: 'completed', normalizedData: normBackSamePhone, version: 1 }
+]);
+report("Phone Merge: identical phone merges without conflict", mergeSamePhone.data.phone?.value === '9876543210' && !mergeSamePhone.conflicts.some(c => c.field === 'phone'), mergeSamePhone);
+
+const normFrontDiffPhone = DataNormalizer.normalize({ customer: { phone: '9876543210' } });
+const normBackDiffPhone = DataNormalizer.normalize({ customer: { phone: '9811122233' } });
+const mergeDiffPhone = MergeEngine.merge([
+  { id: '1', documentType: 'aadhaar_front', provider: 'manual', source: 'file', status: 'completed', normalizedData: normFrontDiffPhone, version: 1 },
+  { id: '2', documentType: 'aadhaar_back', provider: 'manual', source: 'file', status: 'completed', normalizedData: normBackDiffPhone, version: 1 }
+]);
+report("Phone Merge: differing phones surface standard conflict (not suppressed)", mergeDiffPhone.conflicts.some(c => c.field === 'phone'), mergeDiffPhone);
+
 console.log("==========================================================================");
 console.log(`PARSER TEST RESULT: ${passCount} PASSED, ${failCount} FAILED`);
 console.log("==========================================================================");

@@ -239,11 +239,33 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         return;
       }
 
+      // Do not overwrite a manually entered primary phone.
+      if (
+        field === 'phone' &&
+        currentValues.phone &&
+        String(currentValues.phone).trim().length > 0
+      ) {
+        return;
+      }
+
       // Only populate non-empty approved AI fields
       if (data[field] !== undefined && data[field] !== null && data[field] !== "") {
         setValue(field as any, data[field], { shouldValidate: true, shouldDirty: true });
       }
     });
+
+    // WhatsApp Auto-Fill Rule:
+    // Determine the final resolved primary phone (either manual existing or applied from AI data)
+    const finalPrimaryPhone = (currentValues.phone && currentValues.phone.trim().length > 0)
+      ? currentValues.phone.trim()
+      : (data.phone ? String(data.phone).trim() : "");
+
+    const currentWhatsapp = (currentValues.whatsapp || "").trim();
+
+    // If WhatsApp is currently empty and a valid final primary phone exists, copy to WhatsApp
+    if (finalPrimaryPhone && !currentWhatsapp) {
+      setValue("whatsapp", finalPrimaryPhone, { shouldValidate: true, shouldDirty: true });
+    }
 
     setAiDataApplied(true);
     toast.success("AI extracted data applied to form. Please review before saving.");

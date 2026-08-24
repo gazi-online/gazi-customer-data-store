@@ -198,6 +198,34 @@ export class DocumentTextParser {
         }
       }
 
+      // 6. Phone / Mobile Number Extraction
+      const phoneLabelMatch = cleanText.match(/\b(?:Mobile\s*(?:No\.?|Number)?|Mob\s*(?:No\.?|Number)?|Phone\s*(?:No\.?|Number)?|Ph|Contact\s*(?:No\.?|Number)?|মোবাইল|मोबाइल|दूरभाष)[:\s\-]+(?:\+?91[\-\s]?)?([6-9]\d{4}[\s\-]?\d{5}|[6-9]\d{9})\b/i);
+      if (phoneLabelMatch) {
+        const rawDigits = phoneLabelMatch[1].replace(/\D/g, '');
+        if (rawDigits.length === 10 && /^[6-9]/.test(rawDigits) && !/^(\d)\1{9}$/.test(rawDigits)) {
+          result.customer!.phone = rawDigits;
+        }
+      } else {
+        const standaloneMatches = cleanText.matchAll(/(?:(?:\+91|91)[\-\s]?)?([6-9]\d{4}[\s\-]?\d{5}|[6-9]\d{9})\b/g);
+        for (const m of standaloneMatches) {
+          const rawDigits = m[1].replace(/\D/g, '');
+          const fullMatchStr = m[0];
+          const idx = m.index ?? -1;
+          if (idx !== -1) {
+            const surrounding = cleanText.slice(Math.max(0, idx - 4), Math.min(cleanText.length, idx + fullMatchStr.length + 4));
+            const surroundingDigits = surrounding.replace(/\D/g, '');
+            if (surroundingDigits.length > 12) continue; // Part of long reference / VID
+            if (surroundingDigits.length === 12) continue; // Part of 12-digit Aadhaar number
+          }
+          if (rawDigits.length === 10 && /^[6-9]/.test(rawDigits) && !/^(\d)\1{9}$/.test(rawDigits)) {
+            if (pincodeMatch && rawDigits.includes(pincodeMatch[0])) continue;
+            if (dobMatch && rawDigits.includes(dobMatch[0].replace(/\D/g, ''))) continue;
+            result.customer!.phone = rawDigits;
+            break;
+          }
+        }
+      }
+
       // 8. ADDRESS EXTRACTION (Aadhaar Back / Combined Multiline Address)
       if (documentType === 'aadhaar_back' || documentType === 'aadhaar_combined' || documentType === 'aadhaar' || documentType === 'aadhaar_front' || documentType === 'generic_address_document') {
         const addressStopRegex = /(?:Unique Identification|UIDAI|भारतीय विशिष्ट पहचान प्राधिकरण|ইউনিক আইডেন্টিফিকেশন|Mera Aadhaar|আমার আধার|मेरा आधार|Scan QR|QR Code|Download Date|Issue Date|Date of Download|Date of Issue|Government of India|Government of West Bengal|পশ্চিমবঙ্গ সরকার|ভারত সরকার|भारत सरकार|Election Commission|Income Tax|help@uidai\.gov\.in|www\.uidai\.gov\.in|uidai\.gov\.in|Page \d)/i;
