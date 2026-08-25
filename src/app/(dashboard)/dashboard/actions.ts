@@ -7,23 +7,27 @@ export async function getDashboardStats() {
   
   const { count: totalCustomers } = await supabase
     .from("customers")
-    .select("*", { count: 'exact', head: true });
+    .select("*", { count: 'exact', head: true })
+    .is("deleted_at", null);
 
   const { count: activeCustomers } = await supabase
     .from("customers")
     .select("*", { count: 'exact', head: true })
-    .eq("status", "active");
+    .eq("status", "active")
+    .is("deleted_at", null);
 
   const { count: inactiveCustomers } = await supabase
     .from("customers")
     .select("*", { count: 'exact', head: true })
-    .eq("status", "inactive");
+    .eq("status", "inactive")
+    .is("deleted_at", null);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const { count: todayEntries } = await supabase
     .from("customers")
     .select("*", { count: 'exact', head: true })
+    .is("deleted_at", null)
     .gte("created_at", today.toISOString());
 
   const { count: activeServices } = await supabase
@@ -46,6 +50,7 @@ export async function getRecentCustomers() {
   const { data, error } = await supabase
     .from("customers")
     .select("id, first_name, middle_name, last_name, phone, status, created_at, photo_url")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(5);
 

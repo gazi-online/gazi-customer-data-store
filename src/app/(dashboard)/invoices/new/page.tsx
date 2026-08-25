@@ -15,6 +15,7 @@ export default async function CreateInvoicePage({
   const { data: customers } = await supabase
     .from("customers")
     .select("id, first_name, middle_name, last_name, customer_code")
+    .is("deleted_at", null)
     .order("first_name", { ascending: true });
 
   // Fetch active service master definitions

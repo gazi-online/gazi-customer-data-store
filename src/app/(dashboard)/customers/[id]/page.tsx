@@ -8,6 +8,9 @@ import { getProfilePhotoSignedUrl } from "@/app/(dashboard)/customers/ai-actions
 import { CustomerProfileTabs } from "@/components/customers/CustomerProfileTabs";
 import { getCustomerServices, getActiveServices } from "@/app/(dashboard)/services/actions";
 import { getCustomerBillingSummary } from "@/app/(dashboard)/invoices/actions";
+import { CustomerDeleteButton } from "@/components/customers/CustomerDeleteButton";
+
+import { CustomerDocument } from "@/types/document";
 
 // Helper function to mask Aadhaar
 function maskAadhaar(aadhaar: string | null) {
@@ -35,8 +38,8 @@ export default async function CustomerProfilePage({
 }) {
   const { id } = await params;
   let customer;
-  let activeDocuments = [];
-  let allDocuments = [];
+  let activeDocuments: CustomerDocument[] = [];
+  let allDocuments: CustomerDocument[] = [];
   let aiImports: any[] = [];
   let customerServices: any[] = [];
   let availableServices: any[] = [];
@@ -44,6 +47,9 @@ export default async function CustomerProfilePage({
 
   try {
     customer = await getCustomerById(id);
+    if (!customer || customer.deleted_at) {
+      notFound();
+    }
   } catch {
     notFound();
   }
@@ -123,13 +129,21 @@ export default async function CustomerProfilePage({
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Customers
         </Link>
-        <Link 
-          href={`/customers/${id}/edit`} 
-          className="inline-flex items-center px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm"
-        >
-          <Edit className="mr-2 h-4 w-4" />
-          Edit Profile
-        </Link>
+        <div className="flex items-center space-x-3">
+          <Link 
+            href={`/customers/${id}/edit`} 
+            className="inline-flex items-center px-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-sm"
+          >
+            <Edit className="mr-2 h-4 w-4" />
+            Edit Profile
+          </Link>
+          <CustomerDeleteButton
+            customerId={id}
+            customerName={`${customer.first_name} ${customer.last_name}`}
+            redirectTo="/customers"
+            variant="button"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

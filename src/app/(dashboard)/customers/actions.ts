@@ -6,7 +6,11 @@ import { CustomerFormData } from "@/types/customer";
 
 export async function getCustomers(searchQuery?: string, statusFilter?: string) {
   const supabase = await createClient();
-  let query = supabase.from("customers").select("*").order("created_at", { ascending: false });
+  let query = supabase
+    .from("customers")
+    .select("*")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
 
   if (searchQuery) {
     query = query.or(`first_name.ilike.%${searchQuery}%,middle_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%`);
@@ -96,17 +100,45 @@ export async function updateCustomer(id: string, data: CustomerFormData) {
   return { success: true };
 }
 
-export async function deleteCustomer(id: string) {
+export async function softDeleteCustomer(id: string) {
+  if (!id) return { error: "Customer ID is required" };
   const supabase = await createClient();
   
-  const { error } = await supabase.from("customers").delete().eq("id", id);
+  const { error } = await supabase
+    .from("customers")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
   
   if (error) {
     return { error: error.message };
   }
   
   revalidatePath("/customers");
+  revalidatePath(`/customers/${id}`);
   return { success: true };
+}
+
+export async function restoreCustomer(id: string) {
+  if (!id) return { error: "Customer ID is required" };
+  const supabase = await createClient();
+  
+  const { error } = await supabase
+    .from("customers")
+    .update({ deleted_at: null })
+    .eq("id", id);
+  
+  if (error) {
+    return { error: error.message };
+  }
+  
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${id}`);
+  return { success: true };
+}
+
+export async function deleteCustomer(id: string) {
+  // Safe alias for soft deletion
+  return softDeleteCustomer(id);
 }
 
 export async function checkDuplicateCustomer(params: {

@@ -36,6 +36,7 @@ export interface Customer {
   photo_source: string | null;
   original_language_name: string | null;
   status: CustomerStatus;
+  deleted_at?: string | null;
   created_at: string;
   updated_at: string;
 }

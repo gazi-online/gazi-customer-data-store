@@ -18,6 +18,7 @@ export default async function PaymentsPage({
   const { data: customers } = await supabase
     .from("customers")
     .select("id, first_name, middle_name, last_name, customer_code")
+    .is("deleted_at", null)
     .order("first_name", { ascending: true });
 
   // Fetch open/issued invoices list for payment allocation selector

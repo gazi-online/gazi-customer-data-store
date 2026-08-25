@@ -5,11 +5,15 @@ import { Search, Filter, Edit, Eye } from "lucide-react";
 import { Customer } from "@/types/customer";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { CustomerDeleteButton } from "@/components/customers/CustomerDeleteButton";
 
 export function CustomerTable({ customers }: { customers: Customer[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(searchParams.get("search") || "");
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+
+  const visibleCustomers = customers.filter(c => !deletedIds.includes(c.id));
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +79,7 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {customers.length === 0 ? (
+            {visibleCustomers.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center text-zinc-500">
                   <div className="flex flex-col items-center justify-center space-y-2">
@@ -85,7 +89,7 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
                 </td>
               </tr>
             ) : (
-              customers.map((customer) => (
+              visibleCustomers.map((customer) => (
                 <tr key={customer.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
                   <td className="px-6 py-4">
                     <Link href={`/customers/${customer.id}`} className="font-medium text-zinc-900 dark:text-zinc-50 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
@@ -116,6 +120,12 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
                       <Link href={`/customers/${customer.id}/edit`} className="p-1 text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors" title="Edit Customer">
                         <Edit className="h-4 w-4" />
                       </Link>
+                      <CustomerDeleteButton
+                        customerId={customer.id}
+                        customerName={`${customer.first_name} ${customer.last_name}`}
+                        onDeleted={(id) => setDeletedIds(prev => [...prev, id])}
+                        variant="icon"
+                      />
                     </div>
                   </td>
                 </tr>
