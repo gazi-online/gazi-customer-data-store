@@ -4,7 +4,6 @@ import {
   Briefcase,
   CreditCard,
   ArrowRight,
-  TrendingUp,
   Receipt,
   AlertTriangle,
   Clock,
@@ -17,12 +16,14 @@ import {
   getRevenueChartData,
   getCustomerStatusDistribution,
   getServiceTypeDistribution,
+  getPaymentStatusData,
 } from "./actions";
 import { getDashboardBillingSummary } from "@/app/(dashboard)/payments/actions";
 import { CustomerGrowthChart } from "@/components/dashboard/CustomerGrowthChart";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { CustomerStatusChart } from "@/components/dashboard/CustomerStatusChart";
 import { ServicesChart } from "@/components/dashboard/ServicesChart";
+import { PaymentStatusGauge } from "@/components/dashboard/PaymentStatusGauge";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +85,7 @@ export default async function DashboardPage() {
     revenueData,
     statusDist,
     serviceDist,
+    paymentGauge,
   ] = await Promise.all([
     getDashboardStats(),
     getRecentCustomers(),
@@ -92,6 +94,7 @@ export default async function DashboardPage() {
     getRevenueChartData(6),
     getCustomerStatusDistribution(),
     getServiceTypeDistribution(),
+    getPaymentStatusData(),
   ]);
 
   const billingData = billingSummaryRes.data || {
@@ -192,10 +195,17 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      {/* ── Charts Row 1: Growth + Revenue ── */}
-      <section aria-label="Growth and revenue charts">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <CustomerGrowthChart initialData={growthData} initialPeriod="30d" />
+      {/* ── Charts Row 1: Growth + Payment Gauge + Revenue ── */}
+      <section aria-label="Growth, payment gauge and revenue charts">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <CustomerGrowthChart initialData={growthData} initialPeriod="30d" />
+          </div>
+          <div className="lg:col-span-1">
+            <PaymentStatusGauge data={paymentGauge} />
+          </div>
+        </div>
+        <div className="mt-6">
           <RevenueChart data={revenueData} />
         </div>
       </section>

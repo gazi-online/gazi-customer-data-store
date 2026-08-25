@@ -232,3 +232,86 @@ export async function getServiceTypeDistribution(): Promise<ServiceDistPoint[]> 
     .slice(0, 8)
     .map(([name, count]) => ({ name, count }));
 }
+
+// ─── Payment Status Gauge ─────────────────────────────────────────────────
+
+export type PaymentGaugeData = {
+  /** Total amount from non-cancelled, non-draft invoices */
+  totalBilled: number;
+  /** Total collected (paid_amount across those invoices) */
+  totalCollected: number;
+  /** totalBilled - totalCollected */
+  totalOutstanding: number;
+  /** 0–100 integer percentage */
+  collectionRate: number;
+  /** Counts by invoice status */
+  statusCounts: { paid: number; partial: number; issued: number; overdue: number; draft: number };
+};
+
+export async function getPaymentStatusData(): Promise<PaymentGaugeData> {
+  const supabase = await createClient();
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data: invoices, error } = await supabase
+    .from("invoices")
+    .select("status, due_date, total_amount, paid_amount, due_amount");
+
+  if (error || !invoices) {
+    return {
+      totalBilled: 0,
+      totalCollected: 0,
+      totalOutstanding: 0,
+      collectionRate: 0,
+      statusCounts: { paid: 0, partial: 0, issued: 0, overdue: 0, draft: 0 },
+    };
+  }
+
+  const active = invoices.filter((inv) => inv.status !== "cancelled");
+  const billable = active.filter((inv) => inv.status !== "draft");
+
+  let totalBilled = 0;
+  let totalCollected = 0;
+  let paidCount = 0;
+  let partialCount = 0;
+  let issuedCount = 0;
+  let overdueCount = 0;
+  let draftCount = 0;
+
+  for (const inv of active) {
+    if (inv.status === "draft") { draftCount++; continue; }
+    totalBilled += Number(inv.total_amount ?? 0);
+    totalCollected += Number(inv.paid_amount ?? 0);
+
+    if (inv.status === "paid") paidCount++;
+    else if (inv.status === "partially_paid") partialCount++;
+    else if (
+      inv.status === "issued" &&
+      inv.due_date &&
+      inv.due_date < today &&
+      Number(inv.due_amount ?? 0) > 0
+    ) {
+      overdueCount++;
+    } else if (inv.status === "issued") {
+      issuedCount++;
+    }
+  }
+
+  const totalOutstanding = Math.max(0, totalBilled - totalCollected);
+  const collectionRate =
+    totalBilled > 0 ? Math.round((totalCollected / totalBilled) * 100) : 0;
+
+  return {
+    totalBilled: Math.round(totalBilled * 100) / 100,
+    totalCollected: Math.round(totalCollected * 100) / 100,
+    totalOutstanding: Math.round(totalOutstanding * 100) / 100,
+    collectionRate,
+    statusCounts: {
+      paid: paidCount,
+      partial: partialCount,
+      issued: issuedCount,
+      overdue: overdueCount,
+      draft: draftCount,
+    },
+  };
+}
