@@ -276,12 +276,14 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     setDuplicateWarnings([]);
 
     try {
+      const trimmedCustomerCode = data.customer_code?.trim() || "";
+
       // Task 9: Check for existing duplicates
       const dupCheck = await checkDuplicateCustomer({
         aadhaar_number: data.aadhaar_number,
         pan_number: data.pan_number,
         phone: data.phone,
-        customer_code: data.customer_code,
+        customer_code: trimmedCustomerCode || null,
         excludeId: initialData?.id
       });
 
@@ -293,6 +295,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       // Clean up empty optional fields
       const cleanedData = {
         ...data,
+        customer_code: trimmedCustomerCode || undefined,
         middle_name: data.middle_name === "" ? null : data.middle_name,
         gender: data.gender === "" ? null : data.gender,
         father_name: data.father_name === "" ? null : data.father_name,

@@ -32,20 +32,60 @@ export async function getCustomerById(id: string) {
 export async function createCustomer(data: CustomerFormData) {
   const supabase = await createClient();
   
-  const { error } = await supabase.from("customers").insert([data]);
-  
-  if (error) {
-    return { error: error.message };
+  // Sanitize payload: omit empty customer_code so DB trigger assigns next atomic sequence
+  const payload: Record<string, any> = { ...data };
+  if (!payload.customer_code || payload.customer_code.trim() === "") {
+    delete payload.customer_code;
+  } else {
+    payload.customer_code = payload.customer_code.trim();
   }
-  
-  revalidatePath("/customers");
-  return { success: true };
+
+  const maxAttempts = 3;
+  let lastError: any = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const { data: inserted, error } = await supabase
+      .from("customers")
+      .insert([payload])
+      .select("id, customer_code")
+      .single();
+
+    if (!error) {
+      revalidatePath("/customers");
+      return { success: true, customer: inserted };
+    }
+
+    lastError = error;
+
+    // Retry ONLY on unique constraint violation specifically for customer_code
+    const isCustomerCodeUniqueViolation = 
+      error.code === "23505" && 
+      (error.message?.includes("customers_customer_code_key") || (error as any).details?.includes("customer_code"));
+
+    if (isCustomerCodeUniqueViolation && attempt < maxAttempts) {
+      // In case of conflict with a custom/stale code, fallback to atomic DB sequence
+      delete payload.customer_code;
+      continue;
+    }
+
+    // Do NOT mask or retry other unique constraint violations (e.g. phone, aadhaar, pan, email)
+    break;
+  }
+
+  return { error: lastError?.message || "Failed to create customer" };
 }
 
 export async function updateCustomer(id: string, data: CustomerFormData) {
   const supabase = await createClient();
   
-  const { error } = await supabase.from("customers").update(data).eq("id", id);
+  const payload: Record<string, any> = { ...data };
+  if (payload.customer_code === "" || payload.customer_code === undefined) {
+    delete payload.customer_code;
+  } else if (typeof payload.customer_code === "string") {
+    payload.customer_code = payload.customer_code.trim();
+  }
+
+  const { error } = await supabase.from("customers").update(payload).eq("id", id);
   
   if (error) {
     return { error: error.message };
