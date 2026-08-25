@@ -40,6 +40,23 @@ export interface CustomerDocument {
   
   uploaded_at: string;
   
+  // Optional metadata
+  document_name?: string;
+  document_number?: string;
+  issue_date?: string;
+  expiry_date?: string;
+  notes?: string;
+
+  // Joined Customer info (for global listing)
+  customer?: {
+    id: string;
+    customer_code: string;
+    first_name: string;
+    middle_name?: string | null;
+    last_name: string;
+    phone: string;
+  };
+
   // Transient fields for UI
   signed_url?: string;
 }

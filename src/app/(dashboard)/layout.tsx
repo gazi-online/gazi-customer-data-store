@@ -99,16 +99,26 @@ export default function DashboardLayout({
     </>
   );
 
+  const isPrintRoute = pathname.includes("/invoices/") && pathname.endsWith("/print");
+
+  if (isPrintRoute) {
+    return (
+      <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 print:bg-white print:min-h-0">
+        {children}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+    <div className="flex h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950 print:block print:h-auto print:overflow-visible print:bg-white">
       {/* Sidebar - Desktop */}
-      <aside className="w-64 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 flex-col hidden md:flex shrink-0">
+      <aside className="w-64 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 flex-col hidden md:flex shrink-0 print:hidden">
         <SidebarContent />
       </aside>
 
       {/* Sidebar - Mobile (Overlay) */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
+        <div className="md:hidden fixed inset-0 z-50 flex print:hidden">
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
           <aside className="relative w-64 max-w-sm bg-white dark:bg-zinc-900 h-full flex flex-col shadow-xl animate-in slide-in-from-left-4 duration-300">
             <button 
@@ -123,9 +133,9 @@ export default function DashboardLayout({
       )}
 
       {/* Main Content Container */}
-      <main className="flex-1 flex flex-col overflow-hidden w-full">
+      <main className="flex-1 flex flex-col overflow-hidden w-full print:block print:overflow-visible">
         {/* Top Header (Desktop & Mobile) */}
-        <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 h-16 px-4 md:px-8 flex items-center justify-between shadow-sm z-10 shrink-0">
+        <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 h-16 px-4 md:px-8 flex items-center justify-between shadow-sm z-10 shrink-0 print:hidden">
           <div className="flex items-center flex-1">
             <button 
               className="md:hidden mr-4 p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg"
@@ -156,7 +166,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Mobile Search Bar (Only visible below sm breakpoints) */}
-        <div className="sm:hidden p-4 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+        <div className="sm:hidden p-4 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shrink-0 print:hidden">
           <form onSubmit={handleSearch} className="w-full relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
             <input
@@ -170,8 +180,8 @@ export default function DashboardLayout({
         </div>
 
         {/* Page Content Scrollable Area */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-zinc-50/50 dark:bg-zinc-950/50">
-          <div className="max-w-7xl mx-auto w-full">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-zinc-50/50 dark:bg-zinc-950/50 print:p-0 print:overflow-visible print:bg-white">
+          <div className="max-w-7xl mx-auto w-full print:max-w-none">
             {children}
           </div>
         </div>

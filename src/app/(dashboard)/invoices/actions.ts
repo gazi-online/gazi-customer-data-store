@@ -58,7 +58,7 @@ export async function getInvoiceById(id: string) {
     .from("invoices")
     .select(`
       *,
-      customer:customers(id, first_name, middle_name, last_name, customer_code, phone, email),
+      customer:customers(id, first_name, middle_name, last_name, customer_code, phone, email, address, city, district, state, pincode),
       items:invoice_items(*)
     `)
     .eq("id", id)

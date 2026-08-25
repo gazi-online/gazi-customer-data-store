@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { CustomerDocument, AiImportHistoryRecord } from "@/types/document";
-import { FileText, Cpu, Clock, RefreshCw, Archive, Replace, CheckCircle2, XCircle, AlertCircle, FileCode, Layers, User, Briefcase, Activity, Receipt } from "lucide-react";
-import { rerunExtraction, archiveDocument } from "@/app/(dashboard)/documents/actions";
+import { FileText, Cpu, Clock, RefreshCw, Archive, Replace, CheckCircle2, XCircle, AlertCircle, FileCode, Layers, User, Briefcase, Activity, Receipt, Download, Loader2 } from "lucide-react";
+import { rerunExtraction, archiveDocument, getDocumentSignedUrl } from "@/app/(dashboard)/documents/actions";
 import { toast } from "sonner";
 import { ReviewPanel } from "@/components/AiSmartImportEngine/components/ReviewPanel";
 import { MergedResult } from "@/components/AiSmartImportEngine/types";
@@ -48,6 +48,7 @@ export function CustomerProfileTabs({
   const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'ai-imports' | 'services' | 'billing' | 'activity'>('documents');
   const [filterDocStatus, setFilterDocStatus] = useState<'active' | 'all' | 'archived'>('active');
   const [runningRerunId, setRunningRerunId] = useState<string | null>(null);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [rerunReviewResult, setRerunReviewResult] = useState<MergedResult | null>(null);
   
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
@@ -107,12 +108,35 @@ export function CustomerProfileTabs({
   };
 
   const handleArchive = async (docId: string) => {
+    if (!confirm("Are you sure you want to archive this document?")) return;
     try {
       const res = await archiveDocument(docId, customerId);
       if (res.error) throw new Error(res.error);
       toast.success("Document archived cleanly.");
     } catch (err: any) {
       toast.error(err.message || "Failed to archive document");
+    }
+  };
+
+  const handleDownloadDoc = async (doc: CustomerDocument) => {
+    setDownloadingDocId(doc.id);
+    try {
+      const targetFilename = doc.source_filename || `${doc.document_type.replace(/\s+/g, '_')}_${doc.id.slice(0, 6)}`;
+      const result = await getDocumentSignedUrl(doc.file_url, true, targetFilename);
+      if (result.error || !result.signedUrl) {
+        throw new Error(result.error || "Failed to generate download URL");
+      }
+      const link = document.createElement("a");
+      link.href = result.signedUrl;
+      link.download = targetFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Secure download started");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to download document");
+    } finally {
+      setDownloadingDocId(null);
     }
   };
 
@@ -292,6 +316,20 @@ export function CustomerProfileTabs({
                           Preview
                         </a>
                       )}
+
+                      <button
+                        onClick={() => handleDownloadDoc(doc)}
+                        disabled={downloadingDocId === doc.id}
+                        className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-semibold transition-colors flex items-center disabled:opacity-50"
+                        title="Download Document"
+                      >
+                        {downloadingDocId === doc.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                        ) : (
+                          <Download className="h-3.5 w-3.5 mr-1" />
+                        )}
+                        Download
+                      </button>
 
                       {doc.status !== 'archived' && (
                         <>

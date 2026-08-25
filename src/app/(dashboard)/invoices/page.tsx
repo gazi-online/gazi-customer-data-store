@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getInvoices } from "./actions";
-import { Receipt, Plus, Search, Filter, AlertTriangle, Eye, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { Receipt, Plus, Search, Filter, AlertTriangle, Eye, CheckCircle2, Clock, XCircle, Printer } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -218,12 +218,24 @@ export default async function InvoicesPage({
                         {getStatusBadge(inv.status, isOverdue)}
                       </td>
                       <td className="py-4 px-4 text-right">
-                        <Link
-                          href={`/invoices/${inv.id}`}
-                          className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 rounded-lg text-xs font-semibold transition-colors"
-                        >
-                          <Eye className="h-3.5 w-3.5 mr-1" /> View
-                        </Link>
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={`/invoices/${inv.id}`}
+                            className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 rounded-lg text-xs font-semibold transition-colors"
+                            aria-label={`View invoice #${inv.invoice_number}`}
+                          >
+                            <Eye className="h-3.5 w-3.5 mr-1" /> View
+                          </Link>
+                          <Link
+                            href={`/invoices/${inv.id}/print`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400 rounded-lg text-xs font-semibold transition-colors"
+                            aria-label={`Print invoice #${inv.invoice_number}`}
+                          >
+                            <Printer className="h-3.5 w-3.5 mr-1" /> Print
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   );

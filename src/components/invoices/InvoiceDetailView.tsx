@@ -13,7 +13,8 @@ import {
   Ban,
   RotateCcw,
   X,
-  Check
+  Check,
+  Printer
 } from "lucide-react";
 import { RecordPaymentModal } from "@/components/payments/RecordPaymentModal";
 import { issueInvoice, cancelInvoice } from "@/app/(dashboard)/invoices/actions";
@@ -140,6 +141,17 @@ export function InvoiceDetailView({ invoice }: InvoiceDetailViewProps) {
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-3">
+          {/* Print Invoice — always available */}
+          <Link
+            href={`/invoices/${invoice.id}/print`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center px-3.5 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 font-semibold text-sm rounded-xl transition-colors"
+            aria-label="Open print view for this invoice"
+          >
+            <Printer className="mr-1.5 h-4 w-4" /> Print Invoice
+          </Link>
+
           {invoice.status === "draft" && (
             <button
               onClick={handleIssue}
