@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Bot, Play, UploadCloud, FileImage, Loader2, Trash2, FileText, Sparkles, CheckCircle2, Copy } from "lucide-react";
 import { ImportJob, MergedResult } from "./types";
 import { DataNormalizer } from "./DataNormalizer";
 import { MergeEngine } from "./MergeEngine";
 import { ReviewPanel } from "./components/ReviewPanel";
 import { JsonAiGenerator } from "./components/JsonAiGenerator";
+import { PremiumDropzone } from "./components/PremiumDropzone";
+import { UPLOAD_CONSTANTS, DocumentSide, StagedFileItem, FileValidationError, validateSideAssignments } from "./uploadConstants";
 import { JSONValidator } from "@/lib/ai/parser/validator";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
@@ -21,52 +23,150 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
   const [mergedResult, setMergedResult] = useState<MergedResult | null>(null);
   const [inputMethod, setInputMethod] = useState<'file' | 'json'>('file');
   const [jsonText, setJsonText] = useState("");
-  const [stagedFiles, setStagedFiles] = useState<{ id: string; file: File; previewUrl?: string }[]>([]);
+  const [stagedFiles, setStagedFiles] = useState<StagedFileItem[]>([]);
+  const [validationErrors, setValidationErrors] = useState<FileValidationError[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
+  const objectUrlsRef = useRef<Set<string>>(new Set());
 
-  const handleSelectFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    if (!fileList || fileList.length === 0) return;
+  // Cleanup all allocated Object URLs on component unmount
+  useEffect(() => {
+    const urls = objectUrlsRef.current;
+    return () => {
+      urls.forEach(url => URL.revokeObjectURL(url));
+      urls.clear();
+    };
+  }, []);
 
-    const newFiles: { id: string; file: File; previewUrl?: string }[] = [];
+  const handleFilesAdded = (files: File[]) => {
+    if (!files || files.length === 0) return;
 
-    Array.from(fileList).forEach(file => {
-      // Check duplicate in stagedFiles by filename and size
-      const isDup = stagedFiles.some(sf => sf.file.name === file.name && sf.file.size === file.size);
-      if (isDup) return;
+    const newErrors: FileValidationError[] = [];
+    const validNewItems: StagedFileItem[] = [];
+    let currentTotal = stagedFiles.length;
 
+    for (const file of files) {
+      if (currentTotal >= UPLOAD_CONSTANTS.MAX_FILES_PER_BATCH) {
+        newErrors.push({
+          id: uuidv4(),
+          fileName: file.name,
+          reason: `Maximum batch limit of ${UPLOAD_CONSTANTS.MAX_FILES_PER_BATCH} documents reached.`,
+          type: 'batch_limit'
+        });
+        break;
+      }
+
+      // 1. Check duplicate
+      const isDupInStaged = stagedFiles.some(
+        sf => sf.file.name === file.name && sf.file.size === file.size
+      );
+      const isDupInNew = validNewItems.some(
+        item => item.file.name === file.name && item.file.size === file.size
+      );
+
+      if (isDupInStaged || isDupInNew) {
+        newErrors.push({
+          id: uuidv4(),
+          fileName: file.name,
+          reason: `This document is already in the upload queue.`,
+          type: 'duplicate'
+        });
+        continue;
+      }
+
+      // 2. Check format & TIFF rejection
       const lowerName = file.name.toLowerCase();
-      if (lowerName.endsWith('.tif') || lowerName.endsWith('.tiff') || file.type.includes('tiff')) {
-        toast.error(`File ${file.name}: TIFF format is not supported for this release. Please convert to PDF, JPG, PNG, or WEBP.`);
-        return;
+      const isTiff = lowerName.endsWith('.tif') || lowerName.endsWith('.tiff') || file.type.includes('tiff');
+      if (isTiff) {
+        newErrors.push({
+          id: uuidv4(),
+          fileName: file.name,
+          reason: `TIFF format is not supported for this release. Please convert to PDF, JPG, PNG, or WEBP.`,
+          type: 'unsupported_type'
+        });
+        continue;
       }
 
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error(`File ${file.name} exceeds 10MB limit`);
-        return;
+      const hasAllowedExt = UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS.some(ext => lowerName.endsWith(ext));
+      const hasAllowedMime = (UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES as readonly string[]).includes(file.type);
+
+      if (!hasAllowedExt && !hasAllowedMime) {
+        newErrors.push({
+          id: uuidv4(),
+          fileName: file.name,
+          reason: `Unsupported format. Please upload PDF, JPG, PNG, or WEBP documents.`,
+          type: 'unsupported_type'
+        });
+        continue;
       }
 
+      // 3. Check file size
+      if (file.size > UPLOAD_CONSTANTS.MAX_FILE_SIZE_BYTES) {
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+        newErrors.push({
+          id: uuidv4(),
+          fileName: file.name,
+          reason: `File size (${sizeMb} MB) exceeds the maximum limit of ${UPLOAD_CONSTANTS.MAX_FILE_SIZE_LABEL}.`,
+          type: 'size_exceeded'
+        });
+        continue;
+      }
+
+      // Valid file: create preview if image
       let previewUrl: string | undefined = undefined;
       if (file.type.startsWith('image/')) {
         previewUrl = URL.createObjectURL(file);
+        objectUrlsRef.current.add(previewUrl);
       }
 
-      newFiles.push({
+      validNewItems.push({
         id: uuidv4(),
         file,
-        previewUrl
+        previewUrl,
+        side: UPLOAD_CONSTANTS.DEFAULT_SIDE // 'Single'
       });
-    });
-
-    if (newFiles.length > 0) {
-      setStagedFiles(prev => [...prev, ...newFiles]);
+      currentTotal++;
     }
-    // Reset file input value
-    e.target.value = "";
+
+    if (newErrors.length > 0) {
+      setValidationErrors(prev => [...newErrors, ...prev]);
+    }
+
+    if (validNewItems.length > 0) {
+      setStagedFiles(prev => [...prev, ...validNewItems]);
+    }
   };
 
   const handleRemoveStagedFile = (id: string) => {
-    setStagedFiles(prev => prev.filter(sf => sf.id !== id));
+    setStagedFiles(prev => {
+      const target = prev.find(sf => sf.id === id);
+      if (target?.previewUrl) {
+        URL.revokeObjectURL(target.previewUrl);
+        objectUrlsRef.current.delete(target.previewUrl);
+      }
+      return prev.filter(sf => sf.id !== id);
+    });
+  };
+
+  const handleSideChanged = (id: string, side: DocumentSide) => {
+    setStagedFiles(prev => prev.map(sf => sf.id === id ? { ...sf, side } : sf));
+  };
+
+  const handleClearAll = () => {
+    stagedFiles.forEach(sf => {
+      if (sf.previewUrl) {
+        URL.revokeObjectURL(sf.previewUrl);
+        objectUrlsRef.current.delete(sf.previewUrl);
+      }
+    });
+    setStagedFiles([]);
+  };
+
+  const handleDismissError = (id: string) => {
+    setValidationErrors(prev => prev.filter(err => err.id !== id));
+  };
+
+  const handleDismissAllErrors = () => {
+    setValidationErrors([]);
   };
 
   const handleAddJson = () => {
@@ -105,11 +205,19 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
   };
 
   const handleExtractMultiDocuments = async () => {
-    if (stagedFiles.length === 0) return toast.error("Please select at least one document to extract");
-    if (stagedFiles.length > 10) return toast.error("Maximum 10 documents allowed per import batch");
+    if (stagedFiles.length === 0) return toast.error("Please select at least one document to analyze");
+    if (stagedFiles.length > UPLOAD_CONSTANTS.MAX_FILES_PER_BATCH) {
+      return toast.error(`Maximum ${UPLOAD_CONSTANTS.MAX_FILES_PER_BATCH} documents allowed per import batch`);
+    }
+
+    // Validate side selector edge cases
+    const sideError = validateSideAssignments(stagedFiles);
+    if (sideError) {
+      return toast.error(sideError);
+    }
 
     setIsExtracting(true);
-    const toastId = toast.loading("Processing documents with OCR.space...");
+    const toastId = toast.loading("Analyzing documents with AI...");
 
     try {
       const formData = new FormData();
@@ -119,7 +227,29 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
 
       const res = await processOcrSpaceDocument(formData);
       if (!res.success || !res.data) {
-        throw new Error(res.error || "OCR.space document extraction failed.");
+        throw new Error(res.error || "OCR document extraction failed.");
+      }
+
+      // Explicit side mapping:
+      // Front -> frontFile
+      // Back -> backFile
+      // Both -> frontFile (single-document containing both sides)
+      // Single -> frontFile/backFile remain undefined (Case E)
+      const frontItem = stagedFiles.find(sf => sf.side === 'Front');
+      const backItem = stagedFiles.find(sf => sf.side === 'Back');
+      const bothItem = stagedFiles.find(sf => sf.side === 'Both');
+
+      let jobFrontFile: File | undefined = undefined;
+      let jobBackFile: File | undefined = undefined;
+
+      if (frontItem) {
+        jobFrontFile = frontItem.file;
+      } else if (bothItem) {
+        jobFrontFile = bothItem.file;
+      }
+
+      if (backItem) {
+        jobBackFile = backItem.file;
       }
 
       const normalizedData = DataNormalizer.normalize(res.data);
@@ -128,7 +258,8 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
         documentType: res.data.detected_documents?.[0]?.detected_type || 'unknown',
         provider: 'manual',
         source: 'file',
-        frontFile: stagedFiles[0]?.file,
+        frontFile: jobFrontFile,
+        backFile: jobBackFile,
         status: 'completed',
         rawResponse: res.data,
         normalizedData,
@@ -148,19 +279,32 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
         }
       };
 
+      // Clean up preview URLs
+      stagedFiles.forEach(sf => {
+        if (sf.previewUrl) {
+          URL.revokeObjectURL(sf.previewUrl);
+          objectUrlsRef.current.delete(sf.previewUrl);
+        }
+      });
+
       setJobs([newJob]);
       setStagedFiles([]);
 
       const merged = MergeEngine.merge([newJob]);
       setMergedResult(merged);
 
-      toast.success("OCR.space Extraction complete — Ready for review", { id: toastId });
+      toast.success("AI Document Analysis complete — Ready for review", { id: toastId });
     } catch (error: any) {
-      toast.error(error.message || "Failed to process documents with OCR.space", { id: toastId });
+      let errMsg = error?.message || "Failed to analyze documents with AI";
+      if (errMsg.includes("OCR_SPACE_API_KEY is missing") || errMsg.includes("OCR.space is not configured")) {
+        errMsg = "OCR service is not configured. Please configure the server OCR API key.";
+      }
+      toast.error(errMsg, { id: toastId });
     } finally {
       setIsExtracting(false);
     }
   };
+
 
   const handleConfirmReview = (finalData: Record<string, any>) => {
     onAutoFill(finalData);
@@ -207,108 +351,18 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
 
         <div className="p-4 bg-white/60 dark:bg-zinc-900/60 rounded-b-xl border border-indigo-100 dark:border-indigo-800/50">
           {inputMethod === 'file' ? (
-            <div className="space-y-4">
-              <div className="border-2 border-dashed border-indigo-200 dark:border-indigo-800/50 rounded-xl bg-white dark:bg-zinc-900 p-6 text-center">
-                <UploadCloud className="h-10 w-10 text-indigo-500 mx-auto mb-3" />
-                <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                  Select Customer Documents
-                </h3>
-                <p className="text-xs text-zinc-500 mt-1 mb-4">
-                  Select one or multiple files (Aadhaar, PAN, Voter ID, Ration Card, Bank Passbook, etc.).
-                  <br />
-                  Supported: PDF, JPG, PNG, WEBP (Max 10MB per file, max 10 files per import batch).
-                </p>
-
-                <label className="inline-flex items-center justify-center px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-lg cursor-pointer transition-colors shadow-sm">
-                  <span>Browse Documents…</span>
-                  <input 
-                    type="file" 
-                    multiple 
-                    accept=".pdf,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp,application/pdf"
-                    onChange={handleSelectFiles}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-
-              {/* Staged File Queue */}
-              {stagedFiles.length > 0 ? (
-                <div className="bg-indigo-50/60 dark:bg-indigo-950/30 rounded-xl p-4 border border-indigo-100 dark:border-indigo-800/50">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-xs font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider flex items-center">
-                      <Sparkles className="h-4 w-4 mr-1.5 text-indigo-500" />
-                      Documents Ready for Extraction ({stagedFiles.length})
-                    </h4>
-                    <label className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline cursor-pointer">
-                      + Add More Files
-                      <input 
-                        type="file" 
-                        multiple 
-                        accept=".pdf,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp,application/pdf"
-                        onChange={handleSelectFiles}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {stagedFiles.map((sf) => {
-                      const ext = sf.file.name.split('.').pop()?.toUpperCase() || 'FILE';
-                      const sizeMb = (sf.file.size / (1024 * 1024)).toFixed(2);
-
-                      return (
-                        <div key={sf.id} className="flex items-center justify-between bg-white dark:bg-zinc-900 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800/50 shadow-sm">
-                          <div className="flex items-center space-x-3 truncate">
-                            {sf.previewUrl ? (
-                              <img src={sf.previewUrl} alt={sf.file.name} className="h-9 w-9 rounded object-cover border border-zinc-200 dark:border-zinc-700 shrink-0" />
-                            ) : (
-                              <div className="h-9 w-9 rounded bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-xs shrink-0">
-                                {ext}
-                              </div>
-                            )}
-                            <div className="truncate">
-                              <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate" title={sf.file.name}>
-                                {sf.file.name}
-                              </p>
-                              <p className="text-[10px] text-zinc-500">
-                                {ext} • {sizeMb} MB
-                              </p>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveStagedFile(sf.id)}
-                            className="p-1 text-zinc-400 hover:text-red-600 transition-colors shrink-0 ml-2"
-                            title="Remove file"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-indigo-100 dark:border-indigo-800/50 flex justify-end">
-                    <button 
-                      type="button" 
-                      onClick={handleExtractMultiDocuments} 
-                      disabled={isExtracting}
-                      className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all font-bold text-sm shadow-md flex items-center justify-center disabled:opacity-50"
-                    >
-                      {isExtracting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bot className="w-4 h-4 mr-2" />}
-                      {isExtracting ? "Extracting Batch..." : "Extract Data with AI"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3 rounded-lg border border-indigo-100 bg-indigo-50/30 dark:bg-indigo-950/20 text-center">
-                  <p className="text-xs font-medium text-indigo-800 dark:text-indigo-300">
-                    No documents staged. Select your customer documents to begin extraction.
-                  </p>
-                </div>
-              )}
-            </div>
+            <PremiumDropzone
+              stagedFiles={stagedFiles}
+              onFilesAdded={handleFilesAdded}
+              onFileRemoved={handleRemoveStagedFile}
+              onSideChanged={handleSideChanged}
+              onClearAll={handleClearAll}
+              onAnalyze={handleExtractMultiDocuments}
+              isExtracting={isExtracting}
+              errors={validationErrors}
+              onDismissError={handleDismissError}
+              onDismissAllErrors={handleDismissAllErrors}
+            />
           ) : (
             <div className="space-y-4">
               <JsonAiGenerator onJsonGenerated={(jsonStr) => setJsonText(jsonStr)} />
