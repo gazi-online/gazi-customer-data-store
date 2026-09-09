@@ -43,3 +43,6 @@ next-env.d.ts
 # benchmarks
 benchmark-docs/
 
+
+graphify-out/
+.stitch/previews/
