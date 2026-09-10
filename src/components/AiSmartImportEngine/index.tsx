@@ -1,21 +1,28 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Bot, Play, UploadCloud, FileImage, Loader2, Trash2, FileText, Sparkles, CheckCircle2, Copy } from "lucide-react";
+import { Bot, FileImage, CheckCircle2, Copy } from "lucide-react";
 import { ImportJob, MergedResult } from "./types";
 import { DataNormalizer } from "./DataNormalizer";
 import { MergeEngine } from "./MergeEngine";
 import { ReviewPanel } from "./components/ReviewPanel";
 import { JsonAiGenerator } from "./components/JsonAiGenerator";
 import { PremiumDropzone } from "./components/PremiumDropzone";
-import { UPLOAD_CONSTANTS, DocumentSide, StagedFileItem, FileValidationError, validateSideAssignments } from "./uploadConstants";
+import { 
+  UPLOAD_CONSTANTS, 
+  DocumentSide, 
+  StagedFileItem, 
+  FileValidationError, 
+  validateSideAssignments,
+  isOfficeDocument
+} from "./uploadConstants";
 import { JSONValidator } from "@/lib/ai/parser/validator";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
-import { extractDataFromDocuments, processOcrSpaceDocument } from "@/app/(dashboard)/customers/ai-actions";
+import { extractDataFromDocuments } from "@/app/(dashboard)/customers/ai-actions";
 
 interface AiSmartImportEngineProps {
-  onAutoFill: (data: Record<string, any>) => void;
+  onAutoFill: (data: Record<string, unknown>) => void;
 }
 
 export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
@@ -73,7 +80,7 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
         continue;
       }
 
-      // 2. Check format & TIFF rejection
+      // 2. Check format & format rejections
       const lowerName = file.name.toLowerCase();
       const isTiff = lowerName.endsWith('.tif') || lowerName.endsWith('.tiff') || file.type.includes('tiff');
       if (isTiff) {
@@ -86,6 +93,36 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
         continue;
       }
 
+      if (lowerName.endsWith('.doc')) {
+        newErrors.push({
+          id: uuidv4(),
+          fileName: file.name,
+          reason: `Legacy .doc format is not supported. Please save as modern .docx format.`,
+          type: 'unsupported_type'
+        });
+        continue;
+      }
+
+      if (lowerName.endsWith('.xls')) {
+        newErrors.push({
+          id: uuidv4(),
+          fileName: file.name,
+          reason: `Legacy .xls format is not supported. Please save as modern .xlsx format.`,
+          type: 'unsupported_type'
+        });
+        continue;
+      }
+
+      if (lowerName.endsWith('.ppt') || lowerName.endsWith('.pptx') || file.type.includes('presentation') || file.type.includes('powerpoint')) {
+        newErrors.push({
+          id: uuidv4(),
+          fileName: file.name,
+          reason: `PowerPoint presentations are not supported. Please upload PDF, DOCX, XLSX, or image documents.`,
+          type: 'unsupported_type'
+        });
+        continue;
+      }
+
       const hasAllowedExt = UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS.some(ext => lowerName.endsWith(ext));
       const hasAllowedMime = (UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES as readonly string[]).includes(file.type);
 
@@ -93,7 +130,7 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
         newErrors.push({
           id: uuidv4(),
           fileName: file.name,
-          reason: `Unsupported format. Please upload PDF, JPG, PNG, or WEBP documents.`,
+          reason: `Unsupported format. Please upload PDF, DOCX, XLSX, JPG, PNG, or WEBP documents.`,
           type: 'unsupported_type'
         });
         continue;
@@ -122,7 +159,7 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
         id: uuidv4(),
         file,
         previewUrl,
-        side: UPLOAD_CONSTANTS.DEFAULT_SIDE // 'Single'
+        side: isOfficeDocument(file.name) ? 'Single' : UPLOAD_CONSTANTS.DEFAULT_SIDE // Office docs always normalized to 'Single'
       });
       currentTotal++;
     }
@@ -148,7 +185,13 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
   };
 
   const handleSideChanged = (id: string, side: DocumentSide) => {
-    setStagedFiles(prev => prev.map(sf => sf.id === id ? { ...sf, side } : sf));
+    setStagedFiles(prev => prev.map(sf => {
+      if (sf.id !== id) return sf;
+      if (isOfficeDocument(sf.file.name)) {
+        return { ...sf, side: 'Single' };
+      }
+      return { ...sf, side };
+    }));
   };
 
   const handleClearAll = () => {
@@ -199,7 +242,7 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
       const merged = MergeEngine.merge(updatedJobs);
       setMergedResult(merged);
       toast.success(`Customer JSON parsed & ready for review`);
-    } catch (e) {
+    } catch {
       toast.error("Invalid JSON format");
     }
   };
@@ -225,9 +268,14 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
         formData.append("files", sf.file);
       }
 
-      const res = await processOcrSpaceDocument(formData);
-      if (!res.success || !res.data) {
-        throw new Error(res.error || "OCR document extraction failed.");
+      const res = await extractDataFromDocuments(formData) as 
+        | { success: true; data: Record<string, unknown>; perfSummary?: ImportJob['perfSummary'] }
+        | { success: false; error?: string };
+      if (!res.success) {
+        throw new Error(res.error || "Document extraction failed.");
+      }
+      if (!res.data) {
+        throw new Error("No data returned from document extraction.");
       }
 
       // Explicit side mapping:
@@ -253,10 +301,11 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
       }
 
       const normalizedData = DataNormalizer.normalize(res.data);
+      const detectedDocs = res.data.detected_documents as Array<{ detected_type?: string }> | undefined;
       const newJob: ImportJob = {
         id: uuidv4(),
-        documentType: res.data.detected_documents?.[0]?.detected_type || 'unknown',
-        provider: 'manual',
+        documentType: detectedDocs?.[0]?.detected_type || 'unknown',
+        provider: 'gemini',
         source: 'file',
         frontFile: jobFrontFile,
         backFile: jobBackFile,
@@ -264,9 +313,9 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
         rawResponse: res.data,
         normalizedData,
         version: 1,
-        perfSummary: {
-          provider: 'OCR.space API',
-          model: 'engine-2',
+        perfSummary: res.perfSummary || {
+          provider: 'AI Extraction Engine',
+          model: 'auto',
           documentCount: stagedFiles.length,
           imagePrepTime: 0,
           primaryAttemptDuration: 1000,
@@ -294,10 +343,14 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
       setMergedResult(merged);
 
       toast.success("AI Document Analysis complete — Ready for review", { id: toastId });
-    } catch (error: any) {
-      let errMsg = error?.message || "Failed to analyze documents with AI";
+    } catch (error: unknown) {
+      const errObj = error as { message?: string } | null;
+      let errMsg = errObj?.message || "Failed to analyze documents with AI";
       if (errMsg.includes("OCR_SPACE_API_KEY is missing") || errMsg.includes("OCR.space is not configured")) {
         errMsg = "OCR service is not configured. Please configure the server OCR API key.";
+      }
+      if (errMsg.includes(".venv") || errMsg.includes("python") || errMsg.includes("Traceback") || errMsg.includes("tools/markitdown-worker")) {
+        errMsg = "Document extraction failed during preprocessing. Please try a different document or format.";
       }
       toast.error(errMsg, { id: toastId });
     } finally {
@@ -306,7 +359,7 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
   };
 
 
-  const handleConfirmReview = (finalData: Record<string, any>) => {
+  const handleConfirmReview = (finalData: Record<string, unknown>) => {
     onAutoFill(finalData);
     toast.success("Form Auto-Filled Successfully");
   };
@@ -391,7 +444,7 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
                         };
                         setJsonText(JSON.stringify(canonicalJson, null, 2));
                         toast.success("Valid JSON pasted and verified from clipboard!");
-                      } catch (err) {
+                      } catch {
                         toast.error("Clipboard does not contain valid JSON.");
                       }
                     }}

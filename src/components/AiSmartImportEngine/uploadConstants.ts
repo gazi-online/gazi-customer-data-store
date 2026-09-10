@@ -18,20 +18,34 @@ export const UPLOAD_CONSTANTS = {
   MAX_FILE_SIZE_BYTES: 10 * 1024 * 1024, // 10 MB
   MAX_FILE_SIZE_LABEL: "10 MB",
   MAX_FILES_PER_BATCH: 10,
-  ALLOWED_EXTENSIONS: ['.pdf', '.jpg', '.jpeg', '.png', '.webp'] as const,
+  ALLOWED_EXTENSIONS: ['.pdf', '.docx', '.xlsx', '.jpg', '.jpeg', '.png', '.webp'] as const,
   ALLOWED_MIME_TYPES: [
     'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'image/jpeg',
     'image/png',
     'image/webp'
   ] as const,
-  ACCEPT_STRING: '.pdf,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp,application/pdf',
-  SUPPORTED_FORMATS_LABEL: 'PDF, JPG, PNG, WEBP',
+  ACCEPT_STRING: '.pdf,.docx,.xlsx,.jpg,.jpeg,.png,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/jpeg,image/png,image/webp',
+  SUPPORTED_FORMATS_LABEL: 'PDF, DOCX, XLSX, JPG, PNG, WEBP',
   DEFAULT_SIDE: 'Single' as DocumentSide,
   SIDE_OPTIONS: ['Front', 'Back', 'Both', 'Single'] as const satisfies readonly DocumentSide[],
 };
 
+export function isOfficeDocument(fileName: string): boolean {
+  const lower = fileName.toLowerCase();
+  return lower.endsWith('.docx') || lower.endsWith('.xlsx');
+}
+
 export function validateSideAssignments(stagedFiles: StagedFileItem[]): string | null {
+  // Office documents cannot be assigned Front/Back/Both
+  for (const sf of stagedFiles) {
+    if (isOfficeDocument(sf.file.name) && sf.side !== 'Single') {
+      return "Office documents are processed as a single document.";
+    }
+  }
+
   const frontFiles = stagedFiles.filter(sf => sf.side === 'Front');
   const backFiles = stagedFiles.filter(sf => sf.side === 'Back');
   const bothFiles = stagedFiles.filter(sf => sf.side === 'Both');

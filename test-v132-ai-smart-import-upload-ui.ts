@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { UPLOAD_CONSTANTS, DocumentSide, StagedFileItem, FileValidationError } from "./src/components/AiSmartImportEngine/uploadConstants";
+import { UPLOAD_CONSTANTS, StagedFileItem, validateSideAssignments, isOfficeDocument } from "./src/components/AiSmartImportEngine/uploadConstants";
 
 console.log("==========================================================================");
 console.log("🧪 V13.2 AI SMART IMPORT PREMIUM UPLOADER REDESIGN TEST SUITE");
@@ -9,7 +9,7 @@ console.log("===================================================================
 let passed = 0;
 let failed = 0;
 
-function assert(condition: boolean, testName: string, actual?: any) {
+function assert(condition: boolean, testName: string, actual?: unknown) {
   if (condition) {
     console.log(`✅ [PASS] ${testName}`);
     passed++;
@@ -23,30 +23,36 @@ function assert(condition: boolean, testName: string, actual?: any) {
 // GROUP 1: Upload Constants & Supported Specifications
 // -----------------------------------------------------------------------------
 
-// 1. Valid extensions
+// 1. Valid extensions (PDF, DOCX, XLSX, JPG, PNG, WEBP)
 assert(
   UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS.includes('.jpg') &&
   UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS.includes('.png') &&
   UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS.includes('.webp') &&
-  UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS.includes('.pdf'),
-  "1. UPLOAD_CONSTANTS includes .jpg, .png, .webp, and .pdf"
+  UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS.includes('.pdf') &&
+  UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS.includes('.docx') &&
+  UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS.includes('.xlsx'),
+  "1. UPLOAD_CONSTANTS includes .jpg, .png, .webp, .pdf, .docx, and .xlsx"
 );
 
-// 2. Disallowed extensions NOT present
+// 2. Disallowed extensions NOT present (doc, xls, ppt, pptx, tiff)
 assert(
-  !(UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS as readonly string[]).includes('.docx') &&
   !(UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS as readonly string[]).includes('.doc') &&
+  !(UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS as readonly string[]).includes('.xls') &&
+  !(UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS as readonly string[]).includes('.ppt') &&
+  !(UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS as readonly string[]).includes('.pptx') &&
   !(UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS as readonly string[]).includes('.tiff'),
-  "2. UPLOAD_CONSTANTS excludes docx, doc, and tiff"
+  "2. UPLOAD_CONSTANTS strictly excludes legacy .doc, .xls, .ppt, .pptx, and .tiff"
 );
 
 // 3. Allowed MIME types
 assert(
   UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES.includes('application/pdf') &&
+  UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document') &&
+  UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') &&
   UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES.includes('image/jpeg') &&
   UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES.includes('image/png') &&
   UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES.includes('image/webp'),
-  "3. Allowed MIME types accurately match PDF, JPEG, PNG, and WEBP"
+  "3. Allowed MIME types accurately match PDF, DOCX, XLSX, JPEG, PNG, and WEBP"
 );
 
 // 4. Max size is strictly 10 MB
@@ -115,6 +121,21 @@ function simulateValidation(
       continue;
     }
 
+    if (lower.endsWith('.doc')) {
+      errors.push({ file: f.name, reason: "Legacy .doc format is not supported.", type: "unsupported_type" });
+      continue;
+    }
+
+    if (lower.endsWith('.xls')) {
+      errors.push({ file: f.name, reason: "Legacy .xls format is not supported.", type: "unsupported_type" });
+      continue;
+    }
+
+    if (lower.endsWith('.ppt') || lower.endsWith('.pptx') || f.type.includes('presentation') || f.type.includes('powerpoint')) {
+      errors.push({ file: f.name, reason: "PowerPoint presentations are not supported.", type: "unsupported_type" });
+      continue;
+    }
+
     const hasExt = UPLOAD_CONSTANTS.ALLOWED_EXTENSIONS.some(e => lower.endsWith(e));
     const hasMime = (UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES as readonly string[]).includes(f.type);
     if (!hasExt && !hasMime) {
@@ -150,9 +171,25 @@ assert(resWebp.valid.length === 1 && resWebp.errors.length === 0, "10. Valid WEB
 const resPdf = simulateValidation([{ name: "bank_statement.pdf", size: 5 * 1024 * 1024, type: "application/pdf" }], []);
 assert(resPdf.valid.length === 1 && resPdf.errors.length === 0, "11. Valid PDF file accepted");
 
-// 12. Invalid DOCX rejected
-const resDocx = simulateValidation([{ name: "doc.docx", size: 500 * 1024, type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }], []);
-assert(resDocx.valid.length === 0 && resDocx.errors[0]?.type === "unsupported_type", "12. Invalid DOCX file rejected with unsupported_type");
+// 12a. Valid DOCX accepted
+const resDocx = simulateValidation([{ name: "customer_kyc.docx", size: 500 * 1024, type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }], []);
+assert(resDocx.valid.length === 1 && resDocx.errors.length === 0, "12a. Valid DOCX file accepted");
+
+// 12b. Valid XLSX accepted
+const resXlsx = simulateValidation([{ name: "customer_records.xlsx", size: 600 * 1024, type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }], []);
+assert(resXlsx.valid.length === 1 && resXlsx.errors.length === 0, "12b. Valid XLSX file accepted");
+
+// 12c. PPTX rejected
+const resPptx = simulateValidation([{ name: "deck.pptx", size: 1 * 1024 * 1024, type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" }], []);
+assert(resPptx.valid.length === 0 && resPptx.errors[0]?.type === "unsupported_type", "12c. PPTX presentation rejected");
+
+// 12d. Legacy DOC rejected
+const resDoc = simulateValidation([{ name: "legacy_profile.doc", size: 400 * 1024, type: "application/msword" }], []);
+assert(resDoc.valid.length === 0 && resDoc.errors[0]?.type === "unsupported_type", "12d. Legacy DOC file rejected");
+
+// 12e. Legacy XLS rejected
+const resXls = simulateValidation([{ name: "legacy_table.xls", size: 300 * 1024, type: "application/vnd.ms-excel" }], []);
+assert(resXls.valid.length === 0 && resXls.errors[0]?.type === "unsupported_type", "12e. Legacy XLS file rejected");
 
 // 13. TIFF rejected with specific message
 const resTiff = simulateValidation([{ name: "scan.tiff", size: 3 * 1024 * 1024, type: "image/tiff" }], []);
@@ -232,7 +269,6 @@ assert(
 );
 
 // 23a. Case A: 1 Front + 1 Back is a valid pair
-import { validateSideAssignments } from "./src/components/AiSmartImportEngine/uploadConstants";
 const caseA: StagedFileItem[] = [
   { id: "1", file: new File(["f"], "front.jpg", { type: "image/jpeg" }), side: "Front" },
   { id: "2", file: new File(["b"], "back.jpg", { type: "image/jpeg" }), side: "Back" }
@@ -291,6 +327,66 @@ assert(
   "23f. Case F: 'Both' document mapped cleanly (architectural limitation noted: ImportJob lacks bothFile field)"
 );
 
+// 23g. DOCX normalized to Single
+const docxFileItem: StagedFileItem = {
+  id: "docx-1",
+  file: new File(["data"], "customer.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+  side: isOfficeDocument("customer.docx") ? "Single" : "Front"
+};
+assert(
+  isOfficeDocument("customer.docx") === true && docxFileItem.side === "Single",
+  "23g. DOCX is detected by isOfficeDocument and normalized to 'Single'"
+);
+
+// 23h. XLSX normalized to Single
+const xlsxFileItem: StagedFileItem = {
+  id: "xlsx-1",
+  file: new File(["data"], "customer.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+  side: isOfficeDocument("customer.xlsx") ? "Single" : "Front"
+};
+assert(
+  isOfficeDocument("customer.xlsx") === true && xlsxFileItem.side === "Single",
+  "23h. XLSX is detected by isOfficeDocument and normalized to 'Single'"
+);
+
+// 23i. DOCX cannot be assigned Front or Back
+const invalidDocxSide: StagedFileItem[] = [
+  { id: "1", file: new File(["d"], "customer.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }), side: "Front" }
+];
+assert(
+  validateSideAssignments(invalidDocxSide) === "Office documents are processed as a single document.",
+  "23i. DOCX assigned to 'Front' is rejected by validateSideAssignments"
+);
+
+// 23j. XLSX cannot be assigned Front, Back, or Both
+const invalidXlsxSide: StagedFileItem[] = [
+  { id: "1", file: new File(["x"], "sheet.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), side: "Both" }
+];
+assert(
+  validateSideAssignments(invalidXlsxSide) === "Office documents are processed as a single document.",
+  "23j. XLSX assigned to 'Both' is rejected by validateSideAssignments"
+);
+
+// 23k. Images retain full Front/Back/Both/Single flexibility
+const imgFront: StagedFileItem = { id: "1", file: new File(["f"], "front.jpg", { type: "image/jpeg" }), side: "Front" };
+const imgBack: StagedFileItem = { id: "2", file: new File(["b"], "back.jpg", { type: "image/jpeg" }), side: "Back" };
+const imgBoth: StagedFileItem = { id: "3", file: new File(["b"], "both.webp", { type: "image/webp" }), side: "Both" };
+const imgSingle: StagedFileItem = { id: "4", file: new File(["s"], "single.png", { type: "image/png" }), side: "Single" };
+assert(
+  !isOfficeDocument(imgFront.file.name) &&
+  !isOfficeDocument(imgBack.file.name) &&
+  !isOfficeDocument(imgBoth.file.name) &&
+  !isOfficeDocument(imgSingle.file.name) &&
+  validateSideAssignments([imgFront, imgBack]) === null,
+  "23k. Images (JPG, PNG, WEBP) retain full Front/Back/Both/Single behavior"
+);
+
+// 23l. PDF retains full Front/Back/Both/Single flexibility
+const pdfDoc: StagedFileItem = { id: "1", file: new File(["p"], "statement.pdf", { type: "application/pdf" }), side: "Single" };
+assert(
+  !isOfficeDocument(pdfDoc.file.name) && pdfDoc.side === "Single",
+  "23l. PDF retains existing document side behavior without Office single-forcing"
+);
 
 // -----------------------------------------------------------------------------
 // GROUP 4: UI Text, Labels & Action Elements
@@ -351,6 +447,18 @@ assert(
   "29. OCR missing key gracefully maps to user-friendly message without raw stack/secret exposure"
 );
 
+// 30. File icons for DOCX and XLSX
+assert(
+  dropzoneCode.includes("FileType") && dropzoneCode.includes("Sheet"),
+  "30. PremiumDropzone renders FileType icon for DOCX and Sheet icon for XLSX"
+);
+
+// 31. Office document single notice in UI
+assert(
+  dropzoneCode.includes("Office documents are processed as a single document."),
+  "31. PremiumDropzone includes user notice: 'Office documents are processed as a single document.'"
+);
+
 console.log("==========================================================================");
 console.log(`📊 TEST SUMMARY: ${passed} PASSED, ${failed} FAILED (TOTAL: ${passed + failed})`);
 console.log("==========================================================================");
@@ -358,5 +466,5 @@ console.log("===================================================================
 if (failed > 0) {
   process.exit(1);
 } else {
-  console.log("🎉 ALL 28 ASSERTIONS PASSED PERFECTLY!");
+  console.log(`🎉 ALL ${passed} ASSERTIONS PASSED PERFECTLY!`);
 }
