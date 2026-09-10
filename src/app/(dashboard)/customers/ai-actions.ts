@@ -12,6 +12,7 @@ import crypto from "crypto";
 import { OcrSpaceProvider } from "@/lib/ocr/OcrSpaceProvider";
 import { DocumentClassifier } from "@/lib/ocr/DocumentClassifier";
 import { DocumentTextParser } from "@/lib/ocr/DocumentTextParser";
+import { DocumentPreprocessorRouter, MARKITDOWN_PREPROCESSOR_VERSION } from "@/lib/document-preprocessing";
 
 export async function extractDataFromDocuments(formData: FormData) {
   const fullServerActionStart = performance.now();
@@ -45,8 +46,13 @@ export async function extractDataFromDocuments(formData: FormData) {
     }
 
     const fileDataArray = [];
+    const cacheHashFileDataArray = [];
     const originalImages: string[] = [];
     let approximateTotalImageSize = 0;
+    const extractedMarkdownSections: string[] = [];
+    let hasMarkItDownText = false;
+    let anyFallbackTriggered = false;
+    let totalPreprocessingMs = 0;
 
     for (const file of files) {
       approximateTotalImageSize += file.size;
@@ -60,43 +66,81 @@ export async function extractDataFromDocuments(formData: FormData) {
         throw new Error(`File ${file.name} exceeds 10MB file size limit.`);
       }
       
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-      if (!allowedTypes.includes(file.type) && !file.type.startsWith('image/')) {
-        throw new Error(`File type ${file.type || file.name} is not supported. Use JPG, PNG, WEBP, or PDF.`);
+      const allowedTypes = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      ];
+      const isAllowedExt = lowerName.endsWith('.pdf') || lowerName.endsWith('.docx') || lowerName.endsWith('.xlsx') || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.png') || lowerName.endsWith('.webp');
+
+      if (!allowedTypes.includes(file.type) && !file.type.startsWith('image/') && !isAllowedExt) {
+        throw new Error(`File type ${file.type || file.name} is not supported. Use JPG, PNG, WEBP, PDF, DOCX, or XLSX.`);
       }
 
-      // Convert File to Base64 for the AI Provider
-      const buffer = await file.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString('base64');
-      
-      fileDataArray.push({
-        mimeType: file.type,
+      // Convert File to buffer & base64
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const base64 = buffer.toString('base64');
+      originalImages.push(file.name);
+
+      // Track all input files for cache key stability
+      cacheHashFileDataArray.push({
+        mimeType: file.type || 'application/octet-stream',
         base64Data: base64
       });
 
-      originalImages.push(file.name); 
+      // Preprocessing Route Check
+      const prepStart = performance.now();
+      const prepRes = await DocumentPreprocessorRouter.routeAndPreprocess(buffer, file.name, file.type);
+      totalPreprocessingMs += performance.now() - prepStart;
+
+      if (prepRes.fallbackRequired) {
+        anyFallbackTriggered = true;
+        console.log(`[AI Preprocessor] Fallback triggered for ${file.name}: routing to Vision/OCR pipeline`);
+      }
+
+      if (prepRes.source === 'markitdown' && prepRes.markdown) {
+        hasMarkItDownText = true;
+        console.log(`[AI Preprocessor] Document processed with MarkItDown: format=${prepRes.metadata?.format} length=${prepRes.metadata?.markdown_length} duration_ms=${prepRes.metadata?.duration_ms}`);
+        extractedMarkdownSections.push(`Source Document: ${file.name}\n${prepRes.markdown}`);
+      } else if (prepRes.source === 'none') {
+        throw new Error(prepRes.error || `Failed to process document ${file.name}.`);
+      } else {
+        // Image or Scanned PDF falling back to Vision
+        fileDataArray.push({
+          mimeType: file.type || 'application/pdf',
+          base64Data: base64
+        });
+      }
     }
     const fileReadMs = performance.now() - fileReadStart;
     perfTimings.imagePreparation = fileReadMs;
+    perfTimings.preprocessingTime = totalPreprocessingMs;
 
     // Prompt setup
     const providerName = process.env.DEFAULT_AI_PROVIDER || 'gemini';
     const promptVersion = process.env.PROMPT_VERSION || 'v1';
     const modelName = 'gemini-flash-latest';
     
+    const combinedMarkdown = extractedMarkdownSections.join('\n\n---\n\n');
+
     const finalPrompt = PromptManager.generateFinalPrompt({
       provider: providerName as any,
       version: promptVersion as any,
-      documentTypes: documentTypes
+      documentTypes: documentTypes,
+      inputMode: hasMarkItDownText ? 'markdown' : 'vision',
+      markdownContent: hasMarkItDownText ? combinedMarkdown : undefined
     });
 
     const reqId = uuidv4().substring(0, 8);
-    console.log(`[AI] extraction_start requestId=${reqId}`);
+    console.log(`[AI] extraction_start requestId=${reqId} preprocessing=${hasMarkItDownText ? 'markitdown' : 'vision'} files=${files.length}`);
 
     // 4 & 5. SHA-256 File Hash and Request Hash Generation
     const hashStart = performance.now();
     const sha256Start = performance.now();
-    const fileHashes = fileDataArray.map(f => {
+    const fileHashes = cacheHashFileDataArray.map(f => {
       const buf = Buffer.from(f.base64Data, 'base64');
       return crypto.createHash('sha256').update(buf).digest('hex');
     }).sort();
@@ -104,10 +148,11 @@ export async function extractDataFromDocuments(formData: FormData) {
 
     const requestHashGenStart = performance.now();
     const requestHash = ExtractionCache.computeRequestHash({
-      files: fileDataArray,
+      files: cacheHashFileDataArray,
       documentTypes,
       promptVersion,
-      modelName
+      modelName,
+      preprocessingMode: hasMarkItDownText ? MARKITDOWN_PREPROCESSOR_VERSION : 'vision'
     });
     const requestHashGenMs = performance.now() - requestHashGenStart;
     const totalRequestHashMs = performance.now() - hashStart;
@@ -116,8 +161,8 @@ export async function extractDataFromDocuments(formData: FormData) {
     const cacheLookupStart = performance.now();
     const cacheRes = await ExtractionCache.lookupCache(supabase, user.id, requestHash);
     const totalCacheLookupMs = performance.now() - cacheLookupStart;
-    let cacheHit = cacheRes.hit;
-    let cacheLookupMs = cacheRes.lookupMs;
+    const cacheHit = cacheRes.hit;
+    const cacheLookupMs = cacheRes.lookupMs;
     let cacheWriteMs = 0;
     let savedProviderMs = 0;
 
@@ -328,6 +373,9 @@ export async function extractDataFromDocuments(formData: FormData) {
         imagePrepTime: perfTimings.imagePreparation,
         primaryAttemptDuration: perfTimings.primaryAttemptDuration,
         fallbackAttemptDuration: perfTimings.fallbackAttemptDuration,
+        preprocessingTime: totalPreprocessingMs,
+        preprocessingSource: hasMarkItDownText ? 'markitdown' : 'vision',
+        fallbackUsed: anyFallbackTriggered,
         apiTime: extractionResult.apiCallTimeMs || 0,
         jsonParseTime: extractionResult.jsonParseTimeMs || 0,
         normalizationTime: perfTimings.normalizationAndMerge,
@@ -542,23 +590,37 @@ export async function generateCustomerJsonWithProvider(formData: FormData) {
     }
 
     const fileDataArray = [];
+    const extractedMarkdownSections: string[] = [];
+    let hasMarkItDownText = false;
+
     for (const file of files) {
       if (file.size > 10 * 1024 * 1024) {
         throw new Error(`File ${file.name} exceeds 10MB file size limit.`);
       }
-      const buffer = await file.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString('base64');
-      fileDataArray.push({
-        mimeType: file.type,
-        base64Data: base64
-      });
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const base64 = buffer.toString('base64');
+
+      const prepRes = await DocumentPreprocessorRouter.routeAndPreprocess(buffer, file.name, file.type);
+      if (prepRes.source === 'markitdown' && prepRes.markdown) {
+        hasMarkItDownText = true;
+        extractedMarkdownSections.push(`Source Document: ${file.name}\n${prepRes.markdown}`);
+      } else if (prepRes.source === 'none') {
+        throw new Error(prepRes.error || `Failed to process document ${file.name}.`);
+      } else {
+        fileDataArray.push({
+          mimeType: file.type || 'application/pdf',
+          base64Data: base64
+        });
+      }
     }
 
     const promptVersion = process.env.PROMPT_VERSION || 'v1';
     const finalPrompt = PromptManager.generateFinalPrompt({
       provider: providerId as any,
       version: promptVersion as any,
-      documentTypes: []
+      documentTypes: [],
+      inputMode: hasMarkItDownText ? 'markdown' : 'vision',
+      markdownContent: hasMarkItDownText ? extractedMarkdownSections.join('\n\n---\n\n') : undefined
     });
 
     const provider = AIProviderRegistry.getProvider(providerId);

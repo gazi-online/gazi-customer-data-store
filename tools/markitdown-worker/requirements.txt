@@ -1,0 +1,12 @@
+# Microsoft MarkItDown local worker requirements for GCDS
+# Pin exact versions for reproducibility and safety
+# Phase 1: PDF, DOCX, XLSX only (NO OCR plugins, NO Azure/OpenAI dependencies)
+
+markitdown==0.1.7
+pdfminer.six==20260107
+pdfplumber==0.11.10
+mammoth==1.11.0
+openpyxl==3.1.5
+pandas==3.0.5
+python-dateutil==2.9.0.post0
+tzdata==2026.3

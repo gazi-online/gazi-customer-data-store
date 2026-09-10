@@ -3,6 +3,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 
 export interface CacheLookupResult {
   hit: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   resultJson?: any;
   lookupMs: number;
   selectQueryMs?: number;
@@ -16,6 +17,7 @@ export interface CacheSaveOptions {
   provider: string;
   modelName: string;
   promptVersion: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   resultJson: any;
   ttlDays?: number;
 }
@@ -34,6 +36,7 @@ export class ExtractionCache {
     documentTypes?: string[];
     promptVersion: string;
     modelName: string;
+    preprocessingMode?: string;
   }): string {
     const fileHashes = params.files.map(f => {
       const buffer = Buffer.from(f.base64Data, 'base64');
@@ -42,12 +45,18 @@ export class ExtractionCache {
 
     const orderedDocTypes = [...(params.documentTypes || [])].sort();
 
-    const combinedString = [
+    const combinedParts = [
       orderedDocTypes.join(','),
       fileHashes.join(','),
       params.promptVersion,
       params.modelName
-    ].join('|');
+    ];
+
+    if (params.preprocessingMode) {
+      combinedParts.push(params.preprocessingMode);
+    }
+
+    const combinedString = combinedParts.join('|');
 
     return crypto.createHash('sha256').update(combinedString).digest('hex');
   }
@@ -125,8 +134,9 @@ export class ExtractionCache {
         jsonDeserializationMs,
         statsUpdateMs
       };
-    } catch (err: any) {
-      console.warn("[ExtractionCache] Cache lookup exception:", err.message || err);
+    } catch (err: unknown) {
+      const e = err as Error;
+      console.warn("[ExtractionCache] Cache lookup exception:", e?.message || err);
       return { hit: false, lookupMs: performance.now() - startTime, selectQueryMs, jsonDeserializationMs, statsUpdateMs };
     }
   }
@@ -177,8 +187,9 @@ export class ExtractionCache {
 
       console.log(`[ExtractionCache] Successfully cached extraction hash=${options.requestHash.substring(0, 8)} ttlDays=${ttlDays}`);
       return { success: true, writeMs };
-    } catch (err: any) {
-      console.error("[ExtractionCache] Cache save exception:", err.message || err);
+    } catch (err: unknown) {
+      const e = err as Error;
+      console.error("[ExtractionCache] Cache save exception:", e?.message || err);
       return { success: false, writeMs: Date.now() - startTime };
     }
   }

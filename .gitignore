@@ -46,3 +46,10 @@ benchmark-docs/
 
 graphify-out/
 .stitch/previews/
+
+# python / markitdown worker
+tools/markitdown-worker/.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+
