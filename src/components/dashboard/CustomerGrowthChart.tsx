@@ -9,14 +9,15 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { Info, UserPlus, ShieldCheck, Activity } from "lucide-react";
 import type { CustomerGrowthPoint } from "@/app/(dashboard)/dashboard/actions";
 
 const PERIODS = [
-  { label: "7 Days", value: "7d" },
-  { label: "30 Days", value: "30d" },
-  { label: "6 Months", value: "6m" },
-  { label: "1 Year", value: "1y" },
+  { label: "7D", value: "7d", days: 7 },
+  { label: "30D", value: "30d", days: 30 },
+  { label: "90D", value: "90d", days: 90 },
+  { label: "1Y", value: "1y", days: 365 },
 ] as const;
 
 type Period = (typeof PERIODS)[number]["value"];
@@ -25,26 +26,39 @@ interface Props {
   initialData: CustomerGrowthPoint[];
   initialPeriod?: Period;
   onPeriodChange?: (period: Period) => void;
-  isLoading?: boolean;
 }
 
-function CustomTooltip({ active, payload, label }: any) {
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{ value?: number }>;
+  label?: string;
+}
+
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
+  const count = payload[0].value ?? 0;
   return (
     <div
-      className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl px-4 py-3 text-sm"
+      className="bg-slate-900 text-white border border-slate-800 rounded-xl shadow-xl px-3 py-2 text-xs z-50 pointer-events-none"
       role="tooltip"
       aria-label={`Customer growth tooltip for ${label}`}
     >
-      <p className="font-semibold text-zinc-700 dark:text-zinc-300 mb-1">{label}</p>
-      <p className="text-blue-600 dark:text-blue-400 font-mono font-bold">
-        {payload[0].value} new customer{payload[0].value !== 1 ? "s" : ""}
-      </p>
+      <div className="font-bold flex items-center gap-1.5 text-slate-200">
+        <span className="w-2 h-2 rounded-full bg-indigo-400" />
+        {label}
+      </div>
+      <div className="text-indigo-200 font-mono text-[11px] mt-0.5">
+        {count} new customer{count !== 1 ? "s" : ""}
+      </div>
     </div>
   );
 }
 
-export function CustomerGrowthChart({ initialData, initialPeriod = "30d", onPeriodChange, isLoading }: Props) {
+export function CustomerGrowthChart({
+  initialData,
+  initialPeriod = "30d",
+  onPeriodChange,
+}: Props) {
   const [period, setPeriod] = useState<Period>(initialPeriod);
   const [data, setData] = useState<CustomerGrowthPoint[]>(initialData);
   const [loading, setLoading] = useState(false);
@@ -62,36 +76,65 @@ export function CustomerGrowthChart({ initialData, initialPeriod = "30d", onPeri
         setData(json.data ?? []);
       }
     } catch {
-      // fallback: keep old data
+      // fallback: keep existing data
     } finally {
       setLoading(false);
     }
   }
 
-  const isEmpty = !loading && data.every((d) => d.customers === 0);
+  const stats = useMemo(() => {
+    const totalInPeriod = data.reduce((acc, curr) => acc + curr.customers, 0);
+    const countPoints = data.length || 1;
+    const avgDaily = (totalInPeriod / countPoints).toFixed(1);
+    const peak = Math.max(...data.map((d) => d.customers), 0);
+    return { totalInPeriod, avgDaily, peak };
+  }, [data]);
+
+  const hasNoPoints = data.length === 0;
 
   return (
-    <div
-      className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm p-6"
-      aria-label="Customer Growth Chart"
+    <section
+      className="bg-white rounded-[18px] border border-slate-200 p-6 shadow-[0_4px_18px_rgba(15,23,42,0.04)]"
+      aria-label="Customer Growth & Verification Trend"
     >
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+      {/* Chart Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-5 gap-4 border-b border-slate-100">
         <div>
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-            Customer Growth
-          </h2>
-          <p className="text-xs text-zinc-500 mt-0.5">New customers over time</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-slate-900">
+              Customer Growth Trend
+            </h2>
+            {stats.totalInPeriod === 0 && !loading && !hasNoPoints && (
+              <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                No customer growth data for this period
+              </span>
+            )}
+            <span
+              title="Customer registration and onboarding volume over selected time period"
+              className="text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <Info className="h-4 w-4" />
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Customer registration and verification volume over time
+          </p>
         </div>
-        <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden" role="group" aria-label="Period selector">
+
+        {/* Timeframe Selector */}
+        <div
+          className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/70"
+          role="group"
+          aria-label="Timeframe selector"
+        >
           {PERIODS.map((p) => (
             <button
               key={p.value}
               onClick={() => handlePeriod(p.value)}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset ${
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-violet-500 ${
                 period === p.value
-                  ? "bg-blue-600 text-white"
-                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  ? "bg-violet-600 text-white shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
               }`}
               aria-pressed={period === p.value}
             >
@@ -101,59 +144,112 @@ export function CustomerGrowthChart({ initialData, initialPeriod = "30d", onPeri
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="h-56" aria-hidden="true">
-        {loading ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="h-8 w-8 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
-          </div>
-        ) : isEmpty ? (
-          <div className="h-full flex flex-col items-center justify-center text-zinc-400 dark:text-zinc-600 gap-2">
-            <svg className="h-10 w-10 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 13.5L7.5 9l4.5 4.5 4.5-5.25L21 9" />
-            </svg>
-            <p className="text-sm">No customer activity in this period</p>
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-              <defs>
-                <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="10%" stopColor="#3b82f6" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid, #e4e4e7)" strokeOpacity={0.5} />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 10, fill: "var(--chart-axis, #71717a)" }}
-                tickLine={false}
-                axisLine={false}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                allowDecimals={false}
-                tick={{ fontSize: 10, fill: "var(--chart-axis, #71717a)" }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Area
-                type="monotone"
-                dataKey="customers"
-                stroke="#3b82f6"
-                strokeWidth={2.5}
-                fill="url(#cgGrad)"
-                dot={false}
-                activeDot={{ r: 5, fill: "#3b82f6", strokeWidth: 2, stroke: "#fff" }}
-                isAnimationActive
-                animationDuration={700}
-                animationEasing="ease-out"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
+      {/* Accessible Text Summary */}
+      <div className="sr-only" aria-live="polite">
+        Customer growth chart for {period}: {stats.totalInPeriod} total new customers registered, with an average of {stats.avgDaily} per day.
       </div>
-    </div>
+
+      {/* Chart Canvas */}
+      <div className="py-6 relative">
+        <div className="w-full h-64 relative" aria-hidden="true">
+          {loading ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="h-8 w-8 rounded-full border-2 border-violet-600 border-t-transparent animate-spin" />
+            </div>
+          ) : hasNoPoints ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2">
+              <Activity className="h-9 w-9 opacity-40 text-violet-500" />
+              <p className="text-sm font-semibold text-slate-700">No customer growth data for this period</p>
+              <p className="text-xs text-slate-400">Add customers to view trend visualization</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+                <defs>
+                  <linearGradient id="chartGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+                    <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.16} />
+                    <stop offset="60%" stopColor="#3B82F6" stopOpacity={0.03} />
+                    <stop offset="100%" stopColor="#FFFFFF" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="lineGradient" x1="0%" x2="100%" y1="0%" y2="0%">
+                    <stop offset="0%" stopColor="#7C3AED" />
+                    <stop offset="50%" stopColor="#6366F1" />
+                    <stop offset="100%" stopColor="#2563EB" />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "#94A3B8" }}
+                  tickLine={false}
+                  axisLine={{ stroke: "#E2E8F0" }}
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  allowDecimals={false}
+                  domain={[0, stats.peak > 0 ? "auto" : 5]}
+                  tick={{ fontSize: 11, fill: "#94A3B8" }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="customers"
+                  stroke="url(#lineGradient)"
+                  strokeWidth={2.5}
+                  fill="url(#chartGradient)"
+                  dot={false}
+                  activeDot={{ r: 5, fill: "#7C3AED", strokeWidth: 2, stroke: "#FFFFFF" }}
+                  isAnimationActive
+                  animationDuration={600}
+                  animationEasing="ease-out"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* Micro-stats strip */}
+      <div className="pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <UserPlus className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-slate-900">
+              +{stats.avgDaily} / day
+            </div>
+            <div className="text-[11px] text-slate-400">Avg Daily Registrations</div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+            <ShieldCheck className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-slate-900">
+              +{stats.totalInPeriod} in window
+            </div>
+            <div className="text-[11px] text-slate-400">Period Total Onboarding</div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <Activity className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-slate-900">
+              {stats.peak} peak / day
+            </div>
+            <div className="text-[11px] text-slate-400">Highest Volume Single Day</div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
+

@@ -65,9 +65,265 @@ export type RevenuePoint = { month: string; paid: number; outstanding: number };
 export type StatusDistPoint = { name: string; value: number; color: string };
 export type ServiceDistPoint = { name: string; count: number };
 
-/** Customer growth: new active customers grouped by day (7d/30d) or month (6m/1y) */
+export type DashboardMetrics = {
+  totalCustomers: number;
+  newThisMonth: number;
+  activeCustomers: number;
+  documentsStored: number;
+  syncedThisWeek: number;
+  pendingVerification: number;
+  renewalsDue: number;
+};
+
+export async function getDashboardMetrics(): Promise<DashboardMetrics> {
+  try {
+    const supabase = await createClient();
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - 7);
+    const todayStr = now.toISOString().split("T")[0];
+    const in30Days = new Date(now);
+    in30Days.setDate(now.getDate() + 30);
+    const in30DaysStr = in30Days.toISOString().split("T")[0];
+
+    const [
+      totalCustRes,
+      newMonthCustRes,
+      activeCustRes,
+      docsRes,
+      syncedWeekRes,
+      pendingVerifRes,
+      renewalsRes,
+    ] = await Promise.all([
+      supabase
+        .from("customers")
+        .select("*", { count: "exact", head: true })
+        .is("deleted_at", null),
+      supabase
+        .from("customers")
+        .select("*", { count: "exact", head: true })
+        .is("deleted_at", null)
+        .gte("created_at", startOfMonth.toISOString()),
+      supabase
+        .from("customers")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "active")
+        .is("deleted_at", null),
+      supabase
+        .from("customer_documents")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "active"),
+      supabase
+        .from("customer_documents")
+        .select("*", { count: "exact", head: true })
+        .gte("uploaded_at", startOfWeek.toISOString()),
+      supabase
+        .from("customer_documents")
+        .select("*", { count: "exact", head: true })
+        .eq("verified", false)
+        .eq("status", "active"),
+      supabase
+        .from("customer_documents")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "active")
+        .not("expiry_date", "is", null)
+        .gte("expiry_date", todayStr)
+        .lte("expiry_date", in30DaysStr),
+    ]);
+
+    return {
+      totalCustomers: totalCustRes.count || 0,
+      newThisMonth: newMonthCustRes.count || 0,
+      activeCustomers: activeCustRes.count || 0,
+      documentsStored: docsRes.count || 0,
+      syncedThisWeek: syncedWeekRes.count || 0,
+      pendingVerification: pendingVerifRes.count || 0,
+      renewalsDue: renewalsRes.count || 0,
+    };
+  } catch (error) {
+    console.error("Failed to load dashboard metrics safely:", error);
+    return {
+      totalCustomers: 0,
+      newThisMonth: 0,
+      activeCustomers: 0,
+      documentsStored: 0,
+      syncedThisWeek: 0,
+      pendingVerification: 0,
+      renewalsDue: 0,
+    };
+  }
+}
+
+export type ActivityEvent = {
+  id: string;
+  customerId: string;
+  customerName: string;
+  customerCode: string;
+  initials: string;
+  activity: string;
+  iconType: "document" | "customer" | "service";
+  timestamp: string;
+  rawDate: string;
+  status: "Verified" | "Pending Review" | "Complete" | "Active";
+  statusType: "success" | "warning" | "info";
+  actionUrl: string;
+};
+
+export async function getRecentActivity(limit = 6): Promise<ActivityEvent[]> {
+  try {
+    const supabase = await createClient();
+
+    const [docsRes, custRes, servRes] = await Promise.all([
+      supabase
+        .from("customer_documents")
+        .select(`
+          id,
+          document_type,
+          document_name,
+          uploaded_at,
+          verified,
+          status,
+          customer_id,
+          customer:customers (
+            id,
+            customer_code,
+            first_name,
+            last_name
+          )
+        `)
+        .order("uploaded_at", { ascending: false })
+        .limit(limit),
+      supabase
+        .from("customers")
+        .select("id, customer_code, first_name, last_name, created_at, status")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(limit),
+      supabase
+        .from("customer_services")
+        .select(`
+          id,
+          service_name,
+          status,
+          created_at,
+          customer_id,
+          customer:customers (
+            id,
+            customer_code,
+            first_name,
+            last_name
+          )
+        `)
+        .order("created_at", { ascending: false })
+        .limit(limit),
+    ]);
+
+    const activities: ActivityEvent[] = [];
+
+    const getInitials = (first?: string | null, last?: string | null) => {
+      const f = (first || "").trim()[0] || "C";
+      const l = (last || "").trim()[0] || "";
+      return (f + l).toUpperCase();
+    };
+
+    const formatTime = (iso: string) => {
+      const d = new Date(iso);
+      const now = new Date();
+      const isToday = d.toDateString() === now.toDateString();
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const isYesterday = d.toDateString() === yesterday.toDateString();
+
+      const timeStr = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+      if (isToday) return `Today, ${timeStr}`;
+      if (isYesterday) return `Yesterday, ${timeStr}`;
+      return `${d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}, ${timeStr}`;
+    };
+
+    interface CustomerSummary {
+      id: string;
+      customer_code?: string | null;
+      first_name?: string | null;
+      last_name?: string | null;
+    }
+
+    for (const doc of docsRes.data || []) {
+      const cust = (Array.isArray(doc.customer) ? doc.customer[0] : doc.customer) as CustomerSummary | null;
+      if (!cust) continue;
+      const name = `${cust.first_name || ""} ${cust.last_name || ""}`.trim() || "Customer";
+      const code = cust.customer_code ? `#${cust.customer_code}` : `#GC-${cust.id.slice(0, 4).toUpperCase()}`;
+      const docType = doc.document_name || doc.document_type || "Document";
+
+      activities.push({
+        id: `doc-${doc.id}`,
+        customerId: cust.id,
+        customerName: name,
+        customerCode: code,
+        initials: getInitials(cust.first_name, cust.last_name),
+        activity: `${docType} uploaded (Masked)`,
+        iconType: "document",
+        timestamp: formatTime(doc.uploaded_at),
+        rawDate: doc.uploaded_at,
+        status: doc.verified ? "Verified" : "Pending Review",
+        statusType: doc.verified ? "success" : "warning",
+        actionUrl: `/customers/${cust.id}`,
+      });
+    }
+
+    for (const c of custRes.data || []) {
+      const name = `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Customer";
+      const code = c.customer_code ? `#${c.customer_code}` : `#GC-${c.id.slice(0, 4).toUpperCase()}`;
+      activities.push({
+        id: `cust-${c.id}`,
+        customerId: c.id,
+        customerName: name,
+        customerCode: code,
+        initials: getInitials(c.first_name, c.last_name),
+        activity: "New customer registered",
+        iconType: "customer",
+        timestamp: formatTime(c.created_at),
+        rawDate: c.created_at,
+        status: c.status === "active" ? "Active" : "Pending Review",
+        statusType: c.status === "active" ? "info" : "warning",
+        actionUrl: `/customers/${c.id}`,
+      });
+    }
+
+    for (const s of servRes.data || []) {
+      const cust = (Array.isArray(s.customer) ? s.customer[0] : s.customer) as CustomerSummary | null;
+      if (!cust) continue;
+      const name = `${cust.first_name || ""} ${cust.last_name || ""}`.trim() || "Customer";
+      const code = cust.customer_code ? `#${cust.customer_code}` : `#GC-${cust.id.slice(0, 4).toUpperCase()}`;
+      const sName = s.service_name || "Service registered";
+      activities.push({
+        id: `serv-${s.id}`,
+        customerId: cust.id,
+        customerName: name,
+        customerCode: code,
+        initials: getInitials(cust.first_name, cust.last_name),
+        activity: sName,
+        iconType: "service",
+        timestamp: formatTime(s.created_at),
+        rawDate: s.created_at,
+        status: s.status === "completed" ? "Complete" : "Pending Review",
+        statusType: s.status === "completed" ? "success" : "info",
+        actionUrl: `/customers/${cust.id}`,
+      });
+    }
+
+    activities.sort((a, b) => new Date(b.rawDate).getTime() - new Date(a.rawDate).getTime());
+    return activities.slice(0, limit);
+  } catch (error) {
+    console.error("Failed to load recent activity safely:", error);
+    return [];
+  }
+}
+
+/** Customer growth: new active customers grouped by day (7d/30d/90d) or month (1y) */
 export async function getCustomerGrowthData(
-  period: "7d" | "30d" | "6m" | "1y" = "30d"
+  period: "7d" | "30d" | "90d" | "1y" = "30d"
 ): Promise<CustomerGrowthPoint[]> {
   const supabase = await createClient();
 
@@ -79,13 +335,13 @@ export async function getCustomerGrowthData(
     from = new Date(now); from.setDate(now.getDate() - 6);
   } else if (period === "30d") {
     from = new Date(now); from.setDate(now.getDate() - 29);
-  } else if (period === "6m") {
-    from = new Date(now); from.setMonth(now.getMonth() - 5); from.setDate(1);
-    groupByMonth = true;
+  } else if (period === "90d") {
+    from = new Date(now); from.setDate(now.getDate() - 89);
   } else {
     from = new Date(now); from.setMonth(now.getMonth() - 11); from.setDate(1);
     groupByMonth = true;
   }
+  from.setHours(0, 0, 0, 0);
 
   const { data, error } = await supabase
     .from("customers")
@@ -268,7 +524,6 @@ export async function getPaymentStatusData(): Promise<PaymentGaugeData> {
   }
 
   const active = invoices.filter((inv) => inv.status !== "cancelled");
-  const billable = active.filter((inv) => inv.status !== "draft");
 
   let totalBilled = 0;
   let totalCollected = 0;

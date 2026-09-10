@@ -30,6 +30,80 @@ const navigation = [
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
+interface SidebarContentProps {
+  pathname: string;
+  onClose?: () => void;
+}
+
+function SidebarContent({ pathname, onClose }: SidebarContentProps) {
+  return (
+    <>
+      {/* Brand Logo Header */}
+      <div className="h-16 flex items-center px-5 border-b border-slate-200/80 shrink-0">
+        <Link href="/dashboard" className="flex items-center gap-3 group">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-xs">
+            <span className="font-extrabold text-base leading-none tracking-tight">G</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-base font-bold text-slate-900 tracking-tight leading-none mb-1">GCDS</span>
+            <span className="text-[10px] uppercase font-semibold tracking-wider text-slate-400">
+              Customer Data Store
+            </span>
+          </div>
+        </Link>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto" aria-label="Sidebar Navigation">
+        <div className="px-3 text-[11px] font-bold tracking-wider uppercase text-slate-400 mb-2">
+          Main Menu
+        </div>
+        {navigation.map((item) => {
+          const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+          const Icon = item.icon;
+          
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              onClick={onClose}
+              aria-current={isActive ? "page" : undefined}
+              className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group ${
+                isActive 
+                  ? "bg-violet-50 text-violet-700 font-semibold" 
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Icon className={`h-4 w-4 transition-colors ${
+                  isActive 
+                    ? "text-violet-600" 
+                    : "text-slate-400 group-hover:text-slate-600"
+                }`} />
+                <span>{item.name}</span>
+              </div>
+              {isActive && (
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-600 shrink-0" aria-hidden="true" />
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Sidebar Footer */}
+      <div className="p-3 border-t border-slate-200/80 shrink-0">
+        <button
+          onClick={() => logout()}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors group"
+        >
+          <LogOut className="h-4 w-4 text-slate-400 group-hover:text-red-500 transition-colors" />
+          <span>Sign Out</span>
+        </button>
+      </div>
+    </>
+  );
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -43,61 +117,10 @@ export default function DashboardLayout({
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      // Navigating to customers page with search query
       router.push(`/customers?search=${encodeURIComponent(searchQuery)}`);
       setMobileMenuOpen(false);
     }
   };
-
-  const SidebarContent = () => (
-    <>
-      <div className="h-16 flex items-center px-6 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
-        <div className="flex items-center space-x-2 text-blue-600 dark:text-blue-500">
-          <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
-            <span className="text-white font-bold text-lg leading-none">G</span>
-          </div>
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-white tracking-tight">GCDS</h1>
-        </div>
-      </div>
-
-      <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
-        {navigation.map((item) => {
-          const isActive = pathname.startsWith(item.href);
-          const Icon = item.icon;
-          
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              onClick={() => setMobileMenuOpen(false)}
-              className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${
-                isActive 
-                  ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-medium" 
-                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-50"
-              }`}
-            >
-              <Icon className={`h-5 w-5 transition-colors ${
-                isActive 
-                  ? "text-blue-700 dark:text-blue-400" 
-                  : "text-zinc-400 group-hover:text-zinc-600 dark:group-hover:text-zinc-300"
-              }`} />
-              <span>{item.name}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 shrink-0">
-        <button
-          onClick={() => logout()}
-          className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-red-50 dark:hover:bg-red-900/10 hover:text-red-600 dark:hover:text-red-400 transition-colors group"
-        >
-          <LogOut className="h-5 w-5 text-zinc-400 group-hover:text-red-500 transition-colors" />
-          <span className="font-medium">Logout</span>
-        </button>
-      </div>
-    </>
-  );
 
   const isPrintRoute = pathname.includes("/invoices/") && pathname.endsWith("/print");
 
@@ -110,78 +133,93 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-zinc-50 dark:bg-zinc-950 print:block print:h-auto print:overflow-visible print:bg-white">
+    <div className="flex h-screen overflow-hidden bg-[#F8FAFF] print:block print:h-auto print:overflow-visible print:bg-white">
       {/* Sidebar - Desktop */}
-      <aside className="w-64 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 flex-col hidden md:flex shrink-0 print:hidden">
-        <SidebarContent />
+      <aside className="w-64 bg-white border-r border-slate-200/80 flex-col hidden md:flex shrink-0 print:hidden select-none">
+        <SidebarContent pathname={pathname} />
       </aside>
 
       {/* Sidebar - Mobile (Overlay) */}
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex print:hidden">
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
-          <aside className="relative w-64 max-w-sm bg-white dark:bg-zinc-900 h-full flex flex-col shadow-xl animate-in slide-in-from-left-4 duration-300">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setMobileMenuOpen(false)} />
+          <aside className="relative w-64 max-w-sm bg-white h-full flex flex-col shadow-xl animate-in slide-in-from-left-4 duration-300">
             <button 
               onClick={() => setMobileMenuOpen(false)}
-              className="absolute top-4 right-4 p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full"
+              aria-label="Close menu"
+              className="absolute top-4 right-4 p-2 text-slate-500 hover:bg-slate-100 rounded-full"
             >
               <X className="h-5 w-5" />
             </button>
-            <SidebarContent />
+            <SidebarContent pathname={pathname} onClose={() => setMobileMenuOpen(false)} />
           </aside>
         </div>
       )}
 
       {/* Main Content Container */}
       <main className="flex-1 flex flex-col overflow-hidden w-full print:block print:overflow-visible">
-        {/* Top Header (Desktop & Mobile) */}
-        <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 h-16 px-4 md:px-8 flex items-center justify-between shadow-sm z-10 shrink-0 print:hidden">
-          <div className="flex items-center flex-1">
+        {/* Top Header */}
+        <header className="bg-white border-b border-slate-200/80 h-16 px-4 md:px-8 flex items-center justify-between shadow-xs z-10 shrink-0 print:hidden">
+          <div className="flex items-center gap-4 flex-1">
             <button 
-              className="md:hidden mr-4 p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg"
+              className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
+              aria-label="Open navigation menu"
               onClick={() => setMobileMenuOpen(true)}
             >
               <Menu className="h-5 w-5" />
             </button>
             
-            {/* Global Search - Hidden on very small screens, visible on sm and up */}
+            {/* Global Search */}
             <form onSubmit={handleSearch} className="w-full max-w-md relative hidden sm:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Global search (customers, documents...)"
+                placeholder="Search customers, mobile, customer code..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+                className="w-full pl-10 pr-12 py-2 bg-slate-50/80 border border-slate-200 rounded-[12px] text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all text-slate-900"
               />
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-medium text-slate-400 pointer-events-none">
+                <span>⌘</span>K
+              </div>
             </form>
           </div>
 
-          <div className="flex items-center space-x-4">
-             {/* Future: Profile Dropdown */}
-             <div className="h-8 w-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800 shadow-sm cursor-pointer hover:bg-blue-200 transition-colors">
-               A
-             </div>
+          {/* Right: Authenticated User Profile */}
+          <div className="flex items-center gap-3 pl-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-bold text-sm flex items-center justify-center ring-2 ring-slate-100 shadow-xs">
+                GO
+              </div>
+              <div className="hidden sm:flex flex-col text-left">
+                <span className="text-sm font-semibold text-slate-900 leading-tight">Gazi Online</span>
+                <span className="text-[11px] text-slate-400 font-medium leading-tight">Admin / Principal ID</span>
+              </div>
+            </div>
           </div>
         </header>
 
         {/* Mobile Search Bar (Only visible below sm breakpoints) */}
-        <div className="sm:hidden p-4 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shrink-0 print:hidden">
+        <div className="sm:hidden p-3 bg-white border-b border-slate-200/80 shrink-0 print:hidden">
           <form onSubmit={handleSearch} className="w-full relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Search..."
+              placeholder="Search customers, mobile..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-[12px] text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 text-slate-900"
             />
           </form>
         </div>
 
         {/* Page Content Scrollable Area */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-zinc-50/50 dark:bg-zinc-950/50 print:p-0 print:overflow-visible print:bg-white">
-          <div className="max-w-7xl mx-auto w-full print:max-w-none">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#F8FAFF] print:p-0 print:overflow-visible print:bg-white relative">
+          {/* Subtle Ambient Background Accents */}
+          <div className="absolute top-0 left-0 w-96 h-96 bg-violet-400/[0.04] rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
+          <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-400/[0.04] rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
+
+          <div className="max-w-[1440px] mx-auto w-full print:max-w-none relative z-10">
             {children}
           </div>
         </div>
