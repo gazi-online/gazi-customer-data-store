@@ -3,40 +3,38 @@
 import { after } from "next/server";
 import { AIProviderRegistry } from "@/lib/ai/providers";
 import { PromptManager } from "@/lib/ai/prompts/PromptManager";
-import { ExtractionCache } from "@/lib/ai/cache/ExtractionCache";
 import { createClient } from "@/lib/supabase/server";
 import sharp from "sharp";
 import { v4 as uuidv4 } from "uuid";
-
-import crypto from "crypto";
+import path from "path";
 import { OcrSpaceProvider } from "@/lib/ocr/OcrSpaceProvider";
 import { DocumentClassifier } from "@/lib/ocr/DocumentClassifier";
 import { DocumentTextParser } from "@/lib/ocr/DocumentTextParser";
-import { DocumentPreprocessorRouter, MARKITDOWN_PREPROCESSOR_VERSION } from "@/lib/document-preprocessing";
+import { MarkdownTextAdapter } from "@/lib/ocr/MarkdownTextAdapter";
+import { ExtractionCompletenessEvaluator } from "@/lib/ocr/ExtractionCompletenessEvaluator";
+import { DocumentPreprocessorRouter } from "@/lib/document-preprocessing";
+import { ParsedDocumentFields } from "@/lib/ocr/ocr-types";
 
 export async function extractDataFromDocuments(formData: FormData) {
   const fullServerActionStart = performance.now();
   const perfTimings: Record<string, number> = {};
   
   try {
-    // 2. Supabase Server Client Creation
-    const clientCreationStart = performance.now();
     const supabase = await createClient();
-    const supabaseClientMs = performance.now() - clientCreationStart;
-    
-    // 1. Auth/session lookup
-    const authLookupStart = performance.now();
     const { data: { user } } = await supabase.auth.getUser();
-    const authSessionMs = performance.now() - authLookupStart;
 
     if (!user) throw new Error("Unauthorized");
 
-    // 3. File arrayBuffer/read
     const fileReadStart = performance.now();
     const files = formData.getAll('files') as File[];
     const documentTypesRaw = formData.get('documentTypes') as string;
     const documentTypes = documentTypesRaw ? JSON.parse(documentTypesRaw) : [];
     
+    // Feature flag: strictly exact string "true"
+    const isAiFlagTrue = process.env.SMART_IMPORT_AI_ENHANCEMENT_ENABLED === 'true';
+    const isExplicitAi = formData.get('enableAiEnhancement') === 'true';
+    const allowAiEnhancement = isAiFlagTrue || isExplicitAi;
+
     if (files.length === 0) {
       throw new Error("No files provided for extraction");
     }
@@ -45,27 +43,28 @@ export async function extractDataFromDocuments(formData: FormData) {
       throw new Error("Maximum 10 documents allowed per import batch.");
     }
 
-    const fileDataArray = [];
-    const cacheHashFileDataArray = [];
+    const fileDataArray: Array<{ mimeType: string; base64Data: string }> = [];
     const originalImages: string[] = [];
-    let approximateTotalImageSize = 0;
     const extractedMarkdownSections: string[] = [];
     let hasMarkItDownText = false;
     let anyFallbackTriggered = false;
     let totalPreprocessingMs = 0;
 
+    const allParsedData: ParsedDocumentFields[] = [];
+    const sourcesUsed: string[] = [];
+
     for (const file of files) {
-      approximateTotalImageSize += file.size;
       const lowerName = file.name.toLowerCase();
+      const ext = path.extname(lowerName);
 
       if (lowerName.endsWith('.tif') || lowerName.endsWith('.tiff') || file.type.includes('tiff')) {
         throw new Error(`File ${file.name}: TIFF format is not supported for this release. Please convert to PDF, JPG, PNG, or WEBP.`);
       }
 
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      if (file.size > 10 * 1024 * 1024) {
         throw new Error(`File ${file.name} exceeds 10MB file size limit.`);
       }
-      
+
       const allowedTypes = [
         'image/jpeg',
         'image/png',
@@ -80,236 +79,488 @@ export async function extractDataFromDocuments(formData: FormData) {
         throw new Error(`File type ${file.type || file.name} is not supported. Use JPG, PNG, WEBP, PDF, DOCX, or XLSX.`);
       }
 
-      // Convert File to buffer & base64
       const buffer = Buffer.from(await file.arrayBuffer());
       const base64 = buffer.toString('base64');
       originalImages.push(file.name);
 
-      // Track all input files for cache key stability
-      cacheHashFileDataArray.push({
-        mimeType: file.type || 'application/octet-stream',
-        base64Data: base64
-      });
+      const isImage = ext === '.jpg' || ext === '.jpeg' || ext === '.png' || ext === '.webp' || file.type.startsWith('image/');
+      const isPdf = ext === '.pdf' || file.type === 'application/pdf';
+      const isOffice = ext === '.docx' || ext === '.xlsx' || file.type.includes('wordprocessingml') || file.type.includes('spreadsheetml');
 
-      // Preprocessing Route Check
-      const prepStart = performance.now();
-      const prepRes = await DocumentPreprocessorRouter.routeAndPreprocess(buffer, file.name, file.type);
-      totalPreprocessingMs += performance.now() - prepStart;
+      // 1. Image Routing: PRIMARY -> OCR.Space -> DocumentClassifier -> DocumentTextParser
+      if (isImage) {
+        const hasOcrKey = Boolean(process.env.OCR_SPACE_API_KEY?.trim());
 
-      if (prepRes.fallbackRequired) {
-        anyFallbackTriggered = true;
-        console.log(`[AI Preprocessor] Fallback triggered for ${file.name}: routing to Vision/OCR pipeline`);
+        if (!hasOcrKey) {
+          // OCR.Space key absent: surface manual review signal without disclosing key name
+          // Do NOT silently redirect into Gemini/OpenRouter even if AI enhancement is enabled
+          fileDataArray.push({
+            mimeType: file.type || 'image/jpeg',
+            base64Data: base64,
+            // Marker for manual review fallback path
+            _ocrUnavailable: true
+          } as unknown as { mimeType: string; base64Data: string });
+        } else {
+          const ocrRes = await OcrSpaceProvider.extractText({
+            buffer,
+            filename: file.name,
+            mimeType: file.type || 'image/jpeg'
+          });
+
+          if (ocrRes.success && ocrRes.text) {
+            const classification = DocumentClassifier.classify(ocrRes.text);
+            const parsed = DocumentTextParser.parse(ocrRes.text, classification.documentType, file.name);
+            allParsedData.push(parsed);
+            sourcesUsed.push('ocr-space');
+          } else if (ocrRes.errorCategory === 'AUTHENTICATION') {
+            // Authentication error from OCR.Space — do not expose key name to AI path
+            fileDataArray.push({
+              mimeType: file.type || 'image/jpeg',
+              base64Data: base64,
+              _ocrUnavailable: true
+            } as unknown as { mimeType: string; base64Data: string });
+          } else {
+            // Transient OCR failure: buffer for optional AI fallback if allowed
+            fileDataArray.push({
+              mimeType: file.type || 'image/jpeg',
+              base64Data: base64
+            });
+          }
+        }
       }
+      // 2. Structured Document Routing (PDF / DOCX / XLSX)
+      else if (isPdf) {
+        const prepStart = performance.now();
+        const prepRes = await DocumentPreprocessorRouter.routeAndPreprocess(buffer, file.name, file.type);
+        totalPreprocessingMs += performance.now() - prepStart;
 
-      if (prepRes.source === 'markitdown' && prepRes.markdown) {
-        hasMarkItDownText = true;
-        console.log(`[AI Preprocessor] Document processed with MarkItDown: format=${prepRes.metadata?.format} length=${prepRes.metadata?.markdown_length} duration_ms=${prepRes.metadata?.duration_ms}`);
-        extractedMarkdownSections.push(`Source Document: ${file.name}\n${prepRes.markdown}`);
-      } else if (prepRes.source === 'none') {
-        throw new Error(prepRes.error || `Failed to process document ${file.name}.`);
-      } else {
-        // Image or Scanned PDF falling back to Vision
-        fileDataArray.push({
-          mimeType: file.type || 'application/pdf',
-          base64Data: base64
-        });
+        if (prepRes.source === 'markitdown' && prepRes.markdown) {
+          hasMarkItDownText = true;
+          extractedMarkdownSections.push(`Source Document: ${file.name}\n${prepRes.markdown}`);
+          const structured = MarkdownTextAdapter.adaptToStructuredText(prepRes.markdown);
+          const classification = DocumentClassifier.classify(structured);
+          const parsed = DocumentTextParser.parse(structured, classification.documentType, file.name);
+          allParsedData.push(parsed);
+          sourcesUsed.push('markitdown');
+        } else if (prepRes.fallbackRequired || prepRes.source === 'existing-ocr') {
+          // Scanned / Image-only PDF -> Fallback to OCR.Space!
+          anyFallbackTriggered = true;
+          const ocrRes = await OcrSpaceProvider.extractText({
+            buffer,
+            filename: file.name,
+            mimeType: 'application/pdf'
+          });
+
+          if (ocrRes.success && ocrRes.text) {
+            const classification = DocumentClassifier.classify(ocrRes.text);
+            const parsed = DocumentTextParser.parse(ocrRes.text, classification.documentType, file.name);
+            allParsedData.push(parsed);
+            sourcesUsed.push('ocr-space');
+          } else {
+            fileDataArray.push({
+              mimeType: 'application/pdf',
+              base64Data: base64
+            });
+          }
+        } else {
+          fileDataArray.push({
+            mimeType: 'application/pdf',
+            base64Data: base64
+          });
+        }
+      }
+      // 3. DOCX / XLSX Routing (MarkItDown ONLY, NEVER OCR.Space!)
+      else if (isOffice) {
+        const prepStart = performance.now();
+        const prepRes = await DocumentPreprocessorRouter.routeAndPreprocess(buffer, file.name, file.type);
+        totalPreprocessingMs += performance.now() - prepStart;
+
+        if (prepRes.source === 'markitdown' && prepRes.markdown) {
+          hasMarkItDownText = true;
+          extractedMarkdownSections.push(`Source Document: ${file.name}\n${prepRes.markdown}`);
+          const structured = MarkdownTextAdapter.adaptToStructuredText(prepRes.markdown);
+          const classification = DocumentClassifier.classify(structured);
+          const parsed = DocumentTextParser.parse(structured, classification.documentType, file.name);
+          allParsedData.push(parsed);
+          sourcesUsed.push('markitdown');
+        } else {
+          if (prepRes.error) {
+            console.warn(`[MarkItDown] Office document preprocessing failed: ${prepRes.error}`);
+          }
+        }
       }
     }
+
     const fileReadMs = performance.now() - fileReadStart;
     perfTimings.imagePreparation = fileReadMs;
     perfTimings.preprocessingTime = totalPreprocessingMs;
 
-    // Prompt setup
-    const providerName = process.env.DEFAULT_AI_PROVIDER || 'gemini';
-    const promptVersion = process.env.PROMPT_VERSION || 'v1';
-    const modelName = 'gemini-flash-latest';
-    
-    const combinedMarkdown = extractedMarkdownSections.join('\n\n---\n\n');
+    // Build Canonical GCDS JSON from all locally parsed documents
+    let canonicalJson: Record<string, unknown> | null = null;
+    if (allParsedData.length > 0) {
+      const combinedCustomer: Record<string, unknown> = {};
+      const combinedAddress: Record<string, unknown> = {};
+      const combinedDocuments: Record<string, unknown> = {};
 
-    const finalPrompt = PromptManager.generateFinalPrompt({
-      provider: providerName as any,
-      version: promptVersion as any,
-      documentTypes: documentTypes,
-      inputMode: hasMarkItDownText ? 'markdown' : 'vision',
-      markdownContent: hasMarkItDownText ? combinedMarkdown : undefined
-    });
+      for (const parsed of allParsedData) {
+        if (parsed.customer) {
+          Object.entries(parsed.customer).forEach(([k, v]) => {
+            if (v !== undefined && v !== null && v !== '') {
+              if (!combinedCustomer[k] || (typeof v === 'string' && v.length > String(combinedCustomer[k]).length)) {
+                combinedCustomer[k] = v;
+              }
+            }
+          });
+        }
 
-    const reqId = uuidv4().substring(0, 8);
-    console.log(`[AI] extraction_start requestId=${reqId} preprocessing=${hasMarkItDownText ? 'markitdown' : 'vision'} files=${files.length}`);
+        if (parsed.address) {
+          Object.entries(parsed.address).forEach(([k, v]) => {
+            if (v !== undefined && v !== null && v !== '') {
+              const detectedDocType = parsed.detected_documents?.[0]?.detected_type || '';
+              const isBack = detectedDocType.includes('back') || detectedDocType.includes('combined');
+              if (isBack || !combinedAddress[k] || (typeof v === 'string' && v.length > String(combinedAddress[k]).length)) {
+                combinedAddress[k] = v;
+              }
+            }
+          });
+        }
 
-    // 4 & 5. SHA-256 File Hash and Request Hash Generation
-    const hashStart = performance.now();
-    const sha256Start = performance.now();
-    const fileHashes = cacheHashFileDataArray.map(f => {
-      const buf = Buffer.from(f.base64Data, 'base64');
-      return crypto.createHash('sha256').update(buf).digest('hex');
-    }).sort();
-    const sha256FileHashMs = performance.now() - sha256Start;
-
-    const requestHashGenStart = performance.now();
-    const requestHash = ExtractionCache.computeRequestHash({
-      files: cacheHashFileDataArray,
-      documentTypes,
-      promptVersion,
-      modelName,
-      preprocessingMode: hasMarkItDownText ? MARKITDOWN_PREPROCESSOR_VERSION : 'vision'
-    });
-    const requestHashGenMs = performance.now() - requestHashGenStart;
-    const totalRequestHashMs = performance.now() - hashStart;
-
-    // 6, 7 & 11. Cache Select Query, JSON Deserialization, and Stats Update Timing
-    const cacheLookupStart = performance.now();
-    const cacheRes = await ExtractionCache.lookupCache(supabase, user.id, requestHash);
-    const totalCacheLookupMs = performance.now() - cacheLookupStart;
-    const cacheHit = cacheRes.hit;
-    const cacheLookupMs = cacheRes.lookupMs;
-    let cacheWriteMs = 0;
-    let savedProviderMs = 0;
-
-    let extractionResult: any = null;
-    let finalProviderName = providerName;
-    let fallbackTriggered = false;
-    let providerStartTime = Date.now();
-    let primaryAttemptMs = 0;
-    let retryAttemptMs = 0;
-    let primaryStatus = 'success';
-    let primaryErrorCategory = 'NONE';
-
-    if (cacheHit && cacheRes.resultJson) {
-      savedProviderMs = 4500; // Estimated API time saved
-      console.log(`[AI Cache] ⚡ CACHE HIT requestId=${reqId} hash=${requestHash.substring(0, 8)} lookupMs=${cacheLookupMs.toFixed(2)}ms`);
-      
-      let parsedCacheJson = cacheRes.resultJson;
-      if (typeof parsedCacheJson === 'string') {
-        try {
-          parsedCacheJson = JSON.parse(parsedCacheJson);
-        } catch (e) {
-          console.warn("[AI Cache] Failed to parse cached JSON string");
+        if (parsed.documents) {
+          Object.entries(parsed.documents).forEach(([k, v]) => {
+            if (v && typeof v === 'object' && 'number' in v) {
+              combinedDocuments[k] = v;
+            }
+          });
         }
       }
 
-      extractionResult = {
-        status: 'success',
-        parsedJson: parsedCacheJson,
-        modelName: modelName,
-        processingTimeMs: cacheLookupMs,
-        inputTokens: 0,
-        outputTokens: 0,
-        estimatedCost: 0
+      canonicalJson = {
+        customer: combinedCustomer,
+        address: combinedAddress,
+        documents: combinedDocuments,
+        detected_documents: allParsedData.flatMap(d => d.detected_documents || []),
+        confidence_summary: { overall: 0.9, low_confidence_fields: [] }
       };
-      
-      perfTimings.primaryAttemptDuration = 0;
-      perfTimings.fallbackAttemptDuration = 0;
-    } else {
-      console.log(`[AI Cache] 🔍 CACHE MISS requestId=${reqId} hash=${requestHash.substring(0, 8)}`);
-      
-      const TOTAL_AI_BUDGET_MS = 15000;
-      providerStartTime = Date.now();
+    }
 
-      // Get the AI Provider from Registry
-      const provider = AIProviderRegistry.getProvider(providerName);
+    // Evaluate Completeness
+    const evaluation = canonicalJson
+      ? ExtractionCompletenessEvaluator.evaluate(canonicalJson)
+      : { completeness: 0, requiresAiEnhancement: true, missingImportantFields: ['all'], confidenceSummary: { overall: 0, low_confidence_fields: ['all'] } };
 
-      // Call AI Extraction (Primary attempt + capped retry)
-      const primaryStart = Date.now();
-      console.log(`[AI] gemini_start requestId=${reqId}`);
-      extractionResult = await provider.extractData(
-        "You are a highly accurate Document Extraction AI.", 
-        finalPrompt, 
-        fileDataArray,
-        { reqId } as any
-      );
-      
-      primaryAttemptMs = extractionResult.primaryAttemptMs || (Date.now() - primaryStart);
-      retryAttemptMs = extractionResult.retryAttemptMs || 0;
-      perfTimings.primaryAttemptDuration = Date.now() - primaryStart;
-      
-      console.log(`[AI] gemini_end requestId=${reqId} primary_attempt_ms=${primaryAttemptMs} retry_attempt_ms=${retryAttemptMs} duration=${perfTimings.primaryAttemptDuration}ms status=${extractionResult.status} category=${extractionResult.errorCategory}`);
+    if (canonicalJson) {
+      canonicalJson.confidence_summary = evaluation.confidenceSummary;
+    }
 
-      primaryStatus = extractionResult.status;
-      primaryErrorCategory = extractionResult.errorCategory || 'UNKNOWN';
-      perfTimings.fallbackAttemptDuration = 0;
+    // AI Trigger Condition:
+    // Requires BOTH: flag === 'true' (or explicit user request) AND local extraction requires enhancement
+    const needsAi = evaluation.requiresAiEnhancement || allParsedData.length === 0;
+    const shouldTriggerAi = allowAiEnhancement && needsAi;
 
-      // Fallback Architecture with budget check
-      const qualifyingFallbackErrors = [
-        'AUTHENTICATION',
-        'RATE_LIMIT',
-        'QUOTA',
-        'MODEL_UNAVAILABLE',
-        'NETWORK',
-        'PROVIDER_ERROR',
-        'TIMEOUT'
-      ];
+    const primarySource = sourcesUsed.includes('markitdown')
+      ? 'markitdown'
+      : (sourcesUsed.includes('ocr-space') ? 'ocr-space' : 'unknown');
 
-      const elapsedSoFar = Date.now() - providerStartTime;
-      const remainingBudgetMs = TOTAL_AI_BUDGET_MS - elapsedSoFar;
+    let finalProviderName: string = primarySource;
+    let aiEnhancementUsed = false;
+    let extractionResult: {
+      status: string;
+      parsedJson?: Record<string, unknown>;
+      modelName?: string;
+      processingTimeMs?: number;
+      inputTokens?: number;
+      outputTokens?: number;
+      estimatedCost?: number;
+      errorMessage?: string;
+      apiCallTimeMs?: number;
+      jsonParseTimeMs?: number;
+    } | null = null;
+    let modelName = 'local-deterministic';
 
-      if (extractionResult.status === 'failed') {
-        if (remainingBudgetMs <= 2000) {
-          console.warn(`[AI Extraction] Primary provider failed and remaining budget (${remainingBudgetMs}ms) is too low for fallback. Returning timeout.`);
-          extractionResult.errorCategory = 'TIMEOUT';
-          extractionResult.errorMessage = 'AI extraction total budget exceeded (15000ms cap).';
-        } else if (primaryErrorCategory && qualifyingFallbackErrors.includes(primaryErrorCategory)) {
-          console.warn(`[AI Extraction] Primary provider '${providerName}' failed (${extractionResult.errorCategory}). Triggering OpenRouter fallback (Budget remaining: ${remainingBudgetMs}ms).`);
-          
-          fallbackTriggered = true;
-          const fallbackStart = Date.now();
-          const fallbackProvider = AIProviderRegistry.getProvider('openrouter');
-          
-          const fallbackModel = process.env.OPENROUTER_MODEL || 'google/gemini-3.5-flash-lite';
-          extractionResult = await fallbackProvider.extractData(
-            "You are a highly accurate Document Extraction AI.", 
-            finalPrompt, 
-            fileDataArray,
-            { 
-              reqId: reqId + '-fb', 
-              timeoutMs: Math.min(8000, remainingBudgetMs),
-              model: fallbackModel
-            } as any
-          );
-          
-          perfTimings.fallbackAttemptDuration = Date.now() - fallbackStart;
-          finalProviderName = fallbackProvider.getName();
-          console.log(`[AI] fallback_end requestId=${reqId} fallback_attempt_ms=${perfTimings.fallbackAttemptDuration}ms status=${extractionResult.status}`);
-        } else {
-          console.warn(`[AI Extraction] Primary provider '${providerName}' failed (${extractionResult.errorCategory}). Category does not qualify for fallback.`);
-        }
+    // PATH A: Standard Local Extraction (AI Enhancement NOT needed or disabled)
+    if (!shouldTriggerAi) {
+      if (canonicalJson && allParsedData.length > 0) {
+        extractionResult = {
+          status: 'success',
+          parsedJson: canonicalJson,
+          modelName: 'local-deterministic',
+          processingTimeMs: performance.now() - fullServerActionStart,
+          inputTokens: 0,
+          outputTokens: 0,
+          estimatedCost: 0
+        };
+      } else {
+        return {
+          success: false,
+          error: "Unable to read text from document. Please review or enter details manually."
+        };
       }
+    }
+    // PATH B: Optional AI Enhancement
+    else {
+      const hasGeminiKey = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 0);
+      const hasOpenRouterKey = Boolean(process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim().length > 0);
 
-      // If extraction was valid & successful, save to cache!
-      if (extractionResult.status === 'success' && extractionResult.parsedJson && typeof extractionResult.parsedJson === 'object') {
-        const saveRes = await ExtractionCache.saveCache(supabase, {
-          requestHash,
-          userId: user.id,
-          provider: finalProviderName,
-          modelName: extractionResult.modelName || modelName,
-          promptVersion,
-          resultJson: extractionResult.parsedJson
+      // If neither AI key is configured, fallback to local extraction without error!
+      if (!hasGeminiKey && !hasOpenRouterKey) {
+        if (canonicalJson && allParsedData.length > 0) {
+          extractionResult = {
+            status: 'success',
+            parsedJson: canonicalJson,
+            modelName: 'local-deterministic',
+            processingTimeMs: performance.now() - fullServerActionStart,
+            inputTokens: 0,
+            outputTokens: 0,
+            estimatedCost: 0
+          };
+        } else {
+          return {
+            success: false,
+            error: "Unable to read text from document. Please review or enter details manually."
+          };
+        }
+      } else {
+        const promptProvider: 'gemini' | 'openai' | 'claude' = hasGeminiKey ? 'gemini' : 'openai';
+        modelName = hasGeminiKey ? 'gemini-flash-latest' : (process.env.OPENROUTER_MODEL || 'google/gemini-3.5-flash-lite');
+
+        const combinedMarkdown = extractedMarkdownSections.join('\n\n---\n\n');
+        const finalPrompt = PromptManager.generateFinalPrompt({
+          provider: promptProvider,
+          version: 'v1',
+          documentTypes: documentTypes,
+          inputMode: hasMarkItDownText ? 'markdown' : 'vision',
+          markdownContent: hasMarkItDownText ? combinedMarkdown : undefined
         });
-        cacheWriteMs = saveRes.writeMs;
+
+        const reqId = uuidv4().substring(0, 8);
+
+        // Check if any images are marked as unavailable for OCR (key absent)
+        const hasOcrUnavailableImages = fileDataArray.some(
+          f => (f as unknown as { _ocrUnavailable?: boolean })._ocrUnavailable === true
+        );
+        // Remove OCR-unavailable files from the AI fileDataArray — never send image to AI unless
+        // both AI enhancement is enabled AND the failure is transient (not key-missing)
+        const aiFileDataArray = hasOcrUnavailableImages
+          ? fileDataArray.filter(
+              f => !(f as unknown as { _ocrUnavailable?: boolean })._ocrUnavailable
+            )
+          : fileDataArray;
+
+        let rawAiParsedJson: Record<string, unknown> | null = null;
+
+        // Try Gemini if available
+        if (hasGeminiKey) {
+          try {
+            const provider = AIProviderRegistry.getProvider('gemini');
+            const res = await provider.extractData(
+              "You are a highly accurate Document Extraction AI.",
+              finalPrompt,
+              aiFileDataArray,
+              { reqId }
+            );
+
+            if (res.status === 'success' && res.parsedJson) {
+              rawAiParsedJson = res.parsedJson as Record<string, unknown>;
+              extractionResult = res;
+              finalProviderName = 'gemini';
+              aiEnhancementUsed = true;
+            }
+          } catch (geminiErr) {
+            console.warn(`[AI Enhancement] Gemini attempt failed:`, geminiErr);
+          }
+        }
+
+        // Try OpenRouter fallback if Gemini did not succeed
+        if (!extractionResult && hasOpenRouterKey) {
+          try {
+            const fallbackProvider = AIProviderRegistry.getProvider('openrouter');
+            const fallbackModel = process.env.OPENROUTER_MODEL || 'google/gemini-3.5-flash-lite';
+            const res = await fallbackProvider.extractData(
+              "You are a highly accurate Document Extraction AI.",
+              finalPrompt,
+              aiFileDataArray,
+              {
+                reqId: reqId + '-fb',
+                timeoutMs: 10000,
+                model: fallbackModel
+              }
+            );
+
+            if (res.status === 'success' && res.parsedJson) {
+              rawAiParsedJson = res.parsedJson as Record<string, unknown>;
+              extractionResult = res;
+              finalProviderName = 'openrouter';
+              aiEnhancementUsed = true;
+            }
+          } catch (openRouterErr) {
+            console.warn(`[AI Enhancement] OpenRouter attempt failed:`, openRouterErr);
+          }
+        }
+
+        // AI Non-Overwrite Merge:
+        // AI may only FILL missing fields or flag conflicts.
+        // AI must NOT silently replace a valid high-confidence local value.
+        // Fields with validated formats (Aadhaar, PAN, EPIC) are NEVER replaced by AI.
+        if (rawAiParsedJson && canonicalJson && aiEnhancementUsed) {
+          const mergedJson: Record<string, unknown> = JSON.parse(JSON.stringify(canonicalJson));
+          const mergedCustomer = (mergedJson.customer as Record<string, unknown>) || {};
+          const mergedAddress = (mergedJson.address as Record<string, unknown>) || {};
+          const mergedDocuments = (mergedJson.documents as Record<string, Record<string, unknown>>) || {};
+
+          const aiCustomer = (rawAiParsedJson.customer as Record<string, unknown>) || {};
+          const aiAddress = (rawAiParsedJson.address as Record<string, unknown>) || {};
+          const aiDocuments = (rawAiParsedJson.documents as Record<string, Record<string, unknown>>) || {};
+
+          const AADHAAR_RE = /^\d{12}$/;
+          const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+          const EPIC_RE = /^([A-Z]{3}[0-9]{7}|[A-Z]{2,3}\/\d{2,3}\/\d{3,4}\/\d{5,7}|[A-Z]{2,3}[0-9]{7,8})$/;
+
+          // HIGH-TRUST local fields — never overwrite if locally valid
+          const HIGH_TRUST_CUSTOMER_FIELDS = new Set<string>([
+            'full_name', 'dob', 'gender'
+          ]);
+          const HIGH_TRUST_ADDRESS_FIELDS = new Set<string>(['pincode']);
+
+          // Customer fields: only fill if local is empty; flag conflict if different
+          for (const [k, aiVal] of Object.entries(aiCustomer)) {
+            if (aiVal === undefined || aiVal === null || aiVal === '') continue;
+            const localVal = mergedCustomer[k];
+            if (!localVal || localVal === '') {
+              // Local field is empty — AI may fill it
+              mergedCustomer[k] = aiVal;
+            } else if (HIGH_TRUST_CUSTOMER_FIELDS.has(k)) {
+              // Local has a value and this is a high-trust field:
+              // Check if AI disagrees — if so, mark conflict but keep local
+              const aiStr = String(aiVal).trim().toLowerCase();
+              const localStr = String(localVal).trim().toLowerCase();
+              if (aiStr !== localStr) {
+                // Record conflict — local value preserved
+                const conflicts = (mergedJson.conflicts as Array<unknown>) || [];
+                conflicts.push({ field: k, local: localVal, ai: aiVal, fieldSource: 'conflict' });
+                mergedJson.conflicts = conflicts;
+                // Mark provenance
+                mergedCustomer[`_${k}_source`] = 'conflict';
+              }
+            }
+            // Non-high-trust customer fields: fill if missing, else keep local
+          }
+
+          // Address fields
+          for (const [k, aiVal] of Object.entries(aiAddress)) {
+            if (aiVal === undefined || aiVal === null || aiVal === '') continue;
+            const localVal = mergedAddress[k];
+            if (!localVal || localVal === '') {
+              mergedAddress[k] = aiVal;
+            } else if (HIGH_TRUST_ADDRESS_FIELDS.has(k)) {
+              const aiStr = String(aiVal).trim();
+              const localStr = String(localVal).trim();
+              if (aiStr !== localStr) {
+                const conflicts = (mergedJson.conflicts as Array<unknown>) || [];
+                conflicts.push({ field: `address.${k}`, local: localVal, ai: aiVal, fieldSource: 'conflict' });
+                mergedJson.conflicts = conflicts;
+                mergedAddress[`_${k}_source`] = 'conflict';
+              }
+            }
+          }
+
+          // Document ID fields — STRICT: never overwrite a locally validated ID
+          for (const [docType, aiDocObj] of Object.entries(aiDocuments)) {
+            if (!aiDocObj || typeof aiDocObj !== 'object') continue;
+            const aiIdNum = String((aiDocObj as Record<string, unknown>).number || '').toUpperCase().replace(/[\s-]+/g, '');
+            if (!aiIdNum) continue;
+
+            const localDoc = mergedDocuments[docType] as Record<string, unknown> | undefined;
+            const localIdNum = localDoc?.number ? String(localDoc.number).toUpperCase().replace(/[\s-]+/g, '') : '';
+
+            // Validate locally extracted ID
+            let localIsValid = false;
+            if (docType === 'aadhaar') localIsValid = AADHAAR_RE.test(localIdNum);
+            else if (docType === 'pan') localIsValid = PAN_RE.test(localIdNum);
+            else if (docType === 'voter_id') localIsValid = EPIC_RE.test(localIdNum);
+            else localIsValid = localIdNum.length >= 4;
+
+            if (!localIdNum) {
+              // Local has no ID — AI may provide it
+              mergedDocuments[docType] = { ...(localDoc || {}), ...aiDocObj, number: aiIdNum };
+            } else if (localIsValid && aiIdNum !== localIdNum) {
+              // Local is valid but AI disagrees — flag conflict, keep local
+              const conflicts = (mergedJson.conflicts as Array<unknown>) || [];
+              conflicts.push({
+                field: `${docType}.number`,
+                local: '[REDACTED]',
+                ai: '[REDACTED]',
+                fieldSource: 'conflict'
+              });
+              mergedJson.conflicts = conflicts;
+              mergedDocuments[docType] = { ...(localDoc || {}), _number_source: 'conflict' };
+            } else if (!localIsValid && localIdNum && aiIdNum) {
+              // Invalid/ambiguous local field + AI suggestion:
+              // Do NOT silently overwrite; mark/propose for review with provenance
+              const conflicts = (mergedJson.conflicts as Array<unknown>) || [];
+              conflicts.push({
+                field: `${docType}.number`,
+                local: localDoc?.number,
+                ai: aiIdNum,
+                fieldSource: 'review_required',
+                status: 'ambiguous_requires_review'
+              });
+              mergedJson.conflicts = conflicts;
+              mergedDocuments[docType] = {
+                ...(localDoc || {}),
+                _number_source: 'review_required',
+                _ai_suggested_number: aiIdNum
+              };
+            }
+          }
+
+          mergedJson.customer = mergedCustomer;
+          mergedJson.address = mergedAddress;
+          mergedJson.documents = mergedDocuments;
+
+          // Re-evaluate completeness on the merged customer data
+          const mergedEval = ExtractionCompletenessEvaluator.evaluate(mergedJson);
+          mergedJson.confidence_summary = mergedEval.confidenceSummary;
+
+          extractionResult = {
+            ...extractionResult!,
+            parsedJson: mergedJson
+          };
+        }
+
+        // If AI enhancement failed, fall back to local parsed data if we have any
+        if (!extractionResult && canonicalJson && allParsedData.length > 0) {
+          extractionResult = {
+            status: 'success',
+            parsedJson: canonicalJson,
+            modelName: 'local-deterministic',
+            processingTimeMs: performance.now() - fullServerActionStart,
+            inputTokens: 0,
+            outputTokens: 0,
+            estimatedCost: 0
+          };
+          finalProviderName = primarySource;
+          aiEnhancementUsed = false;
+        } else if (!extractionResult) {
+          // All sources (including OCR.Space key absent for images) failed
+          // Return a safe manual-review result rather than an error with key details
+          if (hasOcrUnavailableImages && fileDataArray.length > 0 && allParsedData.length === 0) {
+            return {
+              success: false,
+              error: "Document scanning is currently unavailable. Please enter the customer details manually."
+            };
+          }
+          return {
+            success: false,
+            error: "Unable to read text from document. Please review or enter details manually."
+          };
+        }
       }
     }
 
-    const totalProviderMs = Date.now() - providerStartTime;
-    console.log(`[AI] provider_pipeline_summary primary_attempt_ms=${primaryAttemptMs} retry_attempt_ms=${retryAttemptMs} fallback_attempt_ms=${perfTimings.fallbackAttemptDuration} total_provider_ms=${totalProviderMs} final_provider=${finalProviderName}`);
-
-    // 12. Profile Photo Crop & Upload Deferred (Opt-in on 'Use Photo' click only)
-    const photoCropStart = performance.now();
-    const photoProcessingTime = 0;
-    const ranPhotoCropOnCacheHit = false;
-    const totalPhotoCropLogicMs = performance.now() - photoCropStart;
-    
-    // 8. Normalization (Server-side portion)
-    const normStart = performance.now();
-    perfTimings.normalizationAndMerge = Date.now() - normStart - photoProcessingTime;
-    const serverNormMs = performance.now() - normStart;
-
-    // 10. Save to AI Import History DB Logging (Offloaded from critical path using Next.js 16 after() API)
-    const dbLogStart = performance.now();
-    
+    // Save audit log asynchronously
     after(async () => {
-      const bgLogStart = performance.now();
       try {
-        const { error: dbError } = await supabase
+        await supabase
           .from('ai_import_history')
           .insert([{
             created_by: user.id,
@@ -317,113 +568,55 @@ export async function extractDataFromDocuments(formData: FormData) {
             ai_raw_response: "[REDACTED FOR PRIVACY]",
             final_json: extractionResult.parsedJson || null,
             ai_provider: finalProviderName,
-            prompt_version: promptVersion,
+            prompt_version: process.env.PROMPT_VERSION || 'v1',
             status: extractionResult.status,
-            processing_time_ms: extractionResult.processingTimeMs,
+            processing_time_ms: extractionResult.processingTimeMs || (performance.now() - fullServerActionStart),
             input_tokens: extractionResult.inputTokens || 0,
             output_tokens: extractionResult.outputTokens || 0,
             estimated_cost: extractionResult.estimatedCost || 0,
-            model_name: extractionResult.modelName,
+            model_name: extractionResult.modelName || modelName,
             error_message: extractionResult.errorMessage || null
           }]);
-
-        const bgDuration = performance.now() - bgLogStart;
-        if (dbError) {
-          console.error("[ai_import_history after()] Error saving history:", dbError.message);
-        } else {
-          console.log(`[ai_import_history after()] Audit history saved asynchronously in ${bgDuration.toFixed(2)} ms`);
-        }
-      } catch (logErr: any) {
-        console.error("[ai_import_history after()] Logging exception:", logErr.message || logErr);
+      } catch (logErr: unknown) {
+        const err = logErr as Error;
+        console.error("[ai_import_history after()] Logging exception:", err.message || err);
       }
     });
 
-    const dbLoggingMs = performance.now() - dbLogStart;
-    perfTimings.databaseLogging = dbLoggingMs;
-
-    // 14. revalidatePath / Router Refresh timing check
-    const revalidateStart = performance.now();
-    const revalidateWorkMs = performance.now() - revalidateStart;
-
-    if (extractionResult.status === 'failed' || !extractionResult.parsedJson) {
-      let userFacingError = extractionResult.errorMessage || "AI extraction failed to extract valid data.";
-      
-      const isPrimaryQuotaOrRateLimit = primaryErrorCategory === 'RATE_LIMIT' || primaryErrorCategory === 'QUOTA';
-      const isFallbackQuotaOrRateLimit = extractionResult.errorCategory === 'QUOTA' || extractionResult.errorCategory === 'RATE_LIMIT';
-
-      if (isPrimaryQuotaOrRateLimit && isFallbackQuotaOrRateLimit) {
-        userFacingError = "Primary and backup AI quotas are temporarily unavailable. Please try again later.";
-      }
-
-      return {
-        success: false,
-        error: userFacingError
-      };
-    }
-
-    // 13. Server Action Result Serialization
-    const serializationStart = performance.now();
     const resultResponse = { 
       success: true, 
       data: extractionResult.parsedJson,
       perfSummary: {
         provider: finalProviderName,
         model: extractionResult.modelName || modelName,
+        extractionSource: primarySource,
+        aiEnhancementUsed: aiEnhancementUsed,
+        completeness: evaluation.completeness,
         documentCount: files.length,
-        imagePrepTime: perfTimings.imagePreparation,
-        primaryAttemptDuration: perfTimings.primaryAttemptDuration,
-        fallbackAttemptDuration: perfTimings.fallbackAttemptDuration,
+        imagePrepTime: perfTimings.imagePreparation || 0,
+        primaryAttemptDuration: 0,
+        fallbackAttemptDuration: 0,
         preprocessingTime: totalPreprocessingMs,
-        preprocessingSource: hasMarkItDownText ? 'markitdown' : 'vision',
+        preprocessingSource: hasMarkItDownText ? 'markitdown' : (sourcesUsed.includes('ocr-space') ? 'ocr-space' : 'vision'),
         fallbackUsed: anyFallbackTriggered,
         apiTime: extractionResult.apiCallTimeMs || 0,
         jsonParseTime: extractionResult.jsonParseTimeMs || 0,
-        normalizationTime: perfTimings.normalizationAndMerge,
-        dbLogTime: perfTimings.databaseLogging,
+        normalizationTime: 0,
+        dbLogTime: 0,
         totalTime: performance.now() - fullServerActionStart,
-        cacheHit: cacheHit,
-        cacheLookupMs: totalCacheLookupMs,
-        cacheWriteMs: cacheWriteMs,
-        savedProviderMs: savedProviderMs
+        cacheHit: false,
+        cacheLookupMs: 0,
+        cacheWriteMs: 0,
+        savedProviderMs: 0
       }
     };
-    JSON.stringify(resultResponse);
-    const serializationMs = performance.now() - serializationStart;
-
-    // 15. Full Server Action Duration
-    const fullServerActionMs = performance.now() - fullServerActionStart;
-
-    // DETAILED PROFILING REPORT PRINT
-    console.log("==========================================================================");
-    console.log(" 🔍 DEV-ONLY CACHE-HIT PROFILING REPORT (DIAGNOSE ONLY)                   ");
-    console.log("==========================================================================");
-    console.log(` 1. Auth / Session Lookup:           ${authSessionMs.toFixed(2)} ms`);
-    console.log(` 2. Supabase Server Client Creation: ${supabaseClientMs.toFixed(2)} ms`);
-    console.log(` 3. File arrayBuffer / Read:         ${fileReadMs.toFixed(2)} ms`);
-    console.log(` 4. SHA-256 File Hash:               ${sha256FileHashMs.toFixed(2)} ms`);
-    console.log(` 5. Request Hash Generation:         ${requestHashGenMs.toFixed(2)} ms (Total Hash: ${totalRequestHashMs.toFixed(2)} ms)`);
-    console.log(` 6. Cache Select Query:              ${(cacheRes.selectQueryMs || totalCacheLookupMs).toFixed(2)} ms`);
-    console.log(` 7. Cache JSON Deserialization:      ${(cacheRes.jsonDeserializationMs || 0).toFixed(2)} ms`);
-    console.log(` 8. DataNormalizer (Server portion): ${serverNormMs.toFixed(2)} ms`);
-    console.log(` 9. MergeEngine (Server portion):    0.00 ms (Runs on Client)`);
-    console.log(`10. ai_import_history Insert:        ${dbLoggingMs.toFixed(2)} ms`);
-    console.log(`11. Cache hit_count Update:          ${(cacheRes.statsUpdateMs || 0).toFixed(2)} ms`);
-    console.log(`12. Profile-Photo/Crop Logic:        ${totalPhotoCropLogicMs.toFixed(2)} ms (Ran on cache hit: ${ranPhotoCropOnCacheHit})`);
-    console.log(`13. Result Serialization:            ${serializationMs.toFixed(2)} ms`);
-    console.log(`14. revalidatePath / Refresh Work:   ${revalidateWorkMs.toFixed(2)} ms`);
-    console.log(`15. Full Server Action Duration:     ${fullServerActionMs.toFixed(2)} ms`);
-    console.log("--------------------------------------------------------------------------");
-    const accountedMs = authSessionMs + supabaseClientMs + fileReadMs + totalRequestHashMs + totalCacheLookupMs + totalPhotoCropLogicMs + serverNormMs + dbLoggingMs + serializationMs;
-    const unaccountedMs = fullServerActionMs - accountedMs;
-    console.log(` Accounted Sub-Operations Total:     ${accountedMs.toFixed(2)} ms`);
-    console.log(` Remaining Unaccounted:              ${unaccountedMs.toFixed(2)} ms`);
-    console.log("==========================================================================");
 
     return resultResponse;
 
-  } catch (error: any) {
-    console.error("[extractDataFromDocuments] Error:", error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("[extractDataFromDocuments] Error:", err);
+    return { success: false, error: err.message };
   }
 }
 
@@ -448,9 +641,10 @@ export async function testGeminiConnection() {
     } else {
       return { success: false, error: "Connected to Gemini, but received unexpected response." };
     }
-  } catch (error: any) {
-    console.error("[testGeminiConnection] Error:", error);
-    return { success: false, error: "Failed to connect to Gemini API: " + error.message };
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("[testGeminiConnection] Error:", err);
+    return { success: false, error: "Failed to connect to Gemini API: " + err.message };
   }
 }
 
@@ -552,9 +746,10 @@ export async function cropAndUploadProfilePhoto(formData: FormData) {
       storagePath: fileName,
       signedUrl: signedData?.signedUrl
     };
-  } catch (error: any) {
-    console.error("[cropAndUploadProfilePhoto] Error:", error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("[cropAndUploadProfilePhoto] Error:", err);
+    return { success: false, error: err.message };
   }
 }
 
@@ -614,10 +809,11 @@ export async function generateCustomerJsonWithProvider(formData: FormData) {
       }
     }
 
-    const promptVersion = process.env.PROMPT_VERSION || 'v1';
+    const mappedProvider: 'gemini' | 'openai' | 'claude' =
+      providerId === 'claude' ? 'claude' : (providerId === 'chatgpt' ? 'openai' : 'gemini');
     const finalPrompt = PromptManager.generateFinalPrompt({
-      provider: providerId as any,
-      version: promptVersion as any,
+      provider: mappedProvider,
+      version: 'v1',
       documentTypes: [],
       inputMode: hasMarkItDownText ? 'markdown' : 'vision',
       markdownContent: hasMarkItDownText ? extractedMarkdownSections.join('\n\n---\n\n') : undefined
@@ -652,10 +848,11 @@ export async function generateCustomerJsonWithProvider(formData: FormData) {
       provider: providerId,
       model: result.modelName
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as Error;
     return {
       success: false,
-      error: error.message || "Failed to generate JSON with selected provider."
+      error: err.message || "Failed to generate JSON with selected provider."
     };
   }
 }
@@ -675,7 +872,7 @@ export async function processOcrSpaceDocument(formData: FormData) {
       throw new Error("Maximum 10 documents allowed per import batch.");
     }
 
-    const allParsedData: any[] = [];
+    const allParsedData: Array<Record<string, unknown>> = [];
 
     for (const file of files) {
       const buffer = Buffer.from(await file.arrayBuffer());
@@ -697,20 +894,20 @@ export async function processOcrSpaceDocument(formData: FormData) {
       const detectedType = classification.documentType;
       const parsedFields = DocumentTextParser.parse(extractedText, detectedType);
 
-      allParsedData.push(parsedFields);
+      allParsedData.push(parsedFields as unknown as Record<string, unknown>);
     }
 
     if (allParsedData.length === 0) {
       throw new Error("Could not parse customer data from OCR results.");
     }
 
-    const combinedCustomer: Record<string, any> = {};
-    const combinedAddress: Record<string, any> = {};
-    const combinedDocuments: Record<string, any> = {};
+    const combinedCustomer: Record<string, unknown> = {};
+    const combinedAddress: Record<string, unknown> = {};
+    const combinedDocuments: Record<string, unknown> = {};
 
     for (const parsed of allParsedData) {
-      if (parsed.customer) {
-        Object.entries(parsed.customer).forEach(([k, v]) => {
+      if (parsed.customer && typeof parsed.customer === 'object') {
+        Object.entries(parsed.customer as Record<string, unknown>).forEach(([k, v]) => {
           if (v !== undefined && v !== null && v !== '') {
             if (!combinedCustomer[k] || (typeof v === 'string' && v.length > String(combinedCustomer[k]).length)) {
               combinedCustomer[k] = v;
@@ -719,10 +916,11 @@ export async function processOcrSpaceDocument(formData: FormData) {
         });
       }
 
-      if (parsed.address) {
-        Object.entries(parsed.address).forEach(([k, v]) => {
+      if (parsed.address && typeof parsed.address === 'object') {
+        Object.entries(parsed.address as Record<string, unknown>).forEach(([k, v]) => {
           if (v !== undefined && v !== null && v !== '') {
-            const detectedDocType = parsed.detected_documents?.[0]?.detected_type || '';
+            const detectedDocList = parsed.detected_documents as Array<{ detected_type?: string }> | undefined;
+            const detectedDocType = detectedDocList?.[0]?.detected_type || '';
             const isBack = detectedDocType.includes('back') || detectedDocType.includes('combined');
             if (isBack || !combinedAddress[k] || (typeof v === 'string' && v.length > String(combinedAddress[k]).length)) {
               combinedAddress[k] = v;
@@ -731,9 +929,9 @@ export async function processOcrSpaceDocument(formData: FormData) {
         });
       }
 
-      if (parsed.documents) {
-        Object.entries(parsed.documents).forEach(([k, v]) => {
-          if (v && (v as any).number) {
+      if (parsed.documents && typeof parsed.documents === 'object') {
+        Object.entries(parsed.documents as Record<string, unknown>).forEach(([k, v]) => {
+          if (v && typeof v === 'object' && 'number' in v) {
             combinedDocuments[k] = v;
           }
         });
@@ -745,8 +943,8 @@ export async function processOcrSpaceDocument(formData: FormData) {
       customer: combinedCustomer,
       address: combinedAddress,
       documents: combinedDocuments,
-      detected_documents: allParsedData.flatMap(d => d.detected_documents || []),
-      confidence_summary: firstParsed.confidence_summary || { overall: 0.9, low_confidence_fields: [] }
+      detected_documents: allParsedData.flatMap(d => (d.detected_documents as unknown[]) || []),
+      confidence_summary: (firstParsed.confidence_summary as Record<string, unknown>) || { overall: 0.9, low_confidence_fields: [] }
     };
 
     return {
@@ -754,10 +952,11 @@ export async function processOcrSpaceDocument(formData: FormData) {
       data: combinedJson
     };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as Error;
     return {
       success: false,
-      error: error.message || "OCR.space document extraction failed."
+      error: err.message || "OCR.space document extraction failed."
     };
   }
 }

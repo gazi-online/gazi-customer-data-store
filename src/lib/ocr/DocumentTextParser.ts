@@ -1,5 +1,6 @@
 import { ParsedDocumentFields } from './ocr-types';
 import { isNonPersonNameCandidate } from '../names/nameSafety';
+import { MarkdownTextAdapter } from './MarkdownTextAdapter';
 
 export class DocumentTextParser {
   static parse(text: string, documentType: string, filename?: string): ParsedDocumentFields {
@@ -22,8 +23,9 @@ export class DocumentTextParser {
 
     if (!text || text.trim().length === 0) return result;
 
-    // 10. MULTILINE NORMALIZATION: Pre-normalize CRLF -> LF, trim lines, collapse internal tabs/spaces
-    const cleanText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    // 10. MULTILINE NORMALIZATION: Pre-normalize CRLF -> LF, adapt markdown if present, trim lines
+    const structuredText = MarkdownTextAdapter.adaptToStructuredText(text);
+    const cleanText = structuredText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     const lines = cleanText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
     // Common Pincode Extractor
@@ -87,25 +89,30 @@ export class DocumentTextParser {
         }
       }
 
-      // 2. Gender
-      if (/\b(MALE|पुरुष|পুরুষ)\b/i.test(cleanText)) {
-        result.customer!.gender = 'male';
-      } else if (/\b(FEMALE|महिला|মহিলা)\b/i.test(cleanText)) {
-        result.customer!.gender = 'female';
-      } else if (/\b(TRANSGENDER)\b/i.test(cleanText)) {
-        result.customer!.gender = 'other';
+      // 2. Gender (Front or Combined only — Aadhaar Back never carries cardholder gender)
+      if (documentType !== 'aadhaar_back') {
+        if (/\b(MALE|पुरुष|পুরুষ)\b/i.test(cleanText)) {
+          result.customer!.gender = 'male';
+        } else if (/\b(FEMALE|महिला|মহিলা)\b/i.test(cleanText)) {
+          result.customer!.gender = 'female';
+        } else if (/\b(TRANSGENDER)\b/i.test(cleanText)) {
+          result.customer!.gender = 'other';
+        }
       }
 
-      // 3. DOB / YOB
-      const dobMatch = cleanText.match(/\b(?:DOB|Date of Birth|DATE OF BIRTH|जन्म तिथि|जन्म तारीख)[:\s]*(\d{2}[\/\-.]\d{2}[\/\-.]\d{4})\b/i) ||
-                       cleanText.match(/\b(\d{2}[\/\-.]\d{2}[\/\-.]\d{4})\b/);
-      if (dobMatch) {
-        const norm = normalizeDateStr(dobMatch[1]);
-        if (norm) result.customer!.dob = norm;
-      } else {
-        const yobMatch = cleanText.match(/\b(?:YOB|Year of Birth|जन्म वर्ष)[:\s]*(\d{4})\b/i);
-        if (yobMatch) {
-          result.customer!.dob = `${yobMatch[1]}-01-01`;
+      // 3. DOB / YOB (Front or Combined only — Aadhaar Back never carries cardholder DOB)
+      let dobMatch: RegExpMatchArray | null = null;
+      if (documentType !== 'aadhaar_back') {
+        dobMatch = cleanText.match(/\b(?:DOB|Date of Birth|DATE OF BIRTH|जन्म तिथि|जन्म तारीख)[:\s]*(\d{2}[\/\-.]\d{2}[\/\-.]\d{4})\b/i) ||
+                   cleanText.match(/\b(\d{2}[\/\-.]\d{2}[\/\-.]\d{4})\b/);
+        if (dobMatch) {
+          const norm = normalizeDateStr(dobMatch[1]);
+          if (norm) result.customer!.dob = norm;
+        } else {
+          const yobMatch = cleanText.match(/\b(?:YOB|Year of Birth|जन्म वर्ष)[:\s]*(\d{4})\b/i);
+          if (yobMatch) {
+            result.customer!.dob = `${yobMatch[1]}-01-01`;
+          }
         }
       }
 
@@ -263,7 +270,7 @@ export class DocumentTextParser {
           // Check if this line starts an address block
           for (const lbl of addressStartLabels) {
             if (lbl.regex.test(line)) {
-              let firstLineContent = lbl.stripLabel ? line.replace(lbl.regex, '').trim() : line.trim();
+              const firstLineContent = lbl.stripLabel ? line.replace(lbl.regex, '').trim() : line.trim();
               const blockLines: string[] = [];
               if (firstLineContent.length > 0) {
                 blockLines.push(firstLineContent);
@@ -356,7 +363,7 @@ export class DocumentTextParser {
             recoveredLines.push(cur);
           }
 
-          let fullAddressStr = recoveredLines
+          const fullAddressStr = recoveredLines
             .map(l => l.replace(/^[,\s:\-]+|[,\s:\-]+$/g, '').trim())
             .filter(l => l.length > 0)
             .join(', ')
@@ -529,6 +536,90 @@ export class DocumentTextParser {
     } else if (documentType === 'ration_card') {
       const rationNoMatch = cleanText.match(/\b(RATION CARD NO|CARD NO|RC NO)[:\s]*([A-Z0-9]{8,16})\b/i);
       if (rationNoMatch) result.diagnostic_data!.ration_card_number = rationNoMatch[2];
+    }
+
+    // 9. Generic Document / Structured Text Extractor (for DOCX, XLSX, Text PDF, or untyped KYC forms)
+    if (!result.customer!.full_name) {
+      for (const line of lines) {
+        const nameMatch = line.match(/^(?:Customer\s*Name|Full\s*Name|Applicant\s*Name|Candidate\s*Name|Client\s*Name|Name)[:\s\-]+([A-Za-z\s.]{2,50})$/i);
+        if (nameMatch) {
+          const cand = cleanLatinName(nameMatch[1]);
+          if (cand && !isNonPersonHeader(cand) && cand.length >= 2) {
+            result.customer!.full_name = cand;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!result.customer!.dob) {
+      const dobGeneric = cleanText.match(/\b(?:DOB|Date\s*of\s*Birth|Birth\s*Date)[:\s\-]+(\d{2}[\/\-.]\d{2}[\/\-.]\d{4}|\d{4}[\/\-.]\d{2}[\/\-.]\d{2})\b/i);
+      if (dobGeneric) {
+        const norm = normalizeDateStr(dobGeneric[1]);
+        if (norm) result.customer!.dob = norm;
+      }
+    }
+
+    if (!result.customer!.gender) {
+      const genderGeneric = cleanText.match(/\b(?:Gender|Sex)[:\s\-]+(Male|Female|Other|Transgender|पुरुष|মহিলা)\b/i);
+      if (genderGeneric) {
+        const g = genderGeneric[1].toLowerCase();
+        if (g === 'male' || g === 'पुरुष') result.customer!.gender = 'male';
+        else if (g === 'female' || g === 'মহিলা') result.customer!.gender = 'female';
+        else result.customer!.gender = 'other';
+      }
+    }
+
+    if (!result.customer!.father_name) {
+      const fatherGeneric = cleanText.match(/\b(?:Father(?:'s)?\s*Name|Father)[:\s\-]+([A-Za-z\s.]{2,50})\b/i);
+      if (fatherGeneric) {
+        const cand = cleanLatinName(fatherGeneric[1]);
+        if (cand && !isNonPersonHeader(cand) && cand.length >= 2) {
+          result.customer!.father_name = cand;
+        }
+      }
+    }
+
+    if (!result.customer!.phone) {
+      const phoneGeneric = cleanText.match(/\b(?:Mobile|Phone|Contact|Mob)[:\s\-]+(?:\+?91[\-\s]?)?([6-9]\d{9})\b/i);
+      if (phoneGeneric) {
+        result.customer!.phone = phoneGeneric[1];
+      }
+    }
+
+    if (!result.address!.full_address) {
+      const addrGeneric = cleanText.match(/\b(?:Permanent\s*Address|Present\s*Address|Address)[:\s\-]+([^\n]{5,150})/i);
+      if (addrGeneric) {
+        const candAddr = addrGeneric[1].replace(/^[,\s:\-]+|[,\s:\-]+$/g, '').trim();
+        if (candAddr.length >= 5) {
+          result.address!.full_address = candAddr;
+        }
+      }
+    }
+
+    if (!result.address!.state) {
+      for (const stateName of INDIAN_STATES) {
+        if (new RegExp(`\\b${stateName}\\b`, 'i').test(cleanText)) {
+          result.address!.state = stateName;
+          break;
+        }
+      }
+    }
+
+    if (!result.documents!.pan) {
+      const panMatch = cleanText.match(/\b[A-Z]{5}[0-9]{4}[A-Z]{1}\b/);
+      if (panMatch) result.documents!.pan = { number: panMatch[0] };
+    }
+    if (!result.documents!.aadhaar) {
+      const aadhaarMatch = cleanText.match(/\b[1-9][0-9]{3}\s?[0-9]{4}\s?[0-9]{4}\b/);
+      if (aadhaarMatch) {
+        const cleanNo = aadhaarMatch[0].replace(/\s+/g, '');
+        if (cleanNo.length === 12) result.documents!.aadhaar = { number: cleanNo };
+      }
+    }
+    if (!result.documents!.voter_id) {
+      const epicMatch = cleanText.match(/\b[A-Z]{3}[0-9]{7}\b/);
+      if (epicMatch) result.documents!.voter_id = { number: epicMatch[0] };
     }
 
     return result;

@@ -1,4 +1,4 @@
-export type AiProvider = 'gemini' | 'chatgpt' | 'claude' | 'manual';
+export type AiProvider = 'gemini' | 'chatgpt' | 'claude' | 'manual' | 'ocr-space' | 'markitdown' | 'openrouter';
 
 export type AiField<T> = {
   value: T;
@@ -58,6 +58,7 @@ export interface ImportJob {
   backFile?: File;
   jsonText?: string;
   status: 'pending' | 'processing' | 'completed' | 'error';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rawResponse?: any;
   normalizedData?: NormalizedData;
   error?: string;
@@ -78,6 +79,9 @@ export interface ImportJob {
     cacheLookupMs?: number;
     cacheWriteMs?: number;
     savedProviderMs?: number;
+    extractionSource?: 'ocr-space' | 'markitdown' | 'gemini' | 'openrouter' | string;
+    aiEnhancementUsed?: boolean;
+    completeness?: number;
   };
 }
 
@@ -86,6 +90,7 @@ export interface Conflict {
   options: {
     jobId: string;
     documentType: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     value: any;
     confidence: number;
     source_side?: string;

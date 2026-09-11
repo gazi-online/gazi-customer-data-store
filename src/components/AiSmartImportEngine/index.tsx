@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Bot, FileImage, CheckCircle2, Copy } from "lucide-react";
-import { ImportJob, MergedResult } from "./types";
+import { ImportJob, MergedResult, AiProvider } from "./types";
 import { DataNormalizer } from "./DataNormalizer";
 import { MergeEngine } from "./MergeEngine";
 import { ReviewPanel } from "./components/ReviewPanel";
@@ -260,7 +260,7 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
     }
 
     setIsExtracting(true);
-    const toastId = toast.loading("Analyzing documents with AI...");
+    const toastId = toast.loading("Reading document & extracting information...");
 
     try {
       const formData = new FormData();
@@ -302,10 +302,11 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
 
       const normalizedData = DataNormalizer.normalize(res.data);
       const detectedDocs = res.data.detected_documents as Array<{ detected_type?: string }> | undefined;
+      const resolvedProvider = (res.perfSummary?.extractionSource || res.perfSummary?.provider || 'ocr-space') as AiProvider;
       const newJob: ImportJob = {
         id: uuidv4(),
         documentType: detectedDocs?.[0]?.detected_type || 'unknown',
-        provider: 'gemini',
+        provider: resolvedProvider,
         source: 'file',
         frontFile: jobFrontFile,
         backFile: jobBackFile,
@@ -314,8 +315,10 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
         normalizedData,
         version: 1,
         perfSummary: res.perfSummary || {
-          provider: 'AI Extraction Engine',
-          model: 'auto',
+          provider: resolvedProvider,
+          model: 'local-deterministic',
+          extractionSource: resolvedProvider,
+          aiEnhancementUsed: false,
           documentCount: stagedFiles.length,
           imagePrepTime: 0,
           primaryAttemptDuration: 1000,
@@ -342,15 +345,18 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
       const merged = MergeEngine.merge([newJob]);
       setMergedResult(merged);
 
-      toast.success("AI Document Analysis complete — Ready for review", { id: toastId });
+      toast.success("Document analysis complete — Review extracted details", { id: toastId });
     } catch (error: unknown) {
       const errObj = error as { message?: string } | null;
-      let errMsg = errObj?.message || "Failed to analyze documents with AI";
+      let errMsg = errObj?.message || "Failed to extract information from documents";
       if (errMsg.includes("OCR_SPACE_API_KEY is missing") || errMsg.includes("OCR.space is not configured")) {
         errMsg = "OCR service is not configured. Please configure the server OCR API key.";
       }
       if (errMsg.includes(".venv") || errMsg.includes("python") || errMsg.includes("Traceback") || errMsg.includes("tools/markitdown-worker")) {
         errMsg = "Document extraction failed during preprocessing. Please try a different document or format.";
+      }
+      if (errMsg.includes("GEMINI_API_KEY") || errMsg.includes("OPENROUTER_API_KEY")) {
+        errMsg = "Unable to read document automatically. Please enter details manually.";
       }
       toast.error(errMsg, { id: toastId });
     } finally {

@@ -2,6 +2,8 @@ export interface AIProviderOptions {
   model?: string;
   temperature?: number;
   maxRetries?: number;
+  reqId?: string;
+  timeoutMs?: number;
 }
 
 export type AIErrorCategory = 
@@ -18,6 +20,7 @@ export type AIErrorCategory =
 
 export interface AIExtractionResult {
   rawResponse: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   parsedJson?: any;
   status: 'success' | 'failed';
   processingTimeMs: number;
