@@ -566,7 +566,13 @@ export function CustomerProfileTabs({
                             payment_status: cs.payment_status,
                             service_date: cs.service_date.split('T')[0],
                             due_date: cs.due_date ? cs.due_date.split('T')[0] : null,
-                            notes: cs.notes
+                            notes: cs.notes,
+                            priority: cs.priority || 'normal',
+                            request_number: cs.request_number || null,
+                            application_reference: cs.application_reference || null,
+                            portal_name: cs.portal_name || null,
+                            rejection_reason: cs.rejection_reason || null,
+                            delivered_at: cs.delivered_at || null,
                           });
                           setIsServiceFormOpen(true);
                         }}

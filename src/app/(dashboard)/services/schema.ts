@@ -16,12 +16,24 @@ export const customerServiceSchema = z.object({
   id: z.string().optional(),
   customer_id: z.string().min(1, "Customer ID is required"),
   service_id: z.string().min(1, "Service ID is required"),
-  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled', 'archived']).default('pending'),
+  status: z.enum([
+    'pending',
+    'in_progress',
+    'completed',
+    'cancelled',
+    'archived'
+  ]).default('pending'),
   amount: z.coerce.number().min(0, "Amount must be at least 0"),
   payment_status: z.enum(['unpaid', 'partial', 'paid', 'waived']).default('unpaid'),
   service_date: z.string().min(1, "Service date is required"),
   due_date: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  request_number: z.string().optional().nullable(),
+  application_reference: z.string().optional().nullable(),
+  portal_name: z.string().optional().nullable(),
+  priority: z.enum(['low', 'normal', 'high', 'urgent']).optional().default('normal'),
+  rejection_reason: z.string().optional().nullable(),
+  delivered_at: z.string().optional().nullable(),
 });
 
 export type CustomerServiceFormData = z.infer<typeof customerServiceSchema>;
