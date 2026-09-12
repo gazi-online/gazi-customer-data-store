@@ -85,16 +85,23 @@ export interface ImportJob {
   };
 }
 
+export type RelationshipTargetField = 'father_name' | 'spouse_name';
+export type ConflictField = keyof NormalizedData | 'relationship_interpretation';
+
+export interface ConflictOption {
+  jobId: string;
+  documentType: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  value: any;
+  confidence: number;
+  source_side?: string;
+  targetField?: RelationshipTargetField;
+  candidateValue?: unknown;
+}
+
 export interface Conflict {
-  field: keyof NormalizedData;
-  options: {
-    jobId: string;
-    documentType: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    value: any;
-    confidence: number;
-    source_side?: string;
-  }[];
+  field: ConflictField;
+  options: ConflictOption[];
 }
 
 export interface MergedResult {

@@ -1,4 +1,4 @@
-import { MergedResult, NormalizedData, Conflict } from "../types";
+import { MergedResult, NormalizedData, Conflict, ConflictField } from "../types";
 import { AlertCircle, CheckCircle2, ChevronRight, Check, Loader2, UserCheck, Sparkles, Languages } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { getProfilePhotoSignedUrl, cropAndUploadProfilePhoto } from "@/app/(dashboard)/customers/ai-actions";
@@ -7,6 +7,8 @@ import { PincodeLookupResult } from "@/lib/address/address-types";
 import { toast } from "sonner";
 import { suggestNameComponentsFromFullName } from "../nameUtils";
 import { isBengaliScript } from "@/lib/names/BengaliNameTransliterator";
+import { resolveRelationshipConflictPayload, resolveConflictTransition } from "../relationshipUtils";
+import { getPhotoIdentityKey, resolvePhotoConfirmationPayload, resolveUsePhotoAction, resolveRejectPhotoAction } from "../photoUtils";
 
 // Bengali suggestion fetched from Google Input Tools via /api/bengali-suggestions
 interface GoogleBengaliSuggestion {
@@ -24,6 +26,16 @@ export function ReviewPanel({
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [usePhoto, setUsePhoto] = useState<boolean>(false);
   const [isCroppingPhoto, setIsCroppingPhoto] = useState<boolean>(false);
+  const [croppedStoragePath, setCroppedStoragePath] = useState<string | null>(null);
+
+  const currentPhotoIdentity = getPhotoIdentityKey(result);
+  const photoIdentityRef = useRef<string>(currentPhotoIdentity);
+
+  const photoSeqRef = useRef<number>(0);
+  const activeCropSeqRef = useRef<number>(0);
+  const activePreviewSeqRef = useRef<number>(0);
+  const isMountedRef = useRef<boolean>(true);
+
   const [pinRefData, setPinRefData] = useState<PincodeLookupResult | null>(null);
   const [pinStatus, setPinStatus] = useState<'idle' | 'loading' | 'verified' | 'mismatch' | 'failed'>('idle');
   const [suggestionAccepted, setSuggestionAccepted] = useState<boolean>(false);
@@ -38,12 +50,15 @@ export function ReviewPanel({
   const bengaliReqSeqRef = useRef<number>(0);
 
   const conflictFields = new Set(result.conflicts.map(c => c.field));
+  const hasRelConflict = result.conflicts.some(c => (c.field as string) === 'relationship_interpretation');
 
   const [resolvedData, setResolvedData] = useState<Record<string, any>>(() => {
     const flat: Record<string, any> = {};
     Object.keys(result.data).forEach(key => {
       if (key !== 'profile_photo') {
         if (conflictFields.has(key as any)) {
+          flat[key] = undefined;
+        } else if (hasRelConflict && (key === 'father_name' || key === 'spouse_name')) {
           flat[key] = undefined;
         } else {
           flat[key] = (result.data as any)[key].value;
@@ -172,19 +187,42 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
   'country'
 ];
 
+  // Unmount tracker
   useEffect(() => {
-    async function fetchPhoto() {
-      if (result.data.profile_photo?.storage_path) {
-        const url = await getProfilePhotoSignedUrl(result.data.profile_photo.storage_path);
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Synchronize and reset photo review state when review/photo identity changes
+  useEffect(() => {
+    photoIdentityRef.current = currentPhotoIdentity;
+    const mySeq = ++photoSeqRef.current;
+    activePreviewSeqRef.current = mySeq;
+
+    const initialStoragePath = result.data.profile_photo?.storage_path || null;
+    setCroppedStoragePath(null);
+    setUsePhoto(false); // New review requires explicit approval via Use Photo
+    setPhotoUrl(null);
+    setIsCroppingPhoto(false);
+
+    if (initialStoragePath) {
+      getProfilePhotoSignedUrl(initialStoragePath).then(url => {
+        if (!isMountedRef.current) return;
+        if (photoIdentityRef.current !== currentPhotoIdentity) return;
+        if (activePreviewSeqRef.current !== mySeq) return;
         setPhotoUrl(url);
-        setUsePhoto(true);
-      }
+      }).catch(() => {
+        // Safe non-sensitive error notice without leaking backend/storage/customer metadata
+      });
     }
-    fetchPhoto();
-  }, [result.data.profile_photo]);
+  }, [currentPhotoIdentity, result.data.profile_photo?.storage_path]);
 
   const handleUsePhoto = async () => {
-    if (result.data.profile_photo?.storage_path) {
+    const action = resolveUsePhotoAction(croppedStoragePath, result.data.profile_photo?.storage_path);
+
+    if (action.type === 'reuse') {
       setUsePhoto(true);
       return;
     }
@@ -202,9 +240,15 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
       return;
     }
 
+    const cropSeq = ++photoSeqRef.current;
+    activeCropSeqRef.current = cropSeq;
+    activePreviewSeqRef.current = cropSeq;
+    const requestIdentity = currentPhotoIdentity;
+    let toastId: string | number | undefined;
+
     try {
       setIsCroppingPhoto(true);
-      const toastId = toast.loading("Cropping profile photo from original document...");
+      toastId = toast.loading("Cropping profile photo from original document...");
 
       const formData = new FormData();
       formData.append("file", originalFile);
@@ -212,19 +256,54 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
 
       const res = await cropAndUploadProfilePhoto(formData);
 
+      // Check if superseded, unmounted, or rejected while in-flight
+      const isStillFresh = isMountedRef.current &&
+        photoIdentityRef.current === requestIdentity &&
+        activeCropSeqRef.current === cropSeq;
+
+      if (!isStillFresh) {
+        if (toastId !== undefined) {
+          toast.dismiss(toastId);
+        }
+        return;
+      }
+
       if (res.success && res.storagePath) {
-        result.data.profile_photo.storage_path = res.storagePath;
-        setPhotoUrl(res.signedUrl || null);
+        setCroppedStoragePath(res.storagePath);
+        if (res.signedUrl) {
+          setPhotoUrl(res.signedUrl);
+        }
         setUsePhoto(true);
         toast.success("Profile photo cropped & prepared!", { id: toastId });
       } else {
         toast.error(res.error || "Failed to crop profile photo", { id: toastId });
       }
     } catch (err: any) {
-      toast.error("Crop error: " + err.message);
+      const isStillFresh = isMountedRef.current &&
+        photoIdentityRef.current === requestIdentity &&
+        activeCropSeqRef.current === cropSeq;
+
+      if (!isStillFresh) {
+        if (toastId !== undefined) {
+          toast.dismiss(toastId);
+        }
+        return;
+      }
+      toast.error("Crop error: " + (err?.message || "Failed to crop"));
     } finally {
-      setIsCroppingPhoto(false);
+      if (isMountedRef.current && photoIdentityRef.current === requestIdentity && activeCropSeqRef.current === cropSeq) {
+        setIsCroppingPhoto(false);
+      }
     }
+  };
+
+  const handleRejectPhoto = () => {
+    const { nextSeq, usePhoto: nextUsePhoto } = resolveRejectPhotoAction(photoSeqRef.current);
+    photoSeqRef.current = nextSeq;
+    activeCropSeqRef.current = nextSeq;
+    activePreviewSeqRef.current = nextSeq;
+    setUsePhoto(nextUsePhoto);
+    setIsCroppingPhoto(false);
   };
 
   const handleApplyNameSuggestion = () => {
@@ -239,11 +318,10 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
     toast.success("Suggested name components applied for Auto Fill.");
   };
 
-  const handleResolveConflict = (field: keyof NormalizedData, value: any) => {
-    setResolvedData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const handleResolveConflict = (field: ConflictField, value: any) => {
+    setResolvedData(prev =>
+      resolveConflictTransition(prev, field as string, value, result.conflicts, result.data)
+    );
   };
 
   const handleConfirm = () => {
@@ -255,7 +333,11 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
       return;
     }
 
-    const finalData = { ...resolvedData };
+    const finalData = resolveRelationshipConflictPayload(
+      resolvedData,
+      result.conflicts,
+      result.data
+    );
 
     // --- Bengali original_language_name safety ---
     // Only allow original_language_name in finalData if:
@@ -283,10 +365,15 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
     }
     // If hasDocBengaliName: resolvedData already contains the document value — pass through unchanged.
 
-    if (result.data.profile_photo?.storage_path && usePhoto) {
-      finalData.photo_source = result.data.profile_photo.storage_path;
-    }
-    onConfirm(finalData);
+    // Photo approval and payload resolution (Finding 6)
+    const confirmedPayload = resolvePhotoConfirmationPayload(
+      finalData,
+      usePhoto,
+      croppedStoragePath,
+      result.data.profile_photo?.storage_path
+    );
+
+    onConfirm(confirmedPayload);
   };
 
   return (
@@ -397,8 +484,7 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
                   </button>
                   <button
                     type="button"
-                    onClick={() => setUsePhoto(false)}
-                    disabled={isCroppingPhoto}
+                    onClick={handleRejectPhoto}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                       !usePhoto && !isCroppingPhoto
                         ? 'bg-red-600 text-white shadow-sm' 

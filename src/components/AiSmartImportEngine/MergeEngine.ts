@@ -230,21 +230,25 @@ export class MergeEngine {
         // They extracted the exact same name but assigned it to both Father and Spouse.
         // This is the "Husband/Spouse vs Father/Guardian" conflict.
         conflicts.push({
-          field: 'relationship_interpretation' as any,
+          field: 'relationship_interpretation',
           options: [
             {
               jobId: 'conflict',
               documentType: (data.father_name as any).source_document || 'Unknown',
               value: `Father: ${data.father_name.value}`,
               confidence: data.father_name.confidence,
-              source_side: (data.father_name as any).source_side
+              source_side: (data.father_name as any).source_side,
+              targetField: 'father_name',
+              candidateValue: data.father_name.value
             },
             {
               jobId: 'conflict',
               documentType: (data.spouse_name as any).source_document || 'Unknown',
               value: `Spouse: ${data.spouse_name.value}`,
               confidence: data.spouse_name.confidence,
-              source_side: (data.spouse_name as any).source_side
+              source_side: (data.spouse_name as any).source_side,
+              targetField: 'spouse_name',
+              candidateValue: data.spouse_name.value
             }
           ]
         });

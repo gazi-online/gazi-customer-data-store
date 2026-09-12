@@ -16,7 +16,15 @@ import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { AiSmartImportEngine } from "../AiSmartImportEngine";
 import { IndiaPincodeProvider } from "@/lib/address/IndiaPincodeProvider";
 import { PincodeLookupResult } from "@/lib/address/address-types";
-import { useRef } from "react";
+import { useRef, useMemo } from "react";
+import {
+  FieldOrigins,
+  initializeFieldOrigins,
+  canLookupOverwriteField,
+  resolveAutoFillPayload,
+  checkLookupFreshness,
+  VALID_FORM_FIELDS,
+} from "./customerFormUpdatePolicy";
 
 const customerSchema = z.object({
   customer_code: z.string().optional().or(z.literal("")),
@@ -47,6 +55,7 @@ const customerSchema = z.object({
   country: z.string().optional().or(z.literal("")),
   photo_url: z.string().optional(),
   photo_source: z.string().optional(),
+  original_language_name: z.string().optional().or(z.literal("")),
   
   status: z.enum(["active", "inactive", "lead"]),
 });
@@ -63,9 +72,8 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
   const isEditing = !!initialData;
 
-  const { register, handleSubmit, setValue, watch, getValues, formState: { errors } } = useForm<CustomerFormData>({
-    resolver: zodResolver(customerSchema),
-    defaultValues: initialData ? {
+  const defaultValues = useMemo<CustomerFormData>(() => {
+    return initialData ? {
       first_name: initialData.first_name,
       middle_name: initialData.middle_name || "",
       last_name: initialData.last_name,
@@ -95,6 +103,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       country: "India",
       photo_url: initialData.photo_url || undefined,
       photo_source: initialData.photo_source || undefined,
+      original_language_name: initialData.original_language_name || "",
     } : {
       first_name: "",
       middle_name: "",
@@ -104,7 +113,18 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       country: "India",
       status: "lead",
       gender: "",
-    },
+      original_language_name: "",
+    };
+  }, [initialData]);
+
+  const fieldOriginsRef = useRef<FieldOrigins | null>(null);
+  if (!fieldOriginsRef.current) {
+    fieldOriginsRef.current = initializeFieldOrigins(defaultValues as unknown as Record<string, unknown>, isEditing);
+  }
+
+  const { register, handleSubmit, setValue, watch, getValues, formState: { errors } } = useForm<CustomerFormData>({
+    resolver: zodResolver(customerSchema),
+    defaultValues,
   });
 
   const maritalStatus = watch("marital_status");
@@ -114,6 +134,14 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   const [isPincodeLoading, setIsPincodeLoading] = useState(false);
   const [pincodeError, setPincodeError] = useState<string | null>(null);
   const [isManualAddressEdit, setIsManualAddressEdit] = useState(false);
+  const isManualAddressEditRef = useRef(false);
+
+  const handleToggleManualAddress = () => {
+    const nextMode = !isManualAddressEditRef.current;
+    isManualAddressEditRef.current = nextMode;
+    setIsManualAddressEdit(nextMode);
+  };
+
   const [postOfficeOptions, setPostOfficeOptions] = useState<string[]>([]);
   const [localityOptions, setLocalityOptions] = useState<string[]>([]);
   const [pinRef, setPinRef] = useState<{ state: string; district: string } | null>(null);
@@ -123,50 +151,87 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   const watchedPincode = watch("pincode");
   const watchedState = watch("state");
   const watchedDistrict = watch("district");
+  const watchedPostOffice = watch("post_office");
 
   useEffect(() => {
+    let isCancelled = false;
     const cleanPin = (watchedPincode || "").replace(/\D/g, "").trim();
-    if (cleanPin.length === 6) {
-      const currentReqId = ++lookupReqIdRef.current;
-      setIsPincodeLoading(true);
+
+    // 1. Invalidation and clearing: non-6-digit PIN cancels any in-flight lookup
+    if (cleanPin.length !== 6) {
+      lookupReqIdRef.current++;
+      setIsPincodeLoading(false);
       setPincodeError(null);
-
-      IndiaPincodeProvider.lookup(cleanPin).then(res => {
-        if (lookupReqIdRef.current !== currentReqId) return; // Prevent race conditions
-        setIsPincodeLoading(false);
-        if (res.success && res.data) {
-          setPinRef({ state: res.data.state, district: res.data.district });
-          
-          // Auto-fill state and district unless user is in manual override mode
-          if (!isManualAddressEdit) {
-            setValue("state", res.data.state, { shouldValidate: true, shouldDirty: true });
-            setValue("district", res.data.district, { shouldValidate: true, shouldDirty: true });
-            setValue("country", "India", { shouldValidate: true, shouldDirty: true });
-          }
-
-          const poNames = res.data.postOffices.map(po => po.name);
-          setPostOfficeOptions(poNames);
-          if (poNames.length === 1) {
-            setValue("post_office", poNames[0], { shouldValidate: true, shouldDirty: true });
-          }
-
-          setLocalityOptions(res.data.citiesOrLocalities);
-        } else {
-          setPincodeError("PIN code lookup unavailable. You can enter the address manually.");
-          setIsManualAddressEdit(true);
-        }
-      }).catch(() => {
-        if (lookupReqIdRef.current !== currentReqId) return;
-        setIsPincodeLoading(false);
-        setPincodeError("PIN code lookup unavailable. You can enter the address manually.");
-        setIsManualAddressEdit(true);
-      });
-    } else {
       setPinRef(null);
       setPostOfficeOptions([]);
       setLocalityOptions([]);
+      return;
     }
-  }, [watchedPincode, setValue, isManualAddressEdit]);
+
+    // 2. Setup: advance request ID and start loading
+    const currentReqId = ++lookupReqIdRef.current;
+    setIsPincodeLoading(true);
+    setPincodeError(null);
+
+    IndiaPincodeProvider.lookup(cleanPin).then(res => {
+      // 3. Freshness check at response application time
+      if (isCancelled || !checkLookupFreshness(getValues("pincode"), cleanPin, currentReqId, lookupReqIdRef.current)) {
+        return; // Stale, superseded, or cancelled
+      }
+
+      setIsPincodeLoading(false);
+
+      if (res.success && res.data) {
+        setPinRef({ state: res.data.state, district: res.data.district });
+
+        const origins = fieldOriginsRef.current!;
+        const isManual = isManualAddressEditRef.current;
+
+        if (canLookupOverwriteField("state", res.data.state, origins.state, isManual)) {
+          setValue("state", res.data.state, { shouldValidate: true, shouldDirty: true });
+          origins.state = "lookup";
+        }
+
+        if (canLookupOverwriteField("district", res.data.district, origins.district, isManual)) {
+          setValue("district", res.data.district, { shouldValidate: true, shouldDirty: true });
+          origins.district = "lookup";
+        }
+
+        if (canLookupOverwriteField("country", "India", origins.country, isManual)) {
+          setValue("country", "India", { shouldValidate: true, shouldDirty: true });
+          origins.country = "lookup";
+        }
+
+        const poNames = res.data.postOffices.map(po => po.name);
+        setPostOfficeOptions(poNames);
+        if (poNames.length === 1 && canLookupOverwriteField("post_office", poNames[0], origins.post_office, isManual)) {
+          setValue("post_office", poNames[0], { shouldValidate: true, shouldDirty: true });
+          origins.post_office = "lookup";
+        }
+
+        setLocalityOptions(res.data.citiesOrLocalities);
+      } else {
+        setPincodeError("PIN code lookup unavailable. You can enter the address manually.");
+        setPinRef(null);
+        setPostOfficeOptions([]);
+        setLocalityOptions([]);
+      }
+    }).catch(() => {
+      if (isCancelled || !checkLookupFreshness(getValues("pincode"), cleanPin, currentReqId, lookupReqIdRef.current)) {
+        return;
+      }
+      setIsPincodeLoading(false);
+      setPincodeError("PIN code lookup unavailable. You can enter the address manually.");
+      setPinRef(null);
+      setPostOfficeOptions([]);
+      setLocalityOptions([]);
+    });
+
+    // 5. Cleanup invalidation: cancels in-flight on unmount or re-render
+    return () => {
+      isCancelled = true;
+    };
+  }, [watchedPincode, setValue, getValues]);
 
   useEffect(() => {
     async function loadPhoto() {
@@ -206,6 +271,9 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       if (error) throw error;
 
       setValue("photo_source", fileName, { shouldValidate: true, shouldDirty: true });
+      if (fieldOriginsRef.current) {
+        fieldOriginsRef.current.photo_source = 'user';
+      }
       toast.success("Profile photo uploaded");
     } catch (error: any) {
       toast.error("Failed to upload photo: " + error.message);
@@ -216,55 +284,32 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
   const handleRemovePhoto = () => {
     setValue("photo_source", "", { shouldValidate: true, shouldDirty: true });
+    if (fieldOriginsRef.current) {
+      fieldOriginsRef.current.photo_source = 'user';
+    }
     setPreviewPhotoUrl(null);
   };
 
   const handleAutoFill = (data: Record<string, any>) => {
     const currentValues = getValues();
+    const origins = fieldOriginsRef.current!;
 
-    Object.keys(data).forEach(field => {
-      // Do not overwrite manually uploaded profile photo unless current photo is empty
-      if (field === 'photo_source' && currentValues.photo_source && currentValues.photo_source.length > 0) {
-        return;
-      }
+    const {
+      fieldsToUpdate,
+      fieldOriginsToUpdate,
+      skippedNotice,
+    } = resolveAutoFillPayload(currentValues as unknown as Record<string, unknown>, data, origins);
 
-      // Do not overwrite a manually entered original_language_name.
-      // The user's explicit native-script entry always takes priority over
-      // any document-derived or accepted transliteration suggestion.
-      if (
-        field === 'original_language_name' &&
-        currentValues.original_language_name &&
-        String(currentValues.original_language_name).trim().length > 0
-      ) {
-        return;
-      }
+    for (const [field, value] of Object.entries(fieldsToUpdate)) {
+      setValue(field as keyof CustomerFormData, value as never, { shouldValidate: true, shouldDirty: true });
+    }
 
-      // Do not overwrite a manually entered primary phone.
-      if (
-        field === 'phone' &&
-        currentValues.phone &&
-        String(currentValues.phone).trim().length > 0
-      ) {
-        return;
-      }
+    for (const [field, origin] of Object.entries(fieldOriginsToUpdate)) {
+      origins[field] = origin;
+    }
 
-      // Only populate non-empty approved AI fields
-      if (data[field] !== undefined && data[field] !== null && data[field] !== "") {
-        setValue(field as any, data[field], { shouldValidate: true, shouldDirty: true });
-      }
-    });
-
-    // WhatsApp Auto-Fill Rule:
-    // Determine the final resolved primary phone (either manual existing or applied from AI data)
-    const finalPrimaryPhone = (currentValues.phone && currentValues.phone.trim().length > 0)
-      ? currentValues.phone.trim()
-      : (data.phone ? String(data.phone).trim() : "");
-
-    const currentWhatsapp = (currentValues.whatsapp || "").trim();
-
-    // If WhatsApp is currently empty and a valid final primary phone exists, copy to WhatsApp
-    if (finalPrimaryPhone && !currentWhatsapp) {
-      setValue("whatsapp", finalPrimaryPhone, { shouldValidate: true, shouldDirty: true });
+    if (skippedNotice) {
+      toast.warning(skippedNotice);
     }
 
     setAiDataApplied(true);
@@ -308,6 +353,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         gst_number: data.gst_number === "" ? null : data.gst_number,
         voter_id_number: data.voter_id_number === "" ? null : data.voter_id_number,
         post_office: data.post_office === "" ? null : data.post_office,
+        original_language_name: data.original_language_name === "" ? null : data.original_language_name,
         country: "India",
       } as any;
 
@@ -385,7 +431,22 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-8 shadow-sm space-y-8 relative">
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        onInput={(e) => {
+          const target = e.target as unknown as { name?: string };
+          if (target?.name && VALID_FORM_FIELDS.has(target.name) && fieldOriginsRef.current) {
+            fieldOriginsRef.current[target.name] = 'user';
+          }
+        }}
+        onChange={(e) => {
+          const target = e.target as unknown as { name?: string };
+          if (target?.name && VALID_FORM_FIELDS.has(target.name) && fieldOriginsRef.current) {
+            fieldOriginsRef.current[target.name] = 'user';
+          }
+        }}
+        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-8 shadow-sm space-y-8 relative"
+      >
         
         {/* Personal Details */}
         <div>
@@ -546,7 +607,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             {pinRef && (
               <button
                 type="button"
-                onClick={() => setIsManualAddressEdit(!isManualAddressEdit)}
+                onClick={handleToggleManualAddress}
                 className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
               >
                 {isManualAddressEdit ? "Lock to PIN reference" : "Edit manually"}
@@ -601,6 +662,11 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
               {postOfficeOptions.length > 0 ? (
                 <select {...register("post_office")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow">
                   <option value="">Select Post Office</option>
+                  {watchedPostOffice && !postOfficeOptions.includes(watchedPostOffice) && (
+                    <option key={watchedPostOffice} value={watchedPostOffice}>
+                      {watchedPostOffice} (Current)
+                    </option>
+                  )}
                   {postOfficeOptions.map(po => (
                     <option key={po} value={po}>{po}</option>
                   ))}
