@@ -2,32 +2,31 @@ import { CustomerDocument } from "./document";
 
 export type ServiceStatus = 'active' | 'inactive';
 
-// Currently persisted legacy status union (Phase 1 database constraint)
+// Persisted Phase 2A Service Request status union (12 statuses)
 export type CustomerServiceStatus =
+  // Operational Pipeline
   | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'cancelled'
-  | 'archived';
-
-// Alias for domain consistency with current persistence
-export type ServiceRequestStatus = CustomerServiceStatus;
-
-// Planned Phase 2 expanded workflow status union (deferred until FSM implementation)
-export type ServiceRequestWorkflowStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'draft'
   | 'documents_pending'
   | 'ready_to_submit'
   | 'submitted'
   | 'in_process'
   | 'action_required'
-  | 'rejected'
   | 'completed'
   | 'delivered'
+  // Terminal Outcomes
+  | 'rejected'
   | 'cancelled'
+  // Legacy Compatibility
+  | 'in_progress'
   | 'archived';
+
+// Alias for domain consistency with persisted schema
+export type ServiceRequestStatus = CustomerServiceStatus;
+
+// Forward-looking planning union (retains unpersisted 'draft' for future design)
+export type ServiceRequestWorkflowStatus =
+  | 'draft'
+  | CustomerServiceStatus;
 
 export type ServiceRequestPriority = 'low' | 'normal' | 'high' | 'urgent';
 

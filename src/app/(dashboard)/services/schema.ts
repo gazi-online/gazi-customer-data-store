@@ -18,10 +18,17 @@ export const customerServiceSchema = z.object({
   service_id: z.string().min(1, "Service ID is required"),
   status: z.enum([
     'pending',
-    'in_progress',
+    'documents_pending',
+    'ready_to_submit',
+    'submitted',
+    'in_process',
+    'action_required',
     'completed',
+    'delivered',
+    'rejected',
     'cancelled',
-    'archived'
+    'in_progress',
+    'archived',
   ]).default('pending'),
   amount: z.coerce.number().min(0, "Amount must be at least 0"),
   payment_status: z.enum(['unpaid', 'partial', 'paid', 'waived']).default('unpaid'),
@@ -37,3 +44,26 @@ export const customerServiceSchema = z.object({
 });
 
 export type CustomerServiceFormData = z.infer<typeof customerServiceSchema>;
+
+export const serviceRequestTransitionSchema = z.object({
+  customerServiceId: z.string().uuid("Invalid request ID format"),
+  toStatus: z.enum([
+    'pending',
+    'documents_pending',
+    'ready_to_submit',
+    'submitted',
+    'in_process',
+    'action_required',
+    'completed',
+    'delivered',
+    'rejected',
+    'cancelled',
+    'in_progress',
+    'archived',
+  ]),
+  applicationReference: z.string().optional().nullable(),
+  rejectionReason: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+export type ServiceRequestTransitionData = z.infer<typeof serviceRequestTransitionSchema>;

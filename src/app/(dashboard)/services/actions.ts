@@ -3,7 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { ServiceFormData } from "./schema";
-import { ServiceRequestStatus } from "@/types/service";
+import { CustomerServiceStatus } from "@/types/service";
+import { canTransitionServiceRequest } from "@/lib/services/serviceRequestWorkflow";
 
 export async function getServices(searchQuery?: string, statusFilter?: string, categoryFilter?: string) {
   const supabase = await createClient();
@@ -102,7 +103,7 @@ export async function upsertCustomerService(data: {
   id?: string;
   customer_id: string;
   service_id: string;
-  status: ServiceRequestStatus;
+  status?: CustomerServiceStatus;
   amount: number;
   payment_status: 'unpaid' | 'partial' | 'paid' | 'waived';
   service_date: string;
@@ -116,56 +117,171 @@ export async function upsertCustomerService(data: {
   delivered_at?: string | null;
 }) {
   const supabase = await createClient();
-  
-  // Prepare payload
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { error: "Authentication required" };
+  }
+
+  // CREATE PATH: server-enforced initial status = 'pending'
+  if (!data.id) {
+    const payload: Record<string, unknown> = {
+      customer_id: data.customer_id,
+      service_id: data.service_id,
+      status: 'pending', // Server forces initial status, client override is discarded
+      amount: data.amount,
+      payment_status: data.payment_status,
+      service_date: data.service_date,
+      due_date: data.due_date || null,
+      notes: data.notes || null,
+      application_reference: data.application_reference ? data.application_reference.trim() : null,
+      portal_name: data.portal_name || null,
+      priority: data.priority || 'normal',
+      created_by: user.id,
+    };
+
+    const { data: inserted, error } = await supabase
+      .from("customer_services")
+      .insert([payload])
+      .select()
+      .single();
+
+    if (error) return { error: error.message };
+
+    revalidatePath(`/customers/${data.customer_id}`);
+    revalidatePath("/services");
+    return { success: true, data: inserted };
+  }
+
+  // EDIT PATH: ordinary metadata edits cannot modify status or lifecycle fields
+  if (!isValidUuid(data.id)) {
+    return { error: "Invalid service request ID format" };
+  }
+
+  const { data: existing, error: fetchErr } = await supabase
+    .from("customer_services")
+    .select("id, status, customer_id")
+    .eq("id", data.id)
+    .single();
+
+  if (fetchErr || !existing) {
+    return { error: "Service request not found" };
+  }
+
+  if (data.status && data.status !== existing.status) {
+    return {
+      error: "Status cannot be updated through generic edit. Use transitionServiceRequestStatus() for workflow transitions."
+    };
+  }
+
   const payload: Record<string, unknown> = {
     customer_id: data.customer_id,
     service_id: data.service_id,
-    status: data.status,
     amount: data.amount,
     payment_status: data.payment_status,
     service_date: data.service_date,
     due_date: data.due_date || null,
     notes: data.notes || null,
-    application_reference: data.application_reference || null,
+    application_reference: data.application_reference ? data.application_reference.trim() : null,
     portal_name: data.portal_name || null,
     priority: data.priority || 'normal',
-    rejection_reason: data.rejection_reason || null,
-    delivered_at: data.delivered_at || null,
   };
 
-  if (data.request_number) {
-    payload.request_number = data.request_number;
-  }
+  const { error } = await supabase
+    .from("customer_services")
+    .update(payload)
+    .eq("id", data.id);
 
-  if (data.status === 'completed') {
-    if (!data.id) {
-      payload.completed_at = new Date().toISOString();
-    } else {
-      const { data: existing } = await supabase
-        .from("customer_services")
-        .select("completed_at")
-        .eq("id", data.id)
-        .single();
-      if (existing && !existing.completed_at) {
-        payload.completed_at = new Date().toISOString();
-      }
-    }
-  } else {
-    // When status is pending, in_progress, cancelled, or archived, reset completed_at = null
-    payload.completed_at = null;
-  }
+  if (error) return { error: error.message };
 
-  if (data.id) {
-    const { error } = await supabase.from("customer_services").update(payload).eq("id", data.id);
-    if (error) return { error: error.message };
-  } else {
-    const { error } = await supabase.from("customer_services").insert([payload]);
-    if (error) return { error: error.message };
-  }
-  
   revalidatePath(`/customers/${data.customer_id}`);
+  revalidatePath("/services");
   return { success: true };
+}
+
+export async function transitionServiceRequestStatus(params: {
+  customerServiceId: string;
+  toStatus: CustomerServiceStatus;
+  applicationReference?: string | null;
+  rejectionReason?: string | null;
+  notes?: string | null;
+}) {
+  const { customerServiceId, toStatus, applicationReference, rejectionReason, notes } = params;
+
+  if (!isValidUuid(customerServiceId)) {
+    return { error: "Invalid request ID format" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { error: "Authentication required" };
+  }
+
+  // 1. Fetch current row server-side (never trust client fromStatus)
+  const { data: current, error: fetchError } = await supabase
+    .from("customer_services")
+    .select("id, customer_id, status, application_reference, rejection_reason, notes")
+    .eq("id", customerServiceId)
+    .single();
+
+  if (fetchError || !current) {
+    return { error: "Service request not found" };
+  }
+
+  const fromStatus = current.status as CustomerServiceStatus;
+
+  // 2. Early TypeScript FSM validation
+  if (!canTransitionServiceRequest(fromStatus, toStatus)) {
+    return {
+      error: `Cannot transition service request from '${fromStatus}' to '${toStatus}'.`
+    };
+  }
+
+  // 3. Validation of metadata requirements
+  if (toStatus === 'rejected') {
+    const trimmedReason = rejectionReason?.trim();
+    if (!trimmedReason) {
+      return { error: "A non-empty rejection reason is required when rejecting a request." };
+    }
+  }
+
+  // 4. Build payload with trimmed fields
+  const updatePayload: Record<string, unknown> = {
+    status: toStatus,
+  };
+
+  if (applicationReference !== undefined) {
+    updatePayload.application_reference = applicationReference ? applicationReference.trim() : null;
+  }
+  if (rejectionReason !== undefined) {
+    updatePayload.rejection_reason = rejectionReason ? rejectionReason.trim() : null;
+  }
+  if (notes !== undefined) {
+    updatePayload.notes = notes ? notes.trim() : null;
+  }
+
+  // 5. Concurrency / Compare-and-Set Protection
+  const { data: updated, error: updateError } = await supabase
+    .from("customer_services")
+    .update(updatePayload)
+    .eq("id", customerServiceId)
+    .eq("status", fromStatus)
+    .select()
+    .single();
+
+  if (updateError) {
+    return { error: updateError.message };
+  }
+
+  if (!updated) {
+    return {
+      error: "Conflict: Service request status was modified concurrently by another operation. Please refresh."
+    };
+  }
+
+  revalidatePath(`/customers/${current.customer_id}`);
+  revalidatePath("/services");
+  return { success: true, data: updated };
 }
 
 export async function getServiceRequestById(id: string) {

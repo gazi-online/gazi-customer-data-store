@@ -6,11 +6,7 @@ import {
   ServiceRequest,
   ServiceRequestPriority,
   CustomerServiceStatus,
-  ServiceRequestStatus,
   ServiceRequestWorkflowStatus,
-  ServiceRequestDocument,
-  ServiceRequestStatusHistory,
-  ServiceRequestWithDetails
 } from "./src/types/service";
 import { customerServiceSchema } from "./src/app/(dashboard)/services/schema";
 
@@ -27,7 +23,7 @@ function it(name: string, fn: () => void) {
     fn();
     passedTests++;
     console.log(`✅ [PASS] ${name}`);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(`❌ [FAIL] ${name}`);
     console.error(err);
     process.exitCode = 1;
@@ -159,18 +155,15 @@ it("3a. Legacy persisted statuses ('pending', 'in_progress', 'completed', 'cance
   });
 });
 
-it("3b. Future Phase 2 statuses are strictly REJECTED by current persistence schema", () => {
-  const futureStatuses = [
+it("3b. Unpersisted future statuses (such as draft) are strictly REJECTED by current persistence schema", () => {
+  const unpersistedStatuses = [
     'draft',
-    'documents_pending',
-    'ready_to_submit',
-    'submitted',
-    'in_process',
-    'action_required',
-    'rejected',
-    'delivered'
+    'under_review',
+    'in_review',
+    'submitted_for_review',
+    'closed'
   ];
-  futureStatuses.forEach(s => {
+  unpersistedStatuses.forEach(s => {
     const res = customerServiceSchema.safeParse({
       customer_id: "a0000000-0000-0000-0000-000000000001",
       service_id: "b0000000-0000-0000-0000-000000000001",
@@ -181,7 +174,7 @@ it("3b. Future Phase 2 statuses are strictly REJECTED by current persistence sch
     assert.strictEqual(
       res.success,
       false,
-      `Future status '${s}' must NOT be accepted by Phase 1 persistence schema until Phase 2 FSM is ready`
+      `Unpersisted status '${s}' must NOT be accepted by persistence schema`
     );
   });
 });
