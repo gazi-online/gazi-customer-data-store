@@ -14,13 +14,15 @@ import {
   X,
   Search,
   Receipt,
-  CreditCard
+  CreditCard,
+  ClipboardList
 } from "lucide-react";
 import { logout } from "./actions";
 import { useState } from "react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
+  { name: "Requests", href: "/requests", icon: ClipboardList },
   { name: "Customers", href: "/customers", icon: Users },
   { name: "Invoices", href: "/invoices", icon: Receipt },
   { name: "Payments", href: "/payments", icon: CreditCard },
