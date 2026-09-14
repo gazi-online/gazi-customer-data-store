@@ -67,8 +67,12 @@ export function RequestDrawer({
           return;
         }
 
-        if (res.error || !res.data) {
-          setErrorMessage(res.error || "Failed to load service request details.");
+        if (!res.data) {
+          if (res.errorCode === "not_found") {
+            setErrorMessage("Request is no longer available.");
+          } else {
+            setErrorMessage(res.error || "Failed to load service request details.");
+          }
           setData(null);
         } else {
           setData(res.data);
@@ -106,8 +110,12 @@ export function RequestDrawer({
         const res = await getServiceRequestDrawerData(requestId);
         if (isCancelled || fetchSequenceRef.current !== currentSeq) return;
 
-        if (res.error || !res.data) {
-          setErrorMessage(res.error || "Failed to load service request details.");
+        if (!res.data) {
+          if (res.errorCode === "not_found") {
+            setErrorMessage("Request is no longer available.");
+          } else {
+            setErrorMessage(res.error || "Failed to load service request details.");
+          }
           setData(null);
         } else {
           setData(res.data);
@@ -244,6 +252,17 @@ export function RequestDrawer({
                 <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               </button>
 
+              {data && (
+                <Link
+                  href={`/requests/${data.id}`}
+                  className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                  title="Open Full Workspace"
+                  aria-label="Open Full Workspace"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Link>
+              )}
+
               <button
                 type="button"
                 onClick={onClose}
@@ -310,7 +329,7 @@ export function RequestDrawer({
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-200/60 dark:border-zinc-700/60 flex items-center justify-between">
+                  <div className="pt-2 border-t border-slate-200/60 dark:border-zinc-700/60 flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
                         Status:
@@ -318,23 +337,34 @@ export function RequestDrawer({
                       <RequestStatusBadge status={data.status} />
                     </div>
 
-                    {onTransitionRequest && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onTransitionRequest({
-                            id: data.id,
-                            requestNumber: data.requestNumber,
-                            status: data.status,
-                            applicationReference: data.applicationReference,
-                          })
-                        }
-                        className="px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-xl transition-colors flex items-center gap-1 shadow-2xs"
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/requests/${data.id}`}
+                        className="px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700 rounded-xl transition-colors flex items-center gap-1 shadow-2xs"
+                        title="Open Full Workspace"
                       >
-                        <RefreshCw className="h-3 w-3" />
-                        <span>Update Status</span>
-                      </button>
-                    )}
+                        <span>Workspace</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+
+                      {onTransitionRequest && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onTransitionRequest({
+                              id: data.id,
+                              requestNumber: data.requestNumber,
+                              status: data.status,
+                              applicationReference: data.applicationReference,
+                            })
+                          }
+                          className="px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-xl transition-colors flex items-center gap-1 shadow-2xs"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          <span>Update Status</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 

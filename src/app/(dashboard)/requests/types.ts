@@ -199,6 +199,24 @@ export interface RequestDrawerData {
   invoices: RequestDrawerInvoiceItem[];
 }
 
+export type RequestDrawerErrorCode =
+  | "invalid_id"
+  | "auth_required"
+  | "not_found"
+  | "query_failed";
+
+export type RequestDrawerResult =
+  | {
+      data: RequestDrawerData;
+      error: null;
+      errorCode: null;
+    }
+  | {
+      data: null;
+      error: string;
+      errorCode: RequestDrawerErrorCode;
+    };
+
 // ==============================================================================
 // SANITIZATION & PARAM PARSING
 // ==============================================================================

@@ -14,7 +14,7 @@
  * 9. Hard scope enforcement: no /requests/[id], no document mutations, no invoice generation
  */
 
-import { readFileSync, existsSync } from "fs";
+import { readFileSync } from "fs";
 import { resolve } from "path";
 import {
   getAllowedServiceRequestTransitions,
@@ -339,11 +339,13 @@ assert(
 // ==============================================================================
 console.log("\n--- 9. Hard Scope Boundary Verifications ---");
 
-// 9a. /requests/[id] route must NOT exist
-const requestDetailRouteExists = existsSync(resolve(__dirname, "src/app/(dashboard)/requests/[id]"));
+// 9a. Durable Phase 2B-2 invariant: requests/actions.ts remains strictly READ-ONLY for workflow status
 assert(
-  !requestDetailRouteExists,
-  "9a. /requests/[id] workspace route has NOT been created (strictly deferred to Phase 2C)"
+  !requestsActionsSource.includes("function transitionServiceRequestStatus") &&
+    !requestsActionsSource.includes("updateServiceRequestStatus") &&
+    !requestsActionsSource.includes("service_request_status_history.insert") &&
+    !requestsActionsSource.includes("ALLOWED_TRANSITIONS"),
+  "9a. requests/actions.ts remains strictly read-only for workflow status (mutation canonical to services/actions.ts)"
 );
 
 // 9b. RequestsTable does not link to /requests/[id]

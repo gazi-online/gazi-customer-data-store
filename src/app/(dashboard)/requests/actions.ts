@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import {
   RequestDrawerData,
+  RequestDrawerResult,
   RequestDrawerDocument,
   RequestDrawerHistoryItem,
   RequestDrawerInvoiceItem,
@@ -67,18 +68,15 @@ interface RawServiceRow {
   category?: string | null;
 }
 
-export async function getServiceRequestDrawerData(requestId: string): Promise<{
-  data: RequestDrawerData | null;
-  error?: string | null;
-}> {
+export async function getServiceRequestDrawerData(requestId: string): Promise<RequestDrawerResult> {
   if (!requestId || !isValidUuid(requestId)) {
-    return { data: null, error: "Invalid service request ID format." };
+    return { data: null, error: "Invalid service request ID format.", errorCode: "invalid_id" };
   }
 
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
-    return { data: null, error: "Authentication required to view service request details." };
+    return { data: null, error: "Authentication required to view service request details.", errorCode: "auth_required" };
   }
 
   try {
@@ -142,8 +140,13 @@ export async function getServiceRequestDrawerData(requestId: string): Promise<{
       .eq("id", requestId)
       .single();
 
-    if (fetchError || !row) {
-      return { data: null, error: "Service request not found or access denied." };
+    if (fetchError) {
+      // Safe operational query failure without leaking Postgres internals
+      return { data: null, error: "Failed to query service request.", errorCode: "query_failed" };
+    }
+
+    if (!row) {
+      return { data: null, error: "Service request not found or access denied.", errorCode: "not_found" };
     }
 
     // 2. Fetch linked invoices through invoice_items (supports 0, 1, or multiple linked invoices)
@@ -164,8 +167,8 @@ export async function getServiceRequestDrawerData(requestId: string): Promise<{
       .eq("customer_service_id", requestId);
 
     if (invError) {
-      // Non-fatal error; log internally but proceed with empty invoice array
-      console.error("Failed to fetch linked invoice items for drawer:", invError.message);
+      // Non-fatal secondary query error; log technical code only without leaking PII
+      console.error("Failed to fetch linked invoice items for drawer (code:", invError.code, ")");
     }
 
     // 3. Process documents (strictly safe metadata only)
@@ -270,9 +273,9 @@ export async function getServiceRequestDrawerData(requestId: string): Promise<{
       invoices,
     };
 
-    return { data: drawerData, error: null };
-  } catch (err: unknown) {
-    console.error("Unexpected error in getServiceRequestDrawerData:", err);
-    return { data: null, error: "An unexpected error occurred while loading request details." };
+    return { data: drawerData, error: null, errorCode: null };
+  } catch {
+    console.error("Unexpected error in getServiceRequestDrawerData");
+    return { data: null, error: "An unexpected error occurred while loading request details.", errorCode: "query_failed" };
   }
 }
