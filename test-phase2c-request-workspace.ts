@@ -44,6 +44,7 @@ const notFoundPath = path.resolve("src/app/(dashboard)/requests/[id]/not-found.t
 const errorPath = path.resolve("src/app/(dashboard)/requests/[id]/error.tsx");
 const workspacePath = path.resolve("src/components/requests/RequestWorkspace.tsx");
 const actionsPath = path.resolve("src/components/requests/RequestWorkspaceActions.tsx");
+const documentManagerPath = path.resolve("src/components/requests/RequestDocumentManager.tsx");
 const drawerPath = path.resolve("src/components/requests/RequestDrawer.tsx");
 const serverActionsPath = path.resolve("src/app/(dashboard)/requests/actions.ts");
 const servicesActionsPath = path.resolve("src/app/(dashboard)/services/actions.ts");
@@ -54,6 +55,7 @@ const notFoundCode = fs.existsSync(notFoundPath) ? fs.readFileSync(notFoundPath,
 const errorCode = fs.existsSync(errorPath) ? fs.readFileSync(errorPath, "utf-8") : "";
 const workspaceCode = fs.existsSync(workspacePath) ? fs.readFileSync(workspacePath, "utf-8") : "";
 const actionsCode = fs.existsSync(actionsPath) ? fs.readFileSync(actionsPath, "utf-8") : "";
+const documentManagerCode = fs.existsSync(documentManagerPath) ? fs.readFileSync(documentManagerPath, "utf-8") : "";
 const drawerCode = fs.existsSync(drawerPath) ? fs.readFileSync(drawerPath, "utf-8") : "";
 const serverActionsCode = fs.existsSync(serverActionsPath) ? fs.readFileSync(serverActionsPath, "utf-8") : "";
 const servicesActionsCode = fs.existsSync(servicesActionsPath) ? fs.readFileSync(servicesActionsPath, "utf-8") : "";
@@ -250,14 +252,15 @@ assert(
 );
 
 assert(
-  workspaceCode.includes("Attached Documents (Read-Only)") &&
-    workspaceCode.includes("requirementTag") &&
-    workspaceCode.includes("isVerified"),
+  (workspaceCode.includes("Attached Documents") || documentManagerCode.includes("Attached Documents")) &&
+    (workspaceCode.includes("requirementTag") || documentManagerCode.includes("requirementTag")) &&
+    (workspaceCode.includes("isVerified") || documentManagerCode.includes("isVerified")),
   "5d. Documents section renders metadata, tags, and verification badges"
 );
 
 assert(
-  workspaceCode.includes("No documents attached to this service request"),
+  workspaceCode.includes("No documents attached to this service request") ||
+    documentManagerCode.includes("No documents attached to this service request"),
   "5e. Documents section contains explicit empty state"
 );
 

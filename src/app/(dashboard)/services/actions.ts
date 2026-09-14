@@ -5,6 +5,10 @@ import { revalidatePath } from "next/cache";
 import { ServiceFormData } from "./schema";
 import { CustomerServiceStatus } from "@/types/service";
 import { canTransitionServiceRequest } from "@/lib/services/serviceRequestWorkflow";
+import {
+  attachDocumentToRequest,
+  detachDocumentFromRequest,
+} from "@/app/(dashboard)/requests/actions";
 
 export async function getServices(searchQuery?: string, statusFilter?: string, categoryFilter?: string) {
   const supabase = await createClient();
@@ -337,67 +341,39 @@ export async function getServiceRequestDocuments(customerServiceId: string) {
   return data || [];
 }
 
+/**
+ * Attach a document to a service request.
+ * Delegates to canonical attachDocumentToRequest implementation.
+ */
 export async function attachDocumentToServiceRequest(params: {
   customerServiceId: string;
   documentId: string;
   requirementTag?: string;
   notes?: string;
 }) {
-  const { customerServiceId, documentId, requirementTag = 'general', notes } = params;
-  if (!isValidUuid(customerServiceId) || !isValidUuid(documentId)) {
-    return { error: "Invalid ID format" };
+  const { customerServiceId, documentId, requirementTag, notes } = params;
+  const result = await attachDocumentToRequest({
+    requestId: customerServiceId,
+    documentId,
+    requirementTag,
+    notes,
+  });
+
+  if (!result.success) {
+    return { error: result.error };
   }
 
-  const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return { error: "Authentication required" };
-  }
-
-  // Pre-validate ownership consistency: document customer MUST match request customer
-  const [csRes, docRes] = await Promise.all([
-    supabase.from("customer_services").select("id, customer_id").eq("id", customerServiceId).single(),
-    supabase.from("customer_documents").select("id, customer_id, status, archived_at").eq("id", documentId).single()
-  ]);
-
-  if (csRes.error || !csRes.data) {
-    return { error: "Service request not found" };
-  }
-  if (docRes.error || !docRes.data) {
-    return { error: "Document not found" };
-  }
-  if (docRes.data.status === 'archived' || docRes.data.archived_at) {
-    return { error: "Cannot attach an archived document to a service request" };
-  }
-
-  if (csRes.data.customer_id !== docRes.data.customer_id) {
-    return { error: "Customer integrity mismatch: document does not belong to this service request's customer" };
-  }
-
-  const { data, error } = await supabase
-    .from("service_request_documents")
-    .insert([{
-      customer_service_id: customerServiceId,
-      document_id: documentId,
-      requirement_tag: requirementTag.trim(),
-      notes: notes?.trim() || null,
-      created_by: user.id
-    }])
-    .select()
-    .single();
-
-  if (error) {
-    if (error.code === '23505') {
-      return { error: "This document is already attached under this requirement tag" };
-    }
-    return { error: error.message };
-  }
-
-  revalidatePath(`/customers/${csRes.data.customer_id}`);
-  return { success: true, data };
+  return { success: true, data: { id: result.associationId } };
 }
 
-export async function detachDocumentFromServiceRequest(serviceRequestDocumentId: string, customerId?: string) {
+/**
+ * Detach a document from a service request.
+ * Delegates to canonical detachDocumentFromRequest implementation.
+ */
+export async function detachDocumentFromServiceRequest(
+  serviceRequestDocumentId: string,
+  customerId?: string
+) {
   if (!isValidUuid(serviceRequestDocumentId)) {
     return { error: "Invalid ID format" };
   }
@@ -406,6 +382,21 @@ export async function detachDocumentFromServiceRequest(serviceRequestDocumentId:
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return { error: "Authentication required" };
+  }
+
+  const { data: assoc } = await supabase
+    .from("service_request_documents")
+    .select("customer_service_id")
+    .eq("id", serviceRequestDocumentId)
+    .single();
+
+  if (assoc?.customer_service_id) {
+    const res = await detachDocumentFromRequest({
+      requestId: assoc.customer_service_id,
+      associationId: serviceRequestDocumentId,
+    });
+    if (!res.success) return { error: res.error };
+    return { success: true };
   }
 
   const { error } = await supabase

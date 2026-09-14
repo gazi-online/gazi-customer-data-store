@@ -218,6 +218,71 @@ export type RequestDrawerResult =
     };
 
 // ==============================================================================
+// REQUEST DOCUMENT LIFECYCLE DATA CONTRACTS (PHASE 2C-2)
+// ==============================================================================
+
+export interface EligibleVaultDocument {
+  id: string;
+  documentType: string;
+  documentName: string;
+  sourceFilename?: string;
+  status: string;
+  version: number;
+  uploadedAt: string;
+  fileSize?: number;
+  existingTags: string[];
+}
+
+export type RequestDocumentErrorCode =
+  | "invalid_input"
+  | "auth_required"
+  | "not_found"
+  | "customer_mismatch"
+  | "not_attachable"
+  | "already_attached"
+  | "conflict"
+  | "upload_failed"
+  | "association_failed"
+  | "query_failed";
+
+export type RequestDocumentMutationResult =
+  | {
+      success: true;
+      data?: unknown;
+      documentId?: string;
+      associationId?: string;
+      error: null;
+      errorCode: null;
+      partialSuccess?: false;
+    }
+  | {
+      success: false;
+      error: string;
+      errorCode: RequestDocumentErrorCode;
+      partialSuccess?: boolean;
+      documentId?: string;
+    };
+
+/**
+ * Canonical requirement tag normalizer shared across Attach Existing
+ * and Upload New + Attach flows.
+ * Guaranteed to produce a non-empty, safe string clamped to 50 characters,
+ * with 'general' fallback occurring both before and after normalization.
+ */
+export function normalizeRequirementTag(tag?: string | null): string {
+  if (!tag) return "general";
+  const trimmed = tag.trim().toLowerCase();
+  if (!trimmed) return "general";
+  const sanitized = trimmed
+    .replace(/[^a-z0-9]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (!sanitized) return "general";
+  const sliced = sanitized.slice(0, 50).replace(/_+$/, "");
+  return sliced || "general";
+}
+
+// ==============================================================================
 // SANITIZATION & PARAM PARSING
 // ==============================================================================
 

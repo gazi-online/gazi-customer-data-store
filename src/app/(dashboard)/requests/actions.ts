@@ -1,12 +1,18 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { uploadCustomerDocument } from "@/app/(dashboard)/documents/actions";
 import {
   RequestDrawerData,
   RequestDrawerResult,
   RequestDrawerDocument,
   RequestDrawerHistoryItem,
   RequestDrawerInvoiceItem,
+  EligibleVaultDocument,
+  RequestDocumentErrorCode,
+  RequestDocumentMutationResult,
+  normalizeRequirementTag,
   getIndiaLocalDate,
   isRequestOverdue,
 } from "./types";
@@ -277,5 +283,410 @@ export async function getServiceRequestDrawerData(requestId: string): Promise<Re
   } catch {
     console.error("Unexpected error in getServiceRequestDrawerData");
     return { data: null, error: "An unexpected error occurred while loading request details.", errorCode: "query_failed" };
+  }
+}
+
+// ==============================================================================
+// REQUEST DOCUMENT LIFECYCLE SERVER ACTIONS (PHASE 2C-2)
+// ==============================================================================
+
+/**
+ * Fetch non-archived customer documents eligible for attachment to a service request.
+ * Derives the owning customer_id strictly on the server under tenant RLS.
+ */
+export async function getEligibleRequestDocuments(
+  requestId: string
+): Promise<{
+  data: EligibleVaultDocument[] | null;
+  error: string | null;
+  errorCode: RequestDocumentErrorCode | null;
+}> {
+  if (!isValidUuid(requestId)) {
+    return { data: null, error: "Invalid service request ID format.", errorCode: "invalid_input" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { data: null, error: "Authentication required.", errorCode: "auth_required" };
+    }
+
+    // 1. Resolve customer_id through request record under tenant RLS
+    const { data: request, error: reqErr } = await supabase
+      .from("customer_services")
+      .select("id, customer_id")
+      .eq("id", requestId)
+      .single();
+
+    if (reqErr || !request || !request.customer_id) {
+      return { data: null, error: "Service request not found or access denied.", errorCode: "not_found" };
+    }
+
+    // 2. Fetch existing associations for this request to track already-used requirement tags
+    const { data: existingAssocs, error: assocErr } = await supabase
+      .from("service_request_documents")
+      .select("document_id, requirement_tag")
+      .eq("customer_service_id", requestId);
+
+    if (assocErr) {
+      console.error("[getEligibleRequestDocuments] Existing associations error:", assocErr.message);
+      return { data: null, error: "Failed to retrieve existing associations.", errorCode: "query_failed" };
+    }
+
+    const tagsByDocId: Record<string, string[]> = {};
+    for (const a of existingAssocs || []) {
+      if (a.document_id) {
+        if (!tagsByDocId[a.document_id]) tagsByDocId[a.document_id] = [];
+        if (a.requirement_tag) tagsByDocId[a.document_id].push(a.requirement_tag);
+      }
+    }
+
+    // 3. Query non-archived customer vault documents (active or superseded non-archived)
+    const { data: docs, error: docErr } = await supabase
+      .from("customer_documents")
+      .select("id, document_type, document_name, source_filename, status, version, uploaded_at, file_size, archived_at")
+      .eq("customer_id", request.customer_id)
+      .neq("status", "archived")
+      .is("archived_at", null)
+      .order("uploaded_at", { ascending: false });
+
+    if (docErr) {
+      console.error("[getEligibleRequestDocuments] Documents query error:", docErr.message);
+      return { data: null, error: "Failed to load customer documents.", errorCode: "query_failed" };
+    }
+
+    // 4. Transform into safe public representation (never expose file_url, storage path, OCR, AI JSON, raw actor UUID)
+    const eligibleDocs: EligibleVaultDocument[] = (docs || []).map((d) => ({
+      id: d.id,
+      documentType: d.document_type || "Document",
+      documentName: d.document_name || d.document_type || "Document",
+      sourceFilename: d.source_filename || undefined,
+      status: d.status || "active",
+      version: Number(d.version || 1),
+      uploadedAt: d.uploaded_at || new Date().toISOString(),
+      fileSize: d.file_size ? Number(d.file_size) : undefined,
+      existingTags: tagsByDocId[d.id] || [],
+    }));
+
+    return { data: eligibleDocs, error: null, errorCode: null };
+  } catch {
+    console.error("Unexpected error in getEligibleRequestDocuments");
+    return { data: null, error: "An unexpected error occurred while loading eligible documents.", errorCode: "query_failed" };
+  }
+}
+
+/**
+ * Attach an existing non-archived customer vault document to a service request.
+ * Enforces server-side same-customer ownership validation and canonical tag normalization.
+ */
+export async function attachDocumentToRequest(params: {
+  requestId: string;
+  documentId: string;
+  requirementTag?: string;
+  notes?: string;
+}): Promise<RequestDocumentMutationResult> {
+  const { requestId, documentId, requirementTag, notes } = params;
+
+  if (!isValidUuid(requestId) || !isValidUuid(documentId)) {
+    return { success: false, error: "Invalid ID format.", errorCode: "invalid_input" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: "Authentication required.", errorCode: "auth_required" };
+    }
+
+    // 1. Pre-validate ownership and non-archived status under tenant RLS
+    const [csRes, docRes] = await Promise.all([
+      supabase.from("customer_services").select("id, customer_id").eq("id", requestId).single(),
+      supabase.from("customer_documents").select("id, customer_id, status, archived_at").eq("id", documentId).single(),
+    ]);
+
+    if (csRes.error || !csRes.data) {
+      return { success: false, error: "Service request not found or access denied.", errorCode: "not_found" };
+    }
+    if (docRes.error || !docRes.data) {
+      return { success: false, error: "Customer document not found or access denied.", errorCode: "not_found" };
+    }
+
+    if (csRes.data.customer_id !== docRes.data.customer_id) {
+      return {
+        success: false,
+        error: "Customer integrity mismatch: Document does not belong to this service request's customer.",
+        errorCode: "customer_mismatch",
+      };
+    }
+
+    if (docRes.data.status === "archived" || docRes.data.archived_at) {
+      return {
+        success: false,
+        error: "Cannot attach an archived document to a service request.",
+        errorCode: "not_attachable",
+      };
+    }
+
+    // 2. Canonical requirement tag normalization
+    const normalizedTag = normalizeRequirementTag(requirementTag);
+
+    // 3. Insert association record (created_by = auth.uid() strictly enforced)
+    const { data: inserted, error: insertError } = await supabase
+      .from("service_request_documents")
+      .insert([{
+        customer_service_id: requestId,
+        document_id: documentId,
+        requirement_tag: normalizedTag,
+        notes: notes?.trim() || null,
+        is_verified: false,
+        created_by: user.id,
+      }])
+      .select("id")
+      .single();
+
+    if (insertError) {
+      if (insertError.code === "23505" || insertError.message?.includes("duplicate key")) {
+        return {
+          success: false,
+          error: "This document is already attached to this request under the same requirement tag.",
+          errorCode: "already_attached",
+        };
+      }
+      console.error("[attachDocumentToRequest] Insert error:", insertError.message);
+      return {
+        success: false,
+        error: "Failed to attach document to service request.",
+        errorCode: "association_failed",
+      };
+    }
+
+    // 4. Revalidate concrete paths
+    revalidatePath(`/requests/${requestId}`);
+    revalidatePath("/requests");
+    if (csRes.data.customer_id) {
+      revalidatePath(`/customers/${csRes.data.customer_id}`);
+    }
+
+    return {
+      success: true,
+      associationId: inserted.id,
+      documentId,
+      error: null,
+      errorCode: null,
+    };
+  } catch {
+    console.error("Unexpected error in attachDocumentToRequest");
+    return { success: false, error: "An unexpected error occurred while attaching document.", errorCode: "query_failed" };
+  }
+}
+
+/**
+ * Upload a new file into the canonical customer Document Vault and attach it to the service request.
+ * Server derives request.customer_id to prevent client tenant tampering.
+ * Implements partial failure contract: if upload succeeds but attach fails, the vault document is preserved.
+ */
+export async function uploadAndAttachDocumentToRequest(params: {
+  requestId: string;
+  requirementTag?: string;
+  formData: FormData;
+}): Promise<RequestDocumentMutationResult> {
+  const { requestId, requirementTag, formData } = params;
+
+  if (!isValidUuid(requestId)) {
+    return { success: false, error: "Invalid service request ID format.", errorCode: "invalid_input" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: "Authentication required.", errorCode: "auth_required" };
+    }
+
+    // 1. Fetch service request server-side to resolve trusted customer_id
+    const { data: request, error: reqErr } = await supabase
+      .from("customer_services")
+      .select("id, customer_id")
+      .eq("id", requestId)
+      .single();
+
+    if (reqErr || !request || !request.customer_id) {
+      return { success: false, error: "Service request not found or access denied.", errorCode: "not_found" };
+    }
+
+    // 2. Override/set server-derived customer_id so client cannot spoof ownership
+    formData.delete("customerId");
+    formData.set("customer_id", request.customer_id);
+
+    // 3. Delegate file upload and metadata persistence to canonical Document Vault pipeline
+    const uploadRes = await uploadCustomerDocument(formData);
+    if (!uploadRes || uploadRes.error || !uploadRes.documentId) {
+      return {
+        success: false,
+        error: uploadRes?.error || "Failed to upload document file to customer vault.",
+        errorCode: "upload_failed",
+      };
+    }
+
+    const uploadedDocId = uploadRes.documentId;
+
+    // 4. Attach newly created vault document to this request
+    const attachRes = await attachDocumentToRequest({
+      requestId,
+      documentId: uploadedDocId,
+      requirementTag,
+    });
+
+    if (!attachRes.success) {
+      // Partial failure: Vault document was saved successfully, but association failed.
+      return {
+        success: false,
+        partialSuccess: true,
+        documentId: uploadedDocId,
+        errorCode: "association_failed",
+        error: "The document was saved to the customer's Document Vault, but could not be attached to this request.",
+      };
+    }
+
+    return {
+      success: true,
+      documentId: uploadedDocId,
+      associationId: attachRes.associationId,
+      error: null,
+      errorCode: null,
+    };
+  } catch {
+    console.error("Unexpected error in uploadAndAttachDocumentToRequest");
+    return { success: false, error: "An unexpected error occurred during upload and attachment.", errorCode: "query_failed" };
+  }
+}
+
+/**
+ * Detach a document association from a service request.
+ * Deletes ONLY the service_request_documents association row.
+ * The customer_documents vault record and storage objects are strictly preserved.
+ */
+export async function detachDocumentFromRequest(params: {
+  requestId: string;
+  associationId: string;
+}): Promise<RequestDocumentMutationResult> {
+  const { requestId, associationId } = params;
+
+  if (!isValidUuid(requestId) || !isValidUuid(associationId)) {
+    return { success: false, error: "Invalid ID format.", errorCode: "invalid_input" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: "Authentication required.", errorCode: "auth_required" };
+    }
+
+    // 1. Verify association belongs to this service request under tenant RLS
+    const { data: assoc, error: fetchErr } = await supabase
+      .from("service_request_documents")
+      .select("id, customer_service_id, customer_services(customer_id)")
+      .eq("id", associationId)
+      .eq("customer_service_id", requestId)
+      .single();
+
+    if (fetchErr || !assoc) {
+      return {
+        success: false,
+        error: "Document association not found or already removed.",
+        errorCode: "not_found",
+      };
+    }
+
+    // 2. Delete ONLY the service_request_documents link
+    const { error: delErr } = await supabase
+      .from("service_request_documents")
+      .delete()
+      .eq("id", associationId)
+      .eq("customer_service_id", requestId);
+
+    if (delErr) {
+      console.error("[detachDocumentFromRequest] Delete error:", delErr.message);
+      return { success: false, error: "Failed to detach document association.", errorCode: "query_failed" };
+    }
+
+    // 3. Revalidate concrete paths
+    revalidatePath(`/requests/${requestId}`);
+    revalidatePath("/requests");
+    const custLink = assoc as unknown as { customer_services?: { customer_id?: string } | null };
+    const custId = custLink?.customer_services?.customer_id;
+    if (custId) {
+      revalidatePath(`/customers/${custId}`);
+    }
+
+    return { success: true, error: null, errorCode: null };
+  } catch {
+    console.error("Unexpected error in detachDocumentFromRequest");
+    return { success: false, error: "An unexpected error occurred while detaching document.", errorCode: "query_failed" };
+  }
+}
+
+/**
+ * Toggle verification state on a service_request_documents association.
+ * Uses compare-and-set (CAS) optimistic concurrency based on expectedIsVerified.
+ * Never modifies customer_documents.verified.
+ */
+export async function toggleDocumentVerification(params: {
+  requestId: string;
+  associationId: string;
+  expectedIsVerified: boolean;
+  isVerified: boolean;
+}): Promise<RequestDocumentMutationResult> {
+  const { requestId, associationId, expectedIsVerified, isVerified } = params;
+
+  if (!isValidUuid(requestId) || !isValidUuid(associationId)) {
+    return { success: false, error: "Invalid ID format.", errorCode: "invalid_input" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: "Authentication required.", errorCode: "auth_required" };
+    }
+
+    // Compare-and-set update strictly on the association record
+    const { data: updated, error: updateErr } = await supabase
+      .from("service_request_documents")
+      .update({ is_verified: isVerified })
+      .eq("id", associationId)
+      .eq("customer_service_id", requestId)
+      .eq("is_verified", expectedIsVerified)
+      .select("id, is_verified, customer_services(customer_id)");
+
+    if (updateErr) {
+      console.error("[toggleDocumentVerification] Update error:", updateErr.message);
+      return { success: false, error: "Failed to update verification status.", errorCode: "query_failed" };
+    }
+
+    if (!updated || updated.length === 0) {
+      // Concurrency conflict: row was modified by another operator or already in target state
+      return {
+        success: false,
+        error: "Verification state has changed concurrently. Please refresh and try again.",
+        errorCode: "conflict",
+      };
+    }
+
+    // Revalidate concrete paths
+    revalidatePath(`/requests/${requestId}`);
+    revalidatePath("/requests");
+    const updatedLink = updated[0] as unknown as { customer_services?: { customer_id?: string } | null };
+    const custId = updatedLink?.customer_services?.customer_id;
+    if (custId) {
+      revalidatePath(`/customers/${custId}`);
+    }
+
+    return { success: true, data: updated[0], error: null, errorCode: null };
+  } catch {
+    console.error("Unexpected error in toggleDocumentVerification");
+    return { success: false, error: "An unexpected error occurred while toggling verification.", errorCode: "query_failed" };
   }
 }
