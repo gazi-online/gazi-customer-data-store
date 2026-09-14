@@ -11,6 +11,9 @@ import {
   ALLOWED_LIMITS,
 } from "@/app/(dashboard)/requests/types";
 import { RequestsTable } from "./RequestsTable";
+import { RequestDrawer } from "./RequestDrawer";
+import { RequestStatusTransitionModal } from "./RequestStatusTransitionModal";
+import { CustomerServiceStatus } from "@/types/service";
 import {
   Search,
   Filter,
@@ -55,6 +58,16 @@ export function RequestsDeskView({
 
   // Local state for search bar
   const [searchInput, setSearchInput] = useState(searchParams.get("q") || "");
+
+  // Modal and Drawer states (Phase 2B-2)
+  const [drawerRequestId, setDrawerRequestId] = useState<string | null>(null);
+  const [transitionRequest, setTransitionRequest] = useState<{
+    id: string;
+    requestNumber: string | null;
+    status: CustomerServiceStatus;
+    applicationReference: string | null;
+  } | null>(null);
+  const [drawerRefreshTrigger, setDrawerRefreshTrigger] = useState<number>(0);
 
   // Current active parameters from URL
   const currentQ = searchParams.get("q") || "";
@@ -428,7 +441,18 @@ export function RequestsDeskView({
           </div>
         ) : (
           <>
-            <RequestsTable requests={initialRequests} />
+            <RequestsTable
+              requests={initialRequests}
+              onInspect={(id) => setDrawerRequestId(id)}
+              onTransition={(req) =>
+                setTransitionRequest({
+                  id: req.id,
+                  requestNumber: req.requestNumber,
+                  status: req.status,
+                  applicationReference: req.applicationReference,
+                })
+              }
+            />
 
             {/* Pagination Controls Footer */}
             <div className="p-4 border-t border-slate-200/80 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/50 dark:bg-zinc-900/50">
@@ -486,6 +510,33 @@ export function RequestsDeskView({
           </>
         )}
       </div>
+
+      {/* Quick Status Transition Modal (Phase 2B-2) */}
+      {transitionRequest && (
+        <RequestStatusTransitionModal
+          key={transitionRequest.id}
+          isOpen={Boolean(transitionRequest)}
+          onClose={() => setTransitionRequest(null)}
+          requestId={transitionRequest.id}
+          requestNumber={transitionRequest.requestNumber}
+          currentStatus={transitionRequest.status}
+          existingApplicationReference={transitionRequest.applicationReference}
+          onSuccess={() => {
+            setDrawerRefreshTrigger((prev) => prev + 1);
+            startTransition(() => {
+              router.refresh();
+            });
+          }}
+        />
+      )}
+
+      {/* Read-Only Request Inspection Drawer (Phase 2B-2) */}
+      <RequestDrawer
+        requestId={drawerRequestId}
+        onClose={() => setDrawerRequestId(null)}
+        onTransitionRequest={(req) => setTransitionRequest(req)}
+        refreshTrigger={drawerRefreshTrigger}
+      />
     </div>
   );
 }

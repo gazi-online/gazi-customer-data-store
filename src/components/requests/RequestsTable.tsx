@@ -11,16 +11,20 @@ import {
   Phone,
   FileText,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  Eye,
+  RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 interface RequestsTableProps {
   requests: ServiceRequestDeskRow[];
+  onInspect?: (requestId: string) => void;
+  onTransition?: (req: ServiceRequestDeskRow) => void;
 }
 
-export function RequestsTable({ requests }: RequestsTableProps) {
+export function RequestsTable({ requests, onInspect, onTransition }: RequestsTableProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleCopy = (text: string, label: string) => {
@@ -80,9 +84,20 @@ export function RequestsTable({ requests }: RequestsTableProps) {
                 <td className="py-3.5 px-4 align-top">
                   <div className="flex flex-col">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-mono font-bold text-xs text-slate-900 dark:text-zinc-100">
-                        {req.requestNumber || "SR-PENDING"}
-                      </span>
+                      {onInspect ? (
+                        <button
+                          type="button"
+                          onClick={() => onInspect(req.id)}
+                          className="font-mono font-bold text-xs text-slate-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left cursor-pointer transition-colors"
+                          title="Inspect Request"
+                        >
+                          {req.requestNumber || "SR-PENDING"}
+                        </button>
+                      ) : (
+                        <span className="font-mono font-bold text-xs text-slate-900 dark:text-zinc-100">
+                          {req.requestNumber || "SR-PENDING"}
+                        </span>
+                      )}
                       {req.requestNumber && (
                         <button
                           type="button"
@@ -184,7 +199,18 @@ export function RequestsTable({ requests }: RequestsTableProps) {
 
                 {/* 6. Workflow Status */}
                 <td className="py-3.5 px-4 align-top text-center">
-                  <RequestStatusBadge status={req.status} />
+                  {onTransition ? (
+                    <button
+                      type="button"
+                      onClick={() => onTransition(req)}
+                      className="cursor-pointer hover:opacity-85 transition-opacity"
+                      title="Click to update status"
+                    >
+                      <RequestStatusBadge status={req.status} />
+                    </button>
+                  ) : (
+                    <RequestStatusBadge status={req.status} />
+                  )}
                 </td>
 
                 {/* 7. Due Date */}
@@ -235,9 +261,33 @@ export function RequestsTable({ requests }: RequestsTableProps) {
                 {/* 10. Actions / Navigation */}
                 <td className="py-3.5 px-4 align-top text-right">
                   <div className="flex items-center justify-end gap-1">
+                    {onInspect && (
+                      <button
+                        type="button"
+                        onClick={() => onInspect(req.id)}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors cursor-pointer"
+                        title="Inspect Request"
+                        aria-label={`Inspect request ${req.requestNumber || req.id}`}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                    )}
+
+                    {onTransition && (
+                      <button
+                        type="button"
+                        onClick={() => onTransition(req)}
+                        className="p-1.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors cursor-pointer"
+                        title="Update Status"
+                        aria-label={`Update status of ${req.requestNumber || req.id}`}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
+                    )}
+
                     <Link
                       href={`/customers/${req.customerId}?tab=services`}
-                      className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                      className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                       title="Open Customer Profile"
                       aria-label={`Open profile of ${req.customerName}`}
                     >

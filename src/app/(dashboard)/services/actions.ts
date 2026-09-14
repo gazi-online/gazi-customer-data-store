@@ -281,6 +281,7 @@ export async function transitionServiceRequestStatus(params: {
 
   revalidatePath(`/customers/${current.customer_id}`);
   revalidatePath("/services");
+  revalidatePath("/requests");
   return { success: true, data: updated };
 }
 

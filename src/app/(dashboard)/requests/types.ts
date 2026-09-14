@@ -126,6 +126,80 @@ export interface ServiceRequestsSummaryMetrics {
 }
 
 // ==============================================================================
+// REQUEST DRAWER DATA CONTRACTS (PHASE 2B-2)
+// ==============================================================================
+
+export interface RequestDrawerDocument {
+  id: string;
+  requirementTag: string;
+  isVerified: boolean;
+  documentId: string;
+  documentType: string;
+  documentName: string;
+  fileSize?: number;
+  status?: string;
+  createdAt: string;
+}
+
+export interface RequestDrawerHistoryItem {
+  id: string;
+  fromStatus: string | null;
+  toStatus: string;
+  changedBy: string | null;
+  createdAt: string;
+}
+
+export interface RequestDrawerInvoiceItem {
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  status: string;
+  totalAmount: number;
+  dueAmount: number;
+  invoiceDate: string;
+}
+
+export interface RequestDrawerData {
+  id: string;
+  requestNumber: string | null;
+  status: CustomerServiceStatus;
+  priority: ServiceRequestPriority;
+  applicationReference: string | null;
+  portalName: string | null;
+  notes: string | null;
+  rejectionReason: string | null;
+  amount: number;
+  paymentStatus: PaymentStatus;
+  serviceDate: string;
+  dueDate: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  deliveredAt: string | null;
+  archivedAt: string | null;
+  isOverdue: boolean;
+
+  customer: {
+    id: string;
+    customerCode: string | null;
+    firstName: string;
+    middleName: string | null;
+    lastName: string;
+    phone: string | null;
+  };
+
+  service: {
+    id: string;
+    serviceCode: string;
+    serviceName: string;
+    category: string | null;
+  };
+
+  documents: RequestDrawerDocument[];
+  statusHistory: RequestDrawerHistoryItem[];
+  invoices: RequestDrawerInvoiceItem[];
+}
+
+// ==============================================================================
 // SANITIZATION & PARAM PARSING
 // ==============================================================================
 
