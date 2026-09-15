@@ -108,6 +108,7 @@ export async function createPayment(payload: CreatePaymentPayload) {
     revalidatePath("/invoices");
     revalidatePath(`/invoices/${payload.invoice_id}`);
     revalidatePath(`/customers/${payload.customer_id}`);
+    revalidatePath("/requests");
     revalidatePath("/dashboard");
 
     return {
@@ -145,6 +146,7 @@ export async function createPayment(payload: CreatePaymentPayload) {
     revalidatePath("/payments");
     revalidatePath("/invoices");
     revalidatePath(`/customers/${payload.customer_id}`);
+    revalidatePath("/requests");
     revalidatePath("/dashboard");
 
     return {

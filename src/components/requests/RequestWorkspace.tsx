@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { RequestDrawerData } from "@/app/(dashboard)/requests/types";
+import { RequestDrawerData, calculateRequestBillingSummary } from "@/app/(dashboard)/requests/types";
 import { RequestStatusBadge } from "./RequestStatusBadge";
 import { RequestPriorityBadge } from "./RequestPriorityBadge";
 import { RequestWorkspaceActions, CopyButton } from "./RequestWorkspaceActions";
 import { RequestDocumentManager } from "./RequestDocumentManager";
+import { RequestBillingControls } from "./RequestBillingControls";
+import { RequestInvoiceRowActions } from "./RequestInvoiceRowActions";
 import { getServiceRequestStatusLabel } from "@/lib/services/serviceRequestWorkflow";
 import { CustomerServiceStatus } from "@/types/service";
 import {
@@ -80,6 +82,9 @@ export function RequestWorkspace({ data }: RequestWorkspaceProps) {
 
   const displayRequestNumber =
     data.requestNumber || `SR-${data.id.slice(0, 8).toUpperCase()}`;
+
+  const billingSummary =
+    data.billingSummary || calculateRequestBillingSummary(data.invoices);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -399,29 +404,22 @@ export function RequestWorkspace({ data }: RequestWorkspaceProps) {
             </div>
           </section>
 
-          {/* Card 5: Billing & Invoicing (Read-Only) */}
+          {/* Card 5: Billing & Payments */}
           <section className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 shadow-xs space-y-4">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-2">
-              <CreditCard className="h-4 w-4" />
-              <span>Billing & Invoicing</span>
-            </h2>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                <span>Billing & Payments</span>
+                <span className="sr-only">Billing & Invoicing</span>
+              </h2>
 
-            <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-zinc-800/40 border border-slate-200/70 dark:border-zinc-800 space-y-3 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 dark:text-zinc-400 font-medium">
-                  Service Fee
-                </span>
-                <span className="font-extrabold text-slate-900 dark:text-zinc-100 text-base">
-                  {formatCurrency(data.amount)}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-zinc-700/60">
-                <span className="text-slate-500 dark:text-zinc-400 font-medium">
-                  Payment Status
+              {/* Display-only Payment Status Badge */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
+                  Payment Status:
                 </span>
                 <span
-                  className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider ${
+                  className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
                     data.paymentStatus === "paid"
                       ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
                       : data.paymentStatus === "partial"
@@ -436,15 +434,75 @@ export function RequestWorkspace({ data }: RequestWorkspaceProps) {
               </div>
             </div>
 
+            {/* Financial Totals Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="p-3 rounded-xl bg-slate-50/80 dark:bg-zinc-800/40 border border-slate-200/70 dark:border-zinc-800">
+                <div className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                  Total Invoiced
+                </div>
+                <div className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-zinc-100 mt-0.5">
+                  {formatCurrency(billingSummary.totalInvoiced)}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50/80 dark:bg-zinc-800/40 border border-slate-200/70 dark:border-zinc-800">
+                <div className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                  Total Paid
+                </div>
+                <div className="text-base sm:text-lg font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                  {formatCurrency(billingSummary.totalPaid)}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50/80 dark:bg-zinc-800/40 border border-slate-200/70 dark:border-zinc-800">
+                <div className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                  Balance Due
+                </div>
+                <div
+                  className={`text-base sm:text-lg font-extrabold mt-0.5 ${
+                    billingSummary.balanceDue > 0
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-slate-900 dark:text-zinc-100"
+                  }`}
+                >
+                  {formatCurrency(billingSummary.balanceDue)}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50/80 dark:bg-zinc-800/40 border border-slate-200/70 dark:border-zinc-800">
+                <div className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                  Active Invoices
+                </div>
+                <div className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-zinc-100 mt-0.5">
+                  {billingSummary.activeInvoiceCount}
+                </div>
+              </div>
+            </div>
+
+            {/* Interactive Billing Controls Island */}
+            <RequestBillingControls
+              requestId={data.id}
+              customerId={data.customer.id}
+              customerName={customerFullName}
+              customerCode={data.customer.customerCode || undefined}
+              serviceName={data.service.serviceName}
+              defaultAmount={data.amount}
+              paymentStatus={data.paymentStatus}
+              billingSummary={billingSummary}
+              invoices={data.invoices}
+            />
+
             {/* Linked Invoices */}
-            <div className="space-y-2">
+            <div className="space-y-2 pt-2 border-t border-slate-200/60 dark:border-zinc-800">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Linked Invoices
+                  Invoices ({data.invoices.length})
                 </span>
-                <span className="text-[11px] font-semibold text-slate-400">
-                  {data.invoices.length}
-                </span>
+                {data.invoices.length > 0 && (
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    {billingSummary.activeInvoiceCount} active
+                  </span>
+                )}
               </div>
 
               {data.invoices.length === 0 ? (
@@ -456,21 +514,44 @@ export function RequestWorkspace({ data }: RequestWorkspaceProps) {
                   {data.invoices.map((inv) => (
                     <div
                       key={inv.id || inv.invoiceId}
-                      className="p-3 rounded-xl bg-slate-50/80 dark:bg-zinc-800/40 border border-slate-200/70 dark:border-zinc-800 flex items-center justify-between gap-3 text-xs"
+                      className="p-3.5 rounded-xl bg-slate-50/80 dark:bg-zinc-800/40 border border-slate-200/70 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Receipt className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                          <span className="font-bold text-slate-900 dark:text-zinc-100 font-mono">
+                          <span className="font-bold text-slate-900 dark:text-zinc-100 font-mono text-sm">
                             {inv.invoiceNumber}
                           </span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              inv.status === "paid"
+                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                : inv.status === "partially_paid"
+                                ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                                : inv.status === "cancelled"
+                                ? "bg-slate-200 text-slate-700 dark:bg-zinc-800 dark:text-zinc-400"
+                                : inv.status === "draft"
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                : "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300"
+                            }`}
+                          >
+                            {inv.status}
+                          </span>
+                          {inv.invoiceDate && (
+                            <span className="text-[11px] text-slate-400">
+                              {formatDate(inv.invoiceDate)}
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 dark:text-zinc-400">
+
+                        <div className="flex items-center gap-2.5 text-[11px] text-slate-600 dark:text-zinc-400 font-medium">
                           <span>Total: {formatCurrency(inv.totalAmount)}</span>
+                          <span>•</span>
+                          <span>Paid: {formatCurrency(inv.paidAmount || 0)}</span>
                           <span>•</span>
                           <span
                             className={
-                              inv.dueAmount > 0 ? "font-bold text-red-600" : ""
+                              inv.dueAmount > 0 ? "font-bold text-red-600 dark:text-red-400" : ""
                             }
                           >
                             Due: {formatCurrency(inv.dueAmount)}
@@ -478,14 +559,12 @@ export function RequestWorkspace({ data }: RequestWorkspaceProps) {
                         </div>
                       </div>
 
-                      <Link
-                        href={`/invoices/${inv.invoiceId}`}
-                        className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg transition-colors"
-                        title="View Invoice"
-                        aria-label={`View invoice ${inv.invoiceNumber}`}
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Link>
+                      <RequestInvoiceRowActions
+                        requestId={data.id}
+                        invoice={inv}
+                        customerId={data.customer.id}
+                        customerName={customerFullName}
+                      />
                     </div>
                   ))}
                 </div>

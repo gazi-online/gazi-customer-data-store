@@ -227,6 +227,7 @@ export async function setRequestPaymentWaiver(requestId: string, waived: boolean
   }
 
   revalidatePath("/requests");
+  revalidatePath(`/requests/${requestId}`);
   revalidatePath("/services");
   revalidatePath("/dashboard");
 

@@ -1,4 +1,5 @@
 import { CustomerServiceStatus, ServiceRequestPriority, PaymentStatus } from "@/types/service";
+import { BillingEngine } from "@/lib/billing/BillingEngine";
 
 // ==============================================================================
 // CANONICAL STATUS & FILTER SETS
@@ -149,12 +150,32 @@ export interface RequestDrawerHistoryItem {
   createdAt: string;
 }
 
+export interface RequestBillingInvoice {
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  status: string;
+  totalAmount: number;
+  paidAmount: number;
+  dueAmount: number;
+}
+
+export interface RequestBillingSummary {
+  activeInvoiceCount: number;
+  totalInvoiced: number;
+  totalPaid: number;
+  balanceDue: number;
+  invoices: RequestBillingInvoice[];
+}
+
 export interface RequestDrawerInvoiceItem {
   id: string;
   invoiceId: string;
   invoiceNumber: string;
   status: string;
   totalAmount: number;
+  paidAmount?: number;
   dueAmount: number;
   invoiceDate: string;
 }
@@ -197,6 +218,7 @@ export interface RequestDrawerData {
   documents: RequestDrawerDocument[];
   statusHistory: RequestDrawerHistoryItem[];
   invoices: RequestDrawerInvoiceItem[];
+  billingSummary?: RequestBillingSummary;
 }
 
 export type RequestDrawerErrorCode =
@@ -396,4 +418,55 @@ export function isRequestOverdue(
   const refDate = referenceDateStr || getIndiaLocalDate();
   const dueDay = dueDate.split("T")[0];
   return dueDay < refDate;
+}
+
+/**
+ * Pure helper function to aggregate financial totals across linked invoices.
+ * Canonical active invoice statuses: issued, partially_paid, paid.
+ * Inactive / excluded from active financial totals: draft, cancelled.
+ */
+export function calculateRequestBillingSummary(
+  invoices: Array<{
+    id?: string;
+    invoiceId?: string;
+    invoiceNumber?: string;
+    invoiceDate?: string;
+    status: string;
+    totalAmount?: number;
+    paidAmount?: number;
+    dueAmount?: number;
+  }>
+): RequestBillingSummary {
+  const normalizedInvoices: RequestBillingInvoice[] = invoices.map((inv) => ({
+    id: inv.id || inv.invoiceId || "",
+    invoiceId: inv.invoiceId || inv.id || "",
+    invoiceNumber: inv.invoiceNumber || "INV-UNKNOWN",
+    invoiceDate: inv.invoiceDate || "",
+    status: inv.status || "draft",
+    totalAmount: Number(inv.totalAmount || 0),
+    paidAmount: Number(inv.paidAmount || 0),
+    dueAmount: Number(inv.dueAmount || 0),
+  }));
+
+  const activeInvoices = normalizedInvoices.filter((inv) =>
+    ["issued", "partially_paid", "paid"].includes(inv.status)
+  );
+
+  const totalInvoiced = BillingEngine.roundMoney(
+    activeInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0)
+  );
+  const totalPaid = BillingEngine.roundMoney(
+    activeInvoices.reduce((sum, inv) => sum + inv.paidAmount, 0)
+  );
+  const balanceDue = BillingEngine.roundMoney(
+    activeInvoices.reduce((sum, inv) => sum + inv.dueAmount, 0)
+  );
+
+  return {
+    activeInvoiceCount: activeInvoices.length,
+    totalInvoiced,
+    totalPaid,
+    balanceDue,
+    invoices: normalizedInvoices,
+  };
 }

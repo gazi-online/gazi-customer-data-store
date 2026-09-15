@@ -3,12 +3,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { uploadCustomerDocument } from "@/app/(dashboard)/documents/actions";
+import { createInvoice } from "@/app/(dashboard)/invoices/actions";
 import {
   RequestDrawerData,
   RequestDrawerResult,
   RequestDrawerDocument,
   RequestDrawerHistoryItem,
   RequestDrawerInvoiceItem,
+  RequestBillingInvoice,
+  RequestBillingSummary,
+  calculateRequestBillingSummary,
   EligibleVaultDocument,
   RequestDocumentErrorCode,
   RequestDocumentMutationResult,
@@ -53,6 +57,7 @@ interface RawInvoiceItemRow {
     invoice_number?: string | null;
     status?: string | null;
     total_amount?: number | null;
+    paid_amount?: number | null;
     due_amount?: number | null;
     invoice_date?: string | null;
   } | null;
@@ -166,6 +171,7 @@ export async function getServiceRequestDrawerData(requestId: string): Promise<Re
           invoice_number,
           status,
           total_amount,
+          paid_amount,
           due_amount,
           invoice_date
         )
@@ -227,6 +233,7 @@ export async function getServiceRequestDrawerData(requestId: string): Promise<Re
             invoiceNumber: inv.invoice_number || "INV-UNKNOWN",
             status: inv.status || "draft",
             totalAmount: Number(inv.total_amount || 0),
+            paidAmount: Number(inv.paid_amount || 0),
             dueAmount: Number(inv.due_amount || 0),
             invoiceDate: inv.invoice_date || "",
           });
@@ -277,6 +284,7 @@ export async function getServiceRequestDrawerData(requestId: string): Promise<Re
       documents,
       statusHistory,
       invoices,
+      billingSummary: calculateRequestBillingSummary(invoices),
     };
 
     return { data: drawerData, error: null, errorCode: null };
@@ -689,4 +697,194 @@ export async function toggleDocumentVerification(params: {
     console.error("Unexpected error in toggleDocumentVerification");
     return { success: false, error: "An unexpected error occurred while toggling verification.", errorCode: "query_failed" };
   }
+}
+
+// ==============================================================================
+// REQUEST BILLING SUMMARY & INVOICE GENERATION (PHASE 2C-3D)
+// ==============================================================================
+
+/**
+ * Server action to fetch canonical billing summary for a specific request.
+ * Derives totals strictly from linked invoice_items.customer_service_id.
+ */
+export async function getRequestBillingSummary(requestId: string): Promise<{
+  data: RequestBillingSummary | null;
+  error: string | null;
+}> {
+  if (!requestId || !isValidUuid(requestId)) {
+    return { data: null, error: "Invalid request ID." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { data: null, error: "Authentication required." };
+  }
+
+  const { data: items, error: invError } = await supabase
+    .from("invoice_items")
+    .select(`
+      id,
+      invoice_id,
+      invoice:invoices(
+        id,
+        invoice_number,
+        status,
+        total_amount,
+        paid_amount,
+        due_amount,
+        invoice_date
+      )
+    `)
+    .eq("customer_service_id", requestId);
+
+  if (invError) {
+    console.error("Error fetching request billing summary:", invError);
+    return { data: null, error: "Failed to load request billing summary." };
+  }
+
+  const seen = new Set<string>();
+  const invoices: RequestBillingInvoice[] = [];
+
+  if (Array.isArray(items)) {
+    for (const item of items) {
+      const inv = item.invoice as {
+        id?: string;
+        invoice_number?: string;
+        status?: string;
+        total_amount?: number;
+        paid_amount?: number;
+        due_amount?: number;
+        invoice_date?: string;
+      } | null;
+      if (inv && inv.id && !seen.has(inv.id)) {
+        seen.add(inv.id);
+        invoices.push({
+          id: item.id,
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoice_number || "INV-UNKNOWN",
+          invoiceDate: inv.invoice_date || "",
+          status: inv.status || "draft",
+          totalAmount: Number(inv.total_amount || 0),
+          paidAmount: Number(inv.paid_amount || 0),
+          dueAmount: Number(inv.due_amount || 0),
+        });
+      }
+    }
+  }
+
+  const summary = calculateRequestBillingSummary(invoices);
+  return { data: summary, error: null };
+}
+
+/**
+ * Server action to generate an invoice for a specific request.
+ * Server derives customer_id and customer_service_id relationships from database.
+ * Never trusts client customer_id/customer_service_id.
+ */
+export async function generateInvoiceForRequest(params: {
+  requestId: string;
+  description?: string;
+  amount?: number;
+  status?: "draft" | "issued";
+  notes?: string;
+}): Promise<{
+  success: boolean;
+  data?: {
+    id: string;
+    invoice_number: string;
+    total_amount: number;
+    status: string;
+  };
+  error?: string;
+}> {
+  const { requestId, description, amount, status = "issued", notes } = params;
+
+  if (!requestId || !isValidUuid(requestId)) {
+    return { success: false, error: "Invalid request ID." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { success: false, error: "Authentication required." };
+  }
+
+  // 1. Fetch request to derive customer_id, service_id, and default amounts server-side
+  const { data: reqRow, error: reqError } = await supabase
+    .from("customer_services")
+    .select(`
+      id,
+      customer_id,
+      service_id,
+      amount,
+      notes,
+      service:services(id, service_name, default_price),
+      customer:customers(id, first_name, last_name, customer_code)
+    `)
+    .eq("id", requestId)
+    .single();
+
+  if (reqError || !reqRow) {
+    console.error("Failed to load service request for invoice generation:", reqError);
+    return { success: false, error: "Service request not found or access denied." };
+  }
+
+  const serviceObj = (reqRow.service as { service_name?: string; default_price?: number } | null) || {};
+  const lineDescription = description?.trim() || serviceObj.service_name || "Service Fee";
+  const unitPrice =
+    amount !== undefined && amount >= 0
+      ? amount
+      : Number(reqRow.amount) > 0
+      ? Number(reqRow.amount)
+      : Number(serviceObj.default_price || 0);
+
+  const today = new Date().toISOString().split("T")[0];
+  const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  // 2. Call canonical createInvoice (which routes through create_invoice_atomic)
+  const invoiceRes = await createInvoice({
+    customer_id: reqRow.customer_id,
+    invoice_date: today,
+    due_date: dueDate,
+    notes: notes || reqRow.notes || null,
+    status,
+    items: [
+      {
+        customer_service_id: reqRow.id,
+        service_id: reqRow.service_id,
+        description: lineDescription,
+        quantity: 1,
+        unit_price: unitPrice,
+        discount_amount: 0,
+        tax_amount: 0,
+      },
+    ],
+  });
+
+  if (invoiceRes.error || !invoiceRes.success) {
+    return { success: false, error: invoiceRes.error || "Failed to create invoice." };
+  }
+
+  revalidatePath("/requests");
+  revalidatePath(`/requests/${requestId}`);
+  revalidatePath(`/customers/${reqRow.customer_id}`);
+  revalidatePath("/invoices");
+  if (invoiceRes.data?.id) {
+    revalidatePath(`/invoices/${invoiceRes.data.id}`);
+  }
+  revalidatePath("/dashboard");
+
+  return {
+    success: true,
+    data: invoiceRes.data,
+  };
 }

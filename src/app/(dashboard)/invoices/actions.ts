@@ -206,7 +206,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Crea
   };
 }
 
-export async function issueInvoice(id: string) {
+export async function issueInvoice(id: string, requestId?: string) {
   const supabase = await createClient();
 
   const { error } = await supabase
@@ -222,6 +222,10 @@ export async function issueInvoice(id: string) {
 
   revalidatePath(`/invoices/${id}`);
   revalidatePath("/invoices");
+  revalidatePath("/requests");
+  if (requestId) {
+    revalidatePath(`/requests/${requestId}`);
+  }
   return { success: true };
 }
 
