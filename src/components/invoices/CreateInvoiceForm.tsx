@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, ArrowLeft, Receipt, Calculator, Save, Check } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Receipt, Calculator, Save } from "lucide-react";
 import { BillingEngine } from "@/lib/billing/BillingEngine";
 import { createInvoice } from "@/app/(dashboard)/invoices/actions";
 import { toast } from "sonner";
@@ -67,6 +67,8 @@ export function CreateInvoiceForm({
   const [notes, setNotes] = useState("");
   const [invoiceStatus, setInvoiceStatus] = useState<'issued' | 'draft'>('issued');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Idempotency Key Client Contract: reused on retries, regenerated on fresh transaction
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID());
 
   const [items, setItems] = useState<LineItemState[]>([
     {
@@ -164,6 +166,7 @@ export function CreateInvoiceForm({
         due_date: dueDate || null,
         notes: notes || null,
         status: invoiceStatus,
+        idempotency_key: idempotencyKey,
         items: items.map((it) => ({
           service_id: it.service_id || null,
           customer_service_id: it.customer_service_id || null,
@@ -180,10 +183,20 @@ export function CreateInvoiceForm({
         return;
       }
 
-      toast.success("Invoice created successfully!");
-      router.push(`/invoices/${res.data.id}`);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create invoice.");
+      if (res.replayed) {
+        toast.info("Invoice already created (idempotent replay).");
+      } else {
+        toast.success("Invoice created successfully!");
+      }
+
+      setIdempotencyKey(crypto.randomUUID());
+      if (res.data?.id) {
+        router.push(`/invoices/${res.data.id}`);
+      } else {
+        router.push("/invoices");
+      }
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Failed to create invoice.");
     } finally {
       setIsSubmitting(false);
     }

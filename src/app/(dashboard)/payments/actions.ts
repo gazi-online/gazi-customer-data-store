@@ -64,6 +64,7 @@ export interface CreatePaymentPayload {
   reference_number?: string | null;
   notes?: string | null;
   invoice_id?: string | null;
+  idempotency_key?: string | null;
 }
 
 export async function createPayment(payload: CreatePaymentPayload) {
@@ -78,71 +79,85 @@ export async function createPayment(payload: CreatePaymentPayload) {
   }
 
   const roundedAmount = BillingEngine.roundMoney(Number(payload.amount));
-  const { data: { user } } = await supabase.auth.getUser();
+  const idempotencyKey = payload.idempotency_key || crypto.randomUUID();
+  const paymentDate = payload.payment_date || new Date().toISOString().split("T")[0];
 
-  // Insert payment row into DB. payment_number is generated automatically by DB trigger.
-  const { data: insertedPayment, error: insertError } = await supabase
-    .from("payments")
-    .insert([{
-      customer_id: payload.customer_id,
-      created_by: user?.id || null,
-      amount: roundedAmount,
-      payment_date: payload.payment_date || new Date().toISOString().split("T")[0],
-      payment_method: payload.payment_method,
-      reference_number: payload.reference_number?.trim() || null,
-      status: "recorded",
-      notes: payload.notes?.trim() || null,
-    }])
-    .select()
-    .single();
-
-  if (insertError) {
-    console.error("Error inserting payment:", insertError);
-    return { error: insertError.message };
-  }
-
-  // If an invoice is specified for direct allocation, call allocate_payment_atomic RPC
-  let allocationResult = null;
   if (payload.invoice_id) {
-    // Get target invoice due_amount
-    const { data: inv } = await supabase
-      .from("invoices")
-      .select("due_amount, customer_id, status")
-      .eq("id", payload.invoice_id)
-      .single();
+    // Atomic payment + allocation
+    const { data: res, error: rpcError } = await supabase.rpc("record_payment_and_allocate_atomic", {
+      p_customer_id: payload.customer_id,
+      p_amount: roundedAmount,
+      p_payment_date: paymentDate,
+      p_payment_method: payload.payment_method,
+      p_reference_number: payload.reference_number?.trim() || null,
+      p_notes: payload.notes?.trim() || null,
+      p_invoice_id: payload.invoice_id,
+      p_idempotency_key: idempotencyKey,
+    });
 
-    if (inv) {
-      const allocAmount = Math.min(roundedAmount, Number(inv.due_amount));
-      if (allocAmount > 0) {
-        const { data: rpcRes, error: rpcError } = await supabase.rpc("allocate_payment_atomic", {
-          p_payment_id: insertedPayment.id,
-          p_invoice_id: payload.invoice_id,
-          p_amount: allocAmount,
-        });
-
-        if (rpcError) {
-          console.error("RPC Error allocating payment:", rpcError);
-          allocationResult = { error: rpcError.message };
-        } else if (rpcRes && !rpcRes.success) {
-          allocationResult = { error: rpcRes.error };
-        } else {
-          allocationResult = { success: true };
-        }
-      }
+    if (rpcError) {
+      console.error("RPC Error in record_payment_and_allocate_atomic:", rpcError);
+      return { error: rpcError.message };
     }
+
+    if (!res || !res.success) {
+      return { error: res?.error || "Failed to record and allocate payment atomically." };
+    }
+
+    revalidatePath("/payments");
+    revalidatePath("/invoices");
+    revalidatePath(`/invoices/${payload.invoice_id}`);
+    revalidatePath(`/customers/${payload.customer_id}`);
+    revalidatePath("/dashboard");
+
+    return {
+      success: true,
+      data: {
+        id: res.payment_id,
+        payment_number: res.payment_number,
+        amount: res.amount,
+        status: res.status,
+      },
+      allocation_id: res.allocation_id,
+      replayed: res.replayed || false,
+    };
+  } else {
+    // Standalone unallocated payment
+    const { data: res, error: rpcError } = await supabase.rpc("record_payment_atomic", {
+      p_customer_id: payload.customer_id,
+      p_amount: roundedAmount,
+      p_payment_date: paymentDate,
+      p_payment_method: payload.payment_method,
+      p_reference_number: payload.reference_number?.trim() || null,
+      p_notes: payload.notes?.trim() || null,
+      p_idempotency_key: idempotencyKey,
+    });
+
+    if (rpcError) {
+      console.error("RPC Error in record_payment_atomic:", rpcError);
+      return { error: rpcError.message };
+    }
+
+    if (!res || !res.success) {
+      return { error: res?.error || "Failed to record payment atomically." };
+    }
+
+    revalidatePath("/payments");
+    revalidatePath("/invoices");
+    revalidatePath(`/customers/${payload.customer_id}`);
+    revalidatePath("/dashboard");
+
+    return {
+      success: true,
+      data: {
+        id: res.payment_id,
+        payment_number: res.payment_number,
+        amount: res.amount,
+        status: res.status,
+      },
+      replayed: res.replayed || false,
+    };
   }
-
-  revalidatePath("/payments");
-  revalidatePath("/invoices");
-  if (payload.invoice_id) revalidatePath(`/invoices/${payload.invoice_id}`);
-  revalidatePath(`/customers/${payload.customer_id}`);
-  revalidatePath("/dashboard");
-
-  return {
-    success: true,
-    data: insertedPayment,
-    allocationResult,
-  };
 }
 
 export async function allocatePayment(paymentId: string, invoiceId: string, amount: number) {
@@ -183,6 +198,31 @@ export async function allocatePayment(paymentId: string, invoiceId: string, amou
   revalidatePath("/dashboard");
 
   return { success: true, allocationId: res.allocation_id };
+}
+
+export async function unallocatePayment(paymentId: string, invoiceId: string) {
+  const supabase = await createClient();
+
+  const { data: res, error } = await supabase.rpc("unallocate_payment_atomic", {
+    p_payment_id: paymentId,
+    p_invoice_id: invoiceId,
+  });
+
+  if (error) {
+    console.error("Error executing unallocate_payment_atomic RPC:", error);
+    return { error: error.message };
+  }
+
+  if (!res.success) {
+    return { error: res.error || "Failed to unallocate payment." };
+  }
+
+  revalidatePath("/payments");
+  revalidatePath("/invoices");
+  revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath("/dashboard");
+
+  return { success: true, unallocatedAmount: res.unallocated_amount };
 }
 
 export async function voidPayment(paymentId: string) {

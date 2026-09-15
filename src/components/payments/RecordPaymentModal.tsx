@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, CreditCard, DollarSign, Calendar, Hash, FileText } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, CreditCard } from "lucide-react";
 import { PaymentMethod } from "@/types/billing";
 import { createPayment } from "@/app/(dashboard)/payments/actions";
 import { toast } from "sonner";
@@ -55,8 +55,12 @@ export function RecordPaymentModal({
   const [referenceNumber, setReferenceNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Idempotency Key Client Contract:
+  // Reused across retries of the same transaction; regenerated only when a new transaction is initiated.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (preselectedCustomerId) setCustomerId(preselectedCustomerId);
     if (preselectedInvoiceId) setInvoiceId(preselectedInvoiceId);
     if (preselectedDueAmount && preselectedDueAmount > 0) setAmount(preselectedDueAmount);
@@ -87,23 +91,27 @@ export function RecordPaymentModal({
         reference_number: referenceNumber || null,
         notes: notes || null,
         invoice_id: invoiceId || null,
+        idempotency_key: idempotencyKeyRef.current,
       });
 
       if (res.error) {
+        // Network or business error: idempotencyKey is preserved so retries replay safely
         toast.error(res.error);
         return;
       }
 
-      if (res.allocationResult && res.allocationResult.error) {
-        toast.warning(`Payment recorded, but allocation warning: ${res.allocationResult.error}`);
+      if (res.replayed) {
+        toast.info("Payment already recorded (idempotent replay).");
       } else {
         toast.success("Payment recorded successfully!");
       }
 
+      // Prepare fresh key for future submissions
+      idempotencyKeyRef.current = crypto.randomUUID();
       onClose();
       if (onSuccess) onSuccess();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to record payment.");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Failed to record payment.");
     } finally {
       setIsSubmitting(false);
     }

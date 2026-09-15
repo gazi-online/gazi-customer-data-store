@@ -70,7 +70,26 @@ export function InvoicePrintView({ invoice }: InvoicePrintViewProps) {
         .join(" ")
     : "Unknown Customer";
 
-  const items: any[] = invoice.items || [];
+  const items = [...(invoice.items || [])].sort((
+    a: { line_position?: number | null; created_at?: string | null; id?: string },
+    b: { line_position?: number | null; created_at?: string | null; id?: string }
+  ) => {
+    const posA = a.line_position ?? null;
+    const posB = b.line_position ?? null;
+    if (posA !== null && posB !== null) {
+      if (posA !== posB) return posA - posB;
+    } else if (posA !== null) {
+      return -1;
+    } else if (posB !== null) {
+      return 1;
+    }
+
+    const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    if (dateA !== dateB) return dateA - dateB;
+
+    return String(a.id || "").localeCompare(String(b.id || ""));
+  });
   const allocations: any[] = invoice.allocations || [];
 
   const statusLabel =

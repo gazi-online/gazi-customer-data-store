@@ -31,7 +31,7 @@ export const customerServiceSchema = z.object({
     'archived',
   ]).default('pending'),
   amount: z.coerce.number().min(0, "Amount must be at least 0"),
-  payment_status: z.enum(['unpaid', 'partial', 'paid', 'waived']).default('unpaid'),
+  payment_status: z.enum(['unpaid', 'partial', 'paid', 'waived']).optional().default('unpaid'),
   service_date: z.string().min(1, "Service date is required"),
   due_date: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),

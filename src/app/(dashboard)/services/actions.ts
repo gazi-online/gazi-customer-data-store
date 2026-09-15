@@ -109,7 +109,7 @@ export async function upsertCustomerService(data: {
   service_id: string;
   status?: CustomerServiceStatus;
   amount: number;
-  payment_status: 'unpaid' | 'partial' | 'paid' | 'waived';
+  payment_status?: 'unpaid' | 'partial' | 'paid' | 'waived';
   service_date: string;
   due_date?: string | null;
   notes?: string | null;
@@ -126,14 +126,14 @@ export async function upsertCustomerService(data: {
     return { error: "Authentication required" };
   }
 
-  // CREATE PATH: server-enforced initial status = 'pending'
+  // CREATE PATH: server-enforced initial status = 'pending', payment_status = 'unpaid'
   if (!data.id) {
     const payload: Record<string, unknown> = {
       customer_id: data.customer_id,
       service_id: data.service_id,
       status: 'pending', // Server forces initial status, client override is discarded
       amount: data.amount,
-      payment_status: data.payment_status,
+      payment_status: 'unpaid', // Initial payment status is strictly unpaid
       service_date: data.service_date,
       due_date: data.due_date || null,
       notes: data.notes || null,
@@ -156,7 +156,7 @@ export async function upsertCustomerService(data: {
     return { success: true, data: inserted };
   }
 
-  // EDIT PATH: ordinary metadata edits cannot modify status or lifecycle fields
+  // EDIT PATH: ordinary metadata edits cannot modify status, customer_id, or payment_status
   if (!isValidUuid(data.id)) {
     return { error: "Invalid service request ID format" };
   }
@@ -177,11 +177,10 @@ export async function upsertCustomerService(data: {
     };
   }
 
+  // customer_id is strictly immutable after insert; payment_status is ledger-derived/waiver only
   const payload: Record<string, unknown> = {
-    customer_id: data.customer_id,
     service_id: data.service_id,
     amount: data.amount,
-    payment_status: data.payment_status,
     service_date: data.service_date,
     due_date: data.due_date || null,
     notes: data.notes || null,
@@ -197,9 +196,41 @@ export async function upsertCustomerService(data: {
 
   if (error) return { error: error.message };
 
-  revalidatePath(`/customers/${data.customer_id}`);
+  revalidatePath(`/customers/${existing.customer_id}`);
   revalidatePath("/services");
   return { success: true };
+}
+
+export async function setRequestPaymentWaiver(requestId: string, waived: boolean) {
+  if (!isValidUuid(requestId)) {
+    return { error: "Invalid request ID format" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return { error: "Authentication required" };
+  }
+
+  const { data: res, error: rpcError } = await supabase.rpc("set_request_payment_waiver", {
+    p_request_id: requestId,
+    p_waived: waived,
+  });
+
+  if (rpcError) {
+    console.error("RPC Error in set_request_payment_waiver:", rpcError);
+    return { error: rpcError.message };
+  }
+
+  if (!res || !res.success) {
+    return { error: res?.error || "Failed to update payment waiver." };
+  }
+
+  revalidatePath("/requests");
+  revalidatePath("/services");
+  revalidatePath("/dashboard");
+
+  return { success: true, payment_status: res.payment_status };
 }
 
 export async function transitionServiceRequestStatus(params: {

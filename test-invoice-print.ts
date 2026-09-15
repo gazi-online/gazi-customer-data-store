@@ -231,6 +231,40 @@ function runInvoicePrintTestSuite() {
     overdueStatus === "OVERDUE"
   );
 
+  // ── CASE J: Line Order Sorting (line_position ASC NULLS LAST, created_at ASC, id ASC) ──
+  const unsortedItems = [
+    { id: "item-4", description: "Null pos B", line_position: null, created_at: "2026-09-01T10:00:02Z" },
+    { id: "item-2", description: "Second pos", line_position: 2, created_at: "2026-09-01T10:00:00Z" },
+    { id: "item-1", description: "First pos", line_position: 1, created_at: "2026-09-01T10:00:00Z" },
+    { id: "item-3", description: "Null pos A", line_position: null, created_at: "2026-09-01T10:00:01Z" },
+  ];
+
+  const sortedOrder = [...unsortedItems].sort((a: any, b: any) => {
+    const posA = a.line_position ?? null;
+    const posB = b.line_position ?? null;
+    if (posA !== null && posB !== null) {
+      if (posA !== posB) return posA - posB;
+    } else if (posA !== null) {
+      return -1;
+    } else if (posB !== null) {
+      return 1;
+    }
+    const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    if (dateA !== dateB) return dateA - dateB;
+    return String(a.id || "").localeCompare(String(b.id || ""));
+  });
+
+  const orderResult = sortedOrder.map(i => i.id).join(" -> ");
+  const expectedOrder = "item-1 -> item-2 -> item-3 -> item-4";
+  report(
+    "J",
+    "Line Order Sorting (line_position ASC NULLS LAST, created_at ASC, id ASC)",
+    expectedOrder,
+    orderResult,
+    orderResult === expectedOrder
+  );
+
   console.log("==========================================================================");
   console.log(` 📊 SUMMARY: ${passed} PASSED | ${failed} FAILED`);
   console.log("==========================================================================");

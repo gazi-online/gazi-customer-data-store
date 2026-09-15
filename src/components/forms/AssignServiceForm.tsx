@@ -123,26 +123,28 @@ export function AssignServiceForm({
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Status</label>
                 <select
                   {...register("status")}
-                  className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  disabled={!!customerService?.id}
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                 >
                   <option value="pending">Pending</option>
                   <option value="in_progress">In Progress</option>
                   <option value="completed">Completed</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
+                {customerService?.id && (
+                  <p className="text-[11px] text-zinc-500 mt-1">Lifecycle transitions managed via workflow actions.</p>
+                )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Payment Status</label>
-                <select
-                  {...register("payment_status")}
-                  className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                >
-                  <option value="unpaid">Unpaid</option>
-                  <option value="partial">Partial</option>
-                  <option value="paid">Paid</option>
-                  <option value="waived">Waived</option>
-                </select>
+                <div className="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm flex items-center justify-between text-zinc-700 dark:text-zinc-300">
+                  <span className="font-semibold uppercase tracking-wider text-xs">
+                    {customerService?.payment_status || "unpaid"}
+                  </span>
+                  <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">Ledger Derived</span>
+                </div>
+                <p className="text-[11px] text-zinc-500 mt-1">Managed via invoice and payment ledger.</p>
               </div>
             </div>
             
