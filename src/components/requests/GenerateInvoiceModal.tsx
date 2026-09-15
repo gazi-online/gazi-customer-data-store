@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Receipt, Loader2 } from "lucide-react";
 import { generateInvoiceForRequest } from "@/app/(dashboard)/requests/actions";
@@ -34,6 +34,18 @@ export function GenerateInvoiceModal({
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Idempotency Key Client Contract:
+  // Reused across retries of the same transaction; regenerated on confirmation or when a new modal transaction is opened.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID());
+  const wasOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      idempotencyKeyRef.current = crypto.randomUUID();
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -54,6 +66,7 @@ export function GenerateInvoiceModal({
       setIsSubmitting(true);
       const res = await generateInvoiceForRequest({
         requestId,
+        idempotencyKey: idempotencyKeyRef.current,
         description: description.trim(),
         amount: numAmount,
         status,
@@ -61,6 +74,7 @@ export function GenerateInvoiceModal({
       });
 
       if (!res.success) {
+        // Network or validation/business error: preserve key so user retry safely reuses it
         toast.error(res.error || "Failed to generate invoice.");
         return;
       }
@@ -70,9 +84,12 @@ export function GenerateInvoiceModal({
           ? `Invoice ${res.data.invoice_number} created successfully.`
           : "Invoice generated successfully."
       );
+      // Success confirmed: regenerate key for next logical invoice transaction
+      idempotencyKeyRef.current = crypto.randomUUID();
       onClose();
       router.refresh();
     } catch {
+      // Network/unexpected error: preserve key for safe retry
       toast.error("An unexpected error occurred while generating the invoice.");
     } finally {
       setIsSubmitting(false);

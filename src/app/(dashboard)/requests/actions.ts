@@ -788,6 +788,7 @@ export async function getRequestBillingSummary(requestId: string): Promise<{
  */
 export async function generateInvoiceForRequest(params: {
   requestId: string;
+  idempotencyKey: string;
   description?: string;
   amount?: number;
   status?: "draft" | "issued";
@@ -802,10 +803,14 @@ export async function generateInvoiceForRequest(params: {
   };
   error?: string;
 }> {
-  const { requestId, description, amount, status = "issued", notes } = params;
+  const { requestId, idempotencyKey, description, amount, status = "issued", notes } = params;
 
   if (!requestId || !isValidUuid(requestId)) {
     return { success: false, error: "Invalid request ID." };
+  }
+
+  if (!idempotencyKey || !isValidUuid(idempotencyKey)) {
+    return { success: false, error: "Invalid or missing idempotency key." };
   }
 
   const supabase = await createClient();
@@ -850,13 +855,14 @@ export async function generateInvoiceForRequest(params: {
   const today = new Date().toISOString().split("T")[0];
   const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-  // 2. Call canonical createInvoice (which routes through create_invoice_atomic)
+  // 2. Call canonical createInvoice with explicit client-provided idempotency key
   const invoiceRes = await createInvoice({
     customer_id: reqRow.customer_id,
     invoice_date: today,
     due_date: dueDate,
     notes: notes || reqRow.notes || null,
     status,
+    idempotency_key: idempotencyKey,
     items: [
       {
         customer_service_id: reqRow.id,

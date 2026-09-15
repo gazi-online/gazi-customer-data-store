@@ -257,6 +257,64 @@ assert(
 );
 console.log("  [PASS] 10. Comprehensive revalidation paths verified");
 
+// ------------------------------------------------------------------------------
+// 3. INVOICE IDEMPOTENCY KEY LIFECYCLE & CONTRACT (HOTFIX VERIFICATION)
+// ------------------------------------------------------------------------------
+console.log("\n--- 3. Invoice Idempotency Key Lifecycle & Contract ---");
+
+// 11. GenerateInvoiceModal owns stable idempotency key ref
+assert(
+  generateModalSource.includes("idempotencyKeyRef = useRef") &&
+    generateModalSource.includes("crypto.randomUUID()"),
+  "11a. GenerateInvoiceModal initializes stable idempotencyKeyRef"
+);
+assert(
+  generateModalSource.includes("idempotencyKey: idempotencyKeyRef.current"),
+  "11b. GenerateInvoiceModal supplies idempotencyKeyRef.current to generateInvoiceForRequest"
+);
+console.log("  [PASS] 11. GenerateInvoiceModal owns stable idempotency key");
+
+// 12. Server action contract requires and validates idempotencyKey
+assert(
+  requestsActionsSource.includes("idempotencyKey: string"),
+  "12a. generateInvoiceForRequest accepts idempotencyKey: string in params"
+);
+assert(
+  requestsActionsSource.includes("!isValidUuid(idempotencyKey)"),
+  "12b. generateInvoiceForRequest validates UUID format of idempotencyKey"
+);
+assert(
+  requestsActionsSource.includes("idempotency_key: idempotencyKey"),
+  "12c. generateInvoiceForRequest explicitly forwards idempotency_key to createInvoice"
+);
+console.log("  [PASS] 12. generateInvoiceForRequest accepts, validates, and forwards idempotencyKey");
+
+// 13. Retry path does NOT regenerate key; success resets key; fresh open resets key
+const failureBlock = generateModalSource.slice(
+  generateModalSource.indexOf("if (!res.success)"),
+  generateModalSource.indexOf("toast.success")
+);
+assert(
+  !failureBlock.includes("crypto.randomUUID()"),
+  "13a. Error/retry path preserves idempotency key without regeneration"
+);
+
+const successBlock = generateModalSource.slice(
+  generateModalSource.indexOf("toast.success"),
+  generateModalSource.indexOf("onClose()")
+);
+assert(
+  successBlock.includes("idempotencyKeyRef.current = crypto.randomUUID()"),
+  "13b. Confirmed success resets idempotency key for next logical transaction"
+);
+
+assert(
+  generateModalSource.includes("if (isOpen && !wasOpenRef.current)") &&
+    generateModalSource.includes("idempotencyKeyRef.current = crypto.randomUUID()"),
+  "13c. Reopening a fresh invoice modal generates a fresh logical idempotency key"
+);
+console.log("  [PASS] 13. Retry reuses same key; success & fresh modal open reset key");
+
 console.log("\n==========================================================================");
 console.log(" VERDICT: ✅ ALL PHASE 2C-3D REQUEST BILLING UX TESTS PASSED CLEANLY!");
 console.log("==========================================================================\n");
