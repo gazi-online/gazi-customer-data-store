@@ -7,6 +7,7 @@ import { RequestDocumentManager } from "./RequestDocumentManager";
 import { RequestBillingControls } from "./RequestBillingControls";
 import { RequestInvoiceRowActions } from "./RequestInvoiceRowActions";
 import { FollowupSection } from "./FollowupSection";
+import { RequestCommunicationsSection } from "./RequestCommunicationsSection";
 import { RequestFollowupSummary } from "@/lib/operations/operationsQueryLayer";
 import { formatKolkataDateTime } from "@/lib/operations/dateUtils";
 import { getServiceRequestStatusLabel } from "@/lib/services/serviceRequestWorkflow";
@@ -420,6 +421,16 @@ export function RequestWorkspace({ data, followupSummary }: RequestWorkspaceProp
           {followupSummary && (
             <FollowupSection requestId={data.id} summary={followupSummary} />
           )}
+
+          {/* Customer Outreach & Communications Card */}
+          <RequestCommunicationsSection
+            requestId={data.id}
+            customerId={data.customer.id}
+            customerName={customerFullName}
+            customerPhone={data.customer.phone}
+            requestNumber={data.requestNumber}
+            serviceName={data.service.serviceName}
+          />
 
           {/* Card 2: Attached Documents Lifecycle Manager */}
           <RequestDocumentManager

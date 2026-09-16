@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CustomerDocument, AiImportHistoryRecord } from "@/types/document";
-import { FileText, Cpu, Clock, RefreshCw, Archive, Replace, CheckCircle2, XCircle, AlertCircle, FileCode, Layers, User, Briefcase, Activity, Receipt, Download, Loader2 } from "lucide-react";
+import { FileText, Cpu, Clock, RefreshCw, Archive, Replace, CheckCircle2, XCircle, AlertCircle, FileCode, Layers, User, Briefcase, Activity, Receipt, Download, Loader2, MessageSquare } from "lucide-react";
 import { rerunExtraction, archiveDocument, getDocumentSignedUrl } from "@/app/(dashboard)/documents/actions";
 import { toast } from "sonner";
 import { ReviewPanel } from "@/components/AiSmartImportEngine/components/ReviewPanel";
@@ -12,6 +12,7 @@ import { AssignServiceForm } from "@/components/forms/AssignServiceForm";
 import { Service, CustomerServiceWithDetails } from "@/types/service";
 import { CustomerServiceFormData } from "@/app/(dashboard)/services/schema";
 import { CustomerBillingTab } from "./CustomerBillingTab";
+import { CustomerCommunicationsTimeline } from "./CustomerCommunicationsTimeline";
 
 interface CustomerProfileTabsProps {
   customerId: string;
@@ -45,7 +46,7 @@ export function CustomerProfileTabs({
 }: CustomerProfileTabsProps) {
   console.log(`[TRACE] CustomerProfileTabs activeServices: ${availableServices?.length || 0}`);
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'ai-imports' | 'services' | 'billing' | 'activity'>('documents');
+  const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'ai-imports' | 'services' | 'billing' | 'communications' | 'activity'>('documents');
   const [filterDocStatus, setFilterDocStatus] = useState<'active' | 'all' | 'archived'>('active');
   const [runningRerunId, setRunningRerunId] = useState<string | null>(null);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
@@ -151,6 +152,7 @@ export function CustomerProfileTabs({
             { id: 'overview', label: 'Overview', icon: User },
             { id: 'services', label: 'Services', icon: Briefcase, count: customerServices.length },
             { id: 'billing', label: 'Billing & History', icon: Receipt, count: billingSummary?.invoices?.length || 0 },
+            { id: 'communications', label: 'Communications', icon: MessageSquare },
             { id: 'activity', label: 'Activity Log', icon: Activity },
           ].map(tab => {
             const Icon = tab.icon;
@@ -597,6 +599,14 @@ export function CustomerProfileTabs({
           customerName={customerName}
           billingSummary={billingSummary}
           error={billingError}
+        />
+      )}
+
+      {/* COMMUNICATIONS TAB */}
+      {activeTab === 'communications' && (
+        <CustomerCommunicationsTimeline
+          customerId={customerId}
+          customerName={customerName}
         />
       )}
 
