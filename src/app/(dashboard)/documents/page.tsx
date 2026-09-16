@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, Suspense } from "react";
 import { 
   FileText, 
   UploadCloud, 
@@ -28,6 +28,7 @@ import { DocumentGrid } from "@/components/shared/DocumentGrid";
 import { CustomerDocument, DocumentType } from "@/types/document";
 import { toast } from "sonner";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 const DOCUMENT_TYPES = [
   "All Types",
@@ -46,7 +47,9 @@ const DOCUMENT_TYPES = [
   "Other"
 ];
 
-export default function DocumentsPage() {
+function DocumentsContent() {
+  const searchParams = useSearchParams();
+  const initialRenewal = searchParams.get("renewal") || "all";
   const [isPending, startTransition] = useTransition();
   const [documents, setDocuments] = useState<CustomerDocument[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -60,6 +63,7 @@ export default function DocumentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDocType, setSelectedDocType] = useState("All Types");
   const [statusFilter, setStatusFilter] = useState<"active" | "all" | "archived">("active");
+  const [renewalFilter, setRenewalFilter] = useState<string>(initialRenewal);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,7 +78,8 @@ export default function DocumentsPage() {
       const res = await getAllDocuments({
         search: searchQuery,
         documentType: typeParam,
-        status: statusFilter
+        status: statusFilter,
+        renewalWindow: renewalFilter
       });
 
       setDocuments(res.documents || []);
@@ -88,7 +93,7 @@ export default function DocumentsPage() {
 
   useEffect(() => {
     loadData();
-  }, [searchQuery, selectedDocType, statusFilter]);
+  }, [searchQuery, selectedDocType, statusFilter, renewalFilter]);
 
   // Load customer list for upload dropdown once
   useEffect(() => {
@@ -315,6 +320,31 @@ export default function DocumentsPage() {
             </button>
           </div>
         </div>
+
+        {/* Renewal Operations Quick Filters */}
+        <div className="flex items-center gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800 text-xs overflow-x-auto">
+          <span className="font-bold text-zinc-500 shrink-0 uppercase text-[10px] tracking-wider">Renewal Window:</span>
+          {[
+            { label: "All Documents", value: "all" },
+            { label: "Expired", value: "expired" },
+            { label: "Due in 7 Days", value: "7d" },
+            { label: "Due in 30 Days", value: "30d" },
+            { label: "Due in 60 Days", value: "60d" },
+          ].map((btn) => (
+            <button
+              key={btn.value}
+              type="button"
+              onClick={() => setRenewalFilter(btn.value)}
+              className={`px-3 py-1 rounded-lg font-medium transition-all shrink-0 ${
+                renewalFilter === btn.value
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+              }`}
+            >
+              {btn.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -521,5 +551,20 @@ export default function DocumentsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DocumentsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-12 flex flex-col items-center justify-center text-slate-400 gap-2">
+          <Loader2 className="h-7 w-7 animate-spin text-indigo-600" />
+          <p className="text-sm">Loading document vault...</p>
+        </div>
+      }
+    >
+      <DocumentsContent />
+    </Suspense>
   );
 }

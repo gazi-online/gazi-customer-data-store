@@ -73,6 +73,9 @@ export type DashboardMetrics = {
   syncedThisWeek: number;
   pendingVerification: number;
   renewalsDue: number;
+  followupsDueToday: number;
+  followupsOverdue: number;
+  followupsUpcoming: number;
 };
 
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
@@ -133,6 +136,39 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
         .lte("expiry_date", in30DaysStr),
     ]);
 
+    // Query follow-ups safely (table might be new)
+    let followupsDueToday = 0;
+    let followupsOverdue = 0;
+    let followupsUpcoming = 0;
+
+    try {
+      const { getKolkataTodayHalfOpenRange } = await import("@/lib/operations/dateUtils");
+      const range = getKolkataTodayHalfOpenRange();
+      const [todayRes, overdueRes, upcomingRes] = await Promise.all([
+        supabase
+          .from("service_request_followups")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "open")
+          .gte("follow_up_at", range.startOfTodayIST)
+          .lt("follow_up_at", range.startOfTomorrowIST),
+        supabase
+          .from("service_request_followups")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "open")
+          .lt("follow_up_at", range.startOfTodayIST),
+        supabase
+          .from("service_request_followups")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "open")
+          .gte("follow_up_at", range.startOfTomorrowIST),
+      ]);
+      followupsDueToday = todayRes.count || 0;
+      followupsOverdue = overdueRes.count || 0;
+      followupsUpcoming = upcomingRes.count || 0;
+    } catch {
+      // Table may not exist yet prior to migration
+    }
+
     return {
       totalCustomers: totalCustRes.count || 0,
       newThisMonth: newMonthCustRes.count || 0,
@@ -141,6 +177,9 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
       syncedThisWeek: syncedWeekRes.count || 0,
       pendingVerification: pendingVerifRes.count || 0,
       renewalsDue: renewalsRes.count || 0,
+      followupsDueToday,
+      followupsOverdue,
+      followupsUpcoming,
     };
   } catch (error) {
     console.error("Failed to load dashboard metrics safely:", error);
@@ -152,6 +191,9 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
       syncedThisWeek: 0,
       pendingVerification: 0,
       renewalsDue: 0,
+      followupsDueToday: 0,
+      followupsOverdue: 0,
+      followupsUpcoming: 0,
     };
   }
 }

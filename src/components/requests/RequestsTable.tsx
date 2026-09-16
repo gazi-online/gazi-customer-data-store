@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Eye,
   RefreshCw,
+  Clock,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -66,6 +67,7 @@ export function RequestsTable({ requests, onInspect, onTransition }: RequestsTab
             <th className="py-3 px-3 text-center w-[90px]">Priority</th>
             <th className="py-3 px-4 text-center w-[150px]">Workflow Status</th>
             <th className="py-3 px-4 w-[130px]">Due Date</th>
+            <th className="py-3 px-3 text-center w-[110px]">Follow-up</th>
             <th className="py-3 px-4 text-right w-[140px]">Fee & Payment</th>
             <th className="py-3 px-3 text-center w-[80px]">Docs</th>
             <th className="py-3 px-4 text-right w-[100px]">Actions</th>
@@ -228,7 +230,41 @@ export function RequestsTable({ requests, onInspect, onTransition }: RequestsTab
                   </div>
                 </td>
 
-                {/* 8. Fee & Payment */}
+                {/* 8. Follow-up */}
+                <td className="py-3.5 px-3 align-top text-center">
+                  {req.currentFollowup ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                          req.currentFollowup.state === "overdue"
+                            ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-900"
+                            : req.currentFollowup.state === "today"
+                            ? "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900"
+                            : req.currentFollowup.state === "tomorrow"
+                            ? "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-900"
+                            : "bg-slate-100 text-slate-700 border-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
+                        }`}
+                        title={req.currentFollowup.note ? `Note: ${req.currentFollowup.note}` : undefined}
+                      >
+                        <Clock className="h-2.5 w-2.5" />
+                        {req.currentFollowup.state === "overdue"
+                          ? "Overdue"
+                          : req.currentFollowup.state === "today"
+                          ? "Due Today"
+                          : req.currentFollowup.state === "tomorrow"
+                          ? "Tomorrow"
+                          : "Upcoming"}
+                      </span>
+                      <span className="text-[10px] text-slate-500 dark:text-zinc-400">
+                        {formatDate(req.currentFollowup.followUpAt)}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-slate-300 dark:text-zinc-600 text-xs italic">-</span>
+                  )}
+                </td>
+
+                {/* 9. Fee & Payment */}
                 <td className="py-3.5 px-4 align-top text-right">
                   <div className="flex flex-col items-end">
                     <span className="font-semibold text-xs text-slate-900 dark:text-zinc-100">

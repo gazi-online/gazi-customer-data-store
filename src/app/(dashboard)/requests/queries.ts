@@ -1,6 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { CustomerServiceStatus, ServiceRequestPriority, PaymentStatus } from "@/types/service";
 import {
+  getKolkataTodayHalfOpenRange,
+  classifyFollowupState,
+  FollowupState,
+} from "@/lib/operations/dateUtils";
+import {
   PERSISTED_STATUSES,
   ACTIVE_STATUSES,
   TERMINAL_STATUSES,
@@ -262,6 +267,55 @@ export async function getServiceRequestsDesk(
       query = query.not("status", "in", `(${TERMINAL_STATUSES.join(",")})`);
     }
 
+    // 8b. Apply Follow-up Filter (Asia/Kolkata half-open intervals)
+    if (params.followup && params.followup !== "all") {
+      const { startOfTodayIST, startOfTomorrowIST } = getKolkataTodayHalfOpenRange();
+      if (params.followup === "today") {
+        const { data: fuRows } = await supabase
+          .from("service_request_followups")
+          .select("customer_service_id")
+          .eq("status", "open")
+          .gte("follow_up_at", startOfTodayIST)
+          .lt("follow_up_at", startOfTomorrowIST);
+        const ids = (fuRows || []).map((r: any) => r.customer_service_id);
+        if (ids.length === 0) {
+          return { data: [], totalCount: 0, page: params.page, limit: params.limit, totalPages: 1 };
+        }
+        query = query.in("id", ids);
+      } else if (params.followup === "overdue") {
+        const { data: fuRows } = await supabase
+          .from("service_request_followups")
+          .select("customer_service_id")
+          .eq("status", "open")
+          .lt("follow_up_at", startOfTodayIST);
+        const ids = (fuRows || []).map((r: any) => r.customer_service_id);
+        if (ids.length === 0) {
+          return { data: [], totalCount: 0, page: params.page, limit: params.limit, totalPages: 1 };
+        }
+        query = query.in("id", ids);
+      } else if (params.followup === "upcoming") {
+        const { data: fuRows } = await supabase
+          .from("service_request_followups")
+          .select("customer_service_id")
+          .eq("status", "open")
+          .gte("follow_up_at", startOfTomorrowIST);
+        const ids = (fuRows || []).map((r: any) => r.customer_service_id);
+        if (ids.length === 0) {
+          return { data: [], totalCount: 0, page: params.page, limit: params.limit, totalPages: 1 };
+        }
+        query = query.in("id", ids);
+      } else if (params.followup === "none") {
+        const { data: openRows } = await supabase
+          .from("service_request_followups")
+          .select("customer_service_id")
+          .eq("status", "open");
+        const openIds = (openRows || []).map((r: any) => r.customer_service_id);
+        if (openIds.length > 0) {
+          query = query.not("id", "in", `(${openIds.join(",")})`);
+        }
+      }
+    }
+
     // 9. Apply Deterministic Sorting
     if (params.sort === "newest") {
       query = query.order("created_at", { ascending: false });
@@ -294,7 +348,28 @@ export async function getServiceRequestsDesk(
     const totalCount = count || 0;
     const totalPages = Math.max(1, Math.ceil(totalCount / params.limit));
 
-    // 11. Map rows to typed ServiceRequestDeskRow
+    // 11. Batch-lookup active open follow-ups (1:1 mapping, zero row duplication)
+    const requestIds = (data || []).map((r: any) => String(r.id));
+    const openFollowupMap = new Map<string, { id: string; followUpAt: string; state: FollowupState; note: string | null }>();
+
+    if (requestIds.length > 0) {
+      const { data: fuData } = await supabase
+        .from("service_request_followups")
+        .select("id, customer_service_id, follow_up_at, note, status")
+        .eq("status", "open")
+        .in("customer_service_id", requestIds);
+
+      (fuData || []).forEach((f: any) => {
+        openFollowupMap.set(f.customer_service_id, {
+          id: f.id,
+          followUpAt: f.follow_up_at,
+          state: classifyFollowupState(f.follow_up_at, f.status),
+          note: f.note || null,
+        });
+      });
+    }
+
+    // 12. Map rows to typed ServiceRequestDeskRow
     const rows: ServiceRequestDeskRow[] = (data || []).map((rawRow) => {
       const row = rawRow as Record<string, unknown>;
       const cust = (Array.isArray(row.customer) ? row.customer[0] : row.customer) as Record<string, string | null> | null;
@@ -335,6 +410,7 @@ export async function getServiceRequestsDesk(
         isOverdue: overdue,
         attachedDocumentCount: docs.length,
         notes: (row.notes as string) || null,
+        currentFollowup: openFollowupMap.get(String(row.id)) || null,
       };
     });
 

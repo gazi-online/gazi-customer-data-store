@@ -7,6 +7,7 @@ import { PromptManager } from "@/lib/ai/prompts/PromptManager";
 import { ExtractionCache } from "@/lib/ai/cache/ExtractionCache";
 import { CustomerDocument } from "@/types/document";
 import { v4 as uuidv4 } from "uuid";
+import { getKolkataDateString, getKolkataFutureDateString } from "@/lib/operations/dateUtils";
 
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
@@ -209,6 +210,7 @@ export async function getAllDocuments(params?: {
   search?: string;
   documentType?: string;
   status?: string;
+  renewalWindow?: string;
   page?: number;
   limit?: number;
 }) {
@@ -216,6 +218,7 @@ export async function getAllDocuments(params?: {
   const search = params?.search?.trim() || "";
   const documentType = params?.documentType?.trim() || "";
   const status = params?.status?.trim() || "all";
+  const renewalWindow = params?.renewalWindow?.trim() || "all";
 
   // Build query
   let query = supabase
@@ -232,8 +235,21 @@ export async function getAllDocuments(params?: {
       )
     `, { count: 'exact' });
 
-  // Status Filter if supported
-  if (status && status !== "all") {
+  // Renewal Window Filter (strictly targets active versions with expiry_date)
+  if (renewalWindow && renewalWindow !== "all") {
+    query = query.eq("status", "active").not("expiry_date", "is", null);
+    const todayStr = getKolkataDateString();
+    if (renewalWindow === "expired") {
+      query = query.lt("expiry_date", todayStr);
+    } else if (renewalWindow === "7d") {
+      query = query.gte("expiry_date", todayStr).lte("expiry_date", getKolkataFutureDateString(7));
+    } else if (renewalWindow === "30d") {
+      query = query.gte("expiry_date", todayStr).lte("expiry_date", getKolkataFutureDateString(30));
+    } else if (renewalWindow === "60d") {
+      query = query.gte("expiry_date", todayStr).lte("expiry_date", getKolkataFutureDateString(60));
+    }
+  } else if (status && status !== "all") {
+    // Status Filter if not already filtered by renewal window
     try {
       query = query.eq("status", status);
     } catch {

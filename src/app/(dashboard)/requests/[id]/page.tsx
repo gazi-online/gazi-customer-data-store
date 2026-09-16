@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getServiceRequestDrawerData } from "@/app/(dashboard)/requests/actions";
+import { getRequestFollowupSummary } from "@/lib/operations/operationsQueryLayer";
 import { RequestWorkspace } from "@/components/requests/RequestWorkspace";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,10 @@ export default async function ServiceRequestWorkspacePage({
     notFound();
   }
 
-  const result = await getServiceRequestDrawerData(id);
+  const [result, followupSummary] = await Promise.all([
+    getServiceRequestDrawerData(id),
+    getRequestFollowupSummary(id),
+  ]);
 
   if (!result.data) {
     if (result.errorCode === "not_found" || result.errorCode === "invalid_id") {
@@ -33,5 +37,5 @@ export default async function ServiceRequestWorkspacePage({
     throw new Error("Failed to load service request details.");
   }
 
-  return <RequestWorkspace data={result.data} />;
+  return <RequestWorkspace data={result.data} followupSummary={followupSummary} />;
 }

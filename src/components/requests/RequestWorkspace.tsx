@@ -6,6 +6,9 @@ import { RequestWorkspaceActions, CopyButton } from "./RequestWorkspaceActions";
 import { RequestDocumentManager } from "./RequestDocumentManager";
 import { RequestBillingControls } from "./RequestBillingControls";
 import { RequestInvoiceRowActions } from "./RequestInvoiceRowActions";
+import { FollowupSection } from "./FollowupSection";
+import { RequestFollowupSummary } from "@/lib/operations/operationsQueryLayer";
+import { formatKolkataDateTime } from "@/lib/operations/dateUtils";
 import { getServiceRequestStatusLabel } from "@/lib/services/serviceRequestWorkflow";
 import { CustomerServiceStatus } from "@/types/service";
 import {
@@ -24,6 +27,7 @@ import {
 
 interface RequestWorkspaceProps {
   data: RequestDrawerData;
+  followupSummary?: RequestFollowupSummary;
 }
 
 function formatDate(dateStr?: string | null): string {
@@ -71,7 +75,7 @@ function formatCurrency(amount?: number | null): string {
 
 
 
-export function RequestWorkspace({ data }: RequestWorkspaceProps) {
+export function RequestWorkspace({ data, followupSummary }: RequestWorkspaceProps) {
   const customerFullName = [
     data.customer.firstName,
     data.customer.middleName,
@@ -85,6 +89,126 @@ export function RequestWorkspace({ data }: RequestWorkspaceProps) {
 
   const billingSummary =
     data.billingSummary || calculateRequestBillingSummary(data.invoices);
+
+  // Unified chronological timeline aggregation (application-level, non-destructive)
+  interface TimelineItem {
+    id: string;
+    timestamp: string;
+    badgeColor: string;
+    title: React.ReactNode;
+    subtitle?: string;
+    details?: string;
+  }
+
+  const timelineItems: TimelineItem[] = [];
+
+  // 1. Status transitions
+  data.statusHistory.forEach((item, idx) => {
+    timelineItems.push({
+      id: item.id || `status-${idx}`,
+      timestamp: item.createdAt,
+      badgeColor: "bg-blue-600 dark:bg-blue-500",
+      title: item.fromStatus ? (
+        <span className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-semibold text-slate-700 dark:text-zinc-300">
+            {getServiceRequestStatusLabel(item.fromStatus as CustomerServiceStatus)}
+          </span>
+          <ArrowRight className="h-3 w-3 text-slate-400" />
+          <span className="font-bold text-slate-900 dark:text-zinc-100">
+            {getServiceRequestStatusLabel(item.toStatus as CustomerServiceStatus)}
+          </span>
+        </span>
+      ) : (
+        <span className="font-bold text-slate-900 dark:text-zinc-100">
+          Created as {getServiceRequestStatusLabel(item.toStatus as CustomerServiceStatus)}
+        </span>
+      ),
+      subtitle: item.changedBy ? "Updated by Staff" : undefined,
+      details: "Trigger-Owned",
+    });
+  });
+
+  // 2. Document attachments
+  data.documents.forEach((doc, idx) => {
+    timelineItems.push({
+      id: doc.id || `doc-${idx}`,
+      timestamp: doc.createdAt || data.createdAt,
+      badgeColor: "bg-purple-600 dark:bg-purple-500",
+      title: (
+        <span className="font-bold text-slate-900 dark:text-zinc-100">
+          Document Attached: {doc.documentType}
+        </span>
+      ),
+      subtitle: doc.documentName || undefined,
+      details: doc.requirementTag ? `Requirement: ${doc.requirementTag}` : "Vault Document",
+    });
+  });
+
+  // 3. Follow-up activities
+  if (followupSummary?.history) {
+    followupSummary.history.forEach((f) => {
+      // Creation / Scheduled Event
+      timelineItems.push({
+        id: `fu-create-${f.id}`,
+        timestamp: f.createdAt,
+        badgeColor: "bg-violet-600 dark:bg-violet-500",
+        title: (
+          <span className="font-bold text-slate-900 dark:text-zinc-100">
+            Follow-up Scheduled for {formatKolkataDateTime(f.followUpAt)}
+          </span>
+        ),
+        subtitle: f.note || undefined,
+        details: "Operational Schedule",
+      });
+
+      // Resolution events
+      if (f.status === "completed" && f.completedAt) {
+        timelineItems.push({
+          id: `fu-comp-${f.id}`,
+          timestamp: f.completedAt,
+          badgeColor: "bg-emerald-600 dark:bg-emerald-500",
+          title: (
+            <span className="font-bold text-emerald-700 dark:text-emerald-400">
+              Follow-up Completed
+            </span>
+          ),
+          subtitle: f.resolutionNote || undefined,
+          details: "Follow-up Resolved",
+        });
+      } else if (f.status === "rescheduled") {
+        timelineItems.push({
+          id: `fu-resched-${f.id}`,
+          timestamp: f.updatedAt,
+          badgeColor: "bg-purple-600 dark:bg-purple-400",
+          title: (
+            <span className="font-bold text-purple-700 dark:text-purple-400">
+              Follow-up Rescheduled
+            </span>
+          ),
+          subtitle: f.resolutionNote ? `Reason: ${f.resolutionNote}` : undefined,
+          details: "Superseded by Reschedule",
+        });
+      } else if (f.status === "cancelled") {
+        timelineItems.push({
+          id: `fu-cancel-${f.id}`,
+          timestamp: f.updatedAt,
+          badgeColor: "bg-rose-600 dark:bg-rose-400",
+          title: (
+            <span className="font-bold text-rose-700 dark:text-rose-400">
+              Follow-up Cancelled
+            </span>
+          ),
+          subtitle: f.resolutionNote ? `Reason: ${f.resolutionNote}` : undefined,
+          details: "Follow-up Cancelled",
+        });
+      }
+    });
+  }
+
+  // Chronological sort: newest first
+  timelineItems.sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -292,6 +416,11 @@ export function RequestWorkspace({ data }: RequestWorkspaceProps) {
             )}
           </section>
 
+          {/* Follow-up & Operations Card */}
+          {followupSummary && (
+            <FollowupSection requestId={data.id} summary={followupSummary} />
+          )}
+
           {/* Card 2: Attached Documents Lifecycle Manager */}
           <RequestDocumentManager
             requestId={data.id}
@@ -300,7 +429,7 @@ export function RequestWorkspace({ data }: RequestWorkspaceProps) {
             documents={data.documents}
           />
 
-          {/* Card 3: Workflow Audit History (Read-Only) */}
+          {/* Card 3: Unified Activity & Audit Timeline */}
           <section className="p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-2">
@@ -308,48 +437,38 @@ export function RequestWorkspace({ data }: RequestWorkspaceProps) {
                 <span>Workflow Audit History</span>
               </h2>
               <span className="text-xs text-slate-400 dark:text-zinc-500 font-medium">
-                Trigger-Owned
+                Trigger-Owned Timeline ({timelineItems.length})
               </span>
             </div>
 
-            {data.statusHistory.length === 0 ? (
+            {timelineItems.length === 0 ? (
               <div className="p-6 rounded-xl bg-slate-50 dark:bg-zinc-800/30 border border-dashed border-slate-200 dark:border-zinc-800 text-center text-xs text-slate-400 dark:text-zinc-500">
                 No status transitions recorded yet.
               </div>
             ) : (
               <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-zinc-800">
-                {data.statusHistory.map((item, idx) => (
-                  <div key={item.id || idx} className="relative text-xs">
+                {timelineItems.map((item) => (
+                  <div key={item.id} className="relative text-xs">
                     {/* Circle bullet */}
-                    <div className="absolute -left-6 top-1.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-zinc-900 bg-blue-600 dark:bg-blue-500 shadow-xs" />
+                    <div
+                      className={`absolute -left-6 top-1.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-zinc-900 ${item.badgeColor} shadow-xs`}
+                    />
 
                     <div className="p-3.5 rounded-xl bg-slate-50/80 dark:bg-zinc-800/40 border border-slate-200/70 dark:border-zinc-800 space-y-2">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {item.fromStatus ? (
-                          <>
-                            <span className="font-semibold text-slate-700 dark:text-zinc-300">
-                              {getServiceRequestStatusLabel(
-                                item.fromStatus as CustomerServiceStatus
-                              )}
-                            </span>
-                            <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
-                          </>
-                        ) : (
-                          <span className="text-slate-400 font-medium">
-                            Created as
-                          </span>
-                        )}
-                        <span className="font-bold text-slate-900 dark:text-zinc-100">
-                          {getServiceRequestStatusLabel(
-                            item.toStatus as CustomerServiceStatus
-                          )}
-                        </span>
+                        {item.title}
                       </div>
 
+                      {item.subtitle && (
+                        <p className="text-[11px] text-slate-600 dark:text-zinc-300 bg-white/70 dark:bg-zinc-900/60 p-2 rounded-lg border border-slate-100 dark:border-zinc-800/60 leading-relaxed">
+                          {item.subtitle}
+                        </p>
+                      )}
+
                       <div className="flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500 pt-1.5 border-t border-slate-100 dark:border-zinc-800/60">
-                        <span>{formatDateTime(item.createdAt)}</span>
+                        <span>{formatKolkataDateTime(item.timestamp)}</span>
                         <span className="font-medium text-slate-600 dark:text-zinc-400">
-                          Staff
+                          {item.details || "System"}
                         </span>
                       </div>
                     </div>

@@ -1,5 +1,6 @@
 import { CustomerServiceStatus, ServiceRequestPriority, PaymentStatus } from "@/types/service";
 import { BillingEngine } from "@/lib/billing/BillingEngine";
+import { FollowupState } from "@/lib/operations/dateUtils";
 
 // ==============================================================================
 // CANONICAL STATUS & FILTER SETS
@@ -94,6 +95,12 @@ export interface ServiceRequestDeskRow {
   isOverdue: boolean;
   attachedDocumentCount: number;
   notes: string | null;
+  currentFollowup?: {
+    id: string;
+    followUpAt: string;
+    state: FollowupState;
+    note: string | null;
+  } | null;
 }
 
 export interface ServiceRequestsDeskResult {
@@ -113,6 +120,7 @@ export interface ServiceRequestsDeskParams {
   serviceId?: string;
   paymentStatus?: string;
   overdue?: string;
+  followup?: string;
   sort?: string;
   page?: string | number;
   limit?: string | number;
@@ -315,6 +323,7 @@ export function parseDeskParams(params: Record<string, string | string[] | undef
   serviceId: string;
   paymentStatus: string;
   overdue: string;
+  followup: 'all' | 'today' | 'overdue' | 'upcoming' | 'none';
   sort: string;
   page: number;
   limit: number;
@@ -346,6 +355,12 @@ export function parseDeskParams(params: Record<string, string | string[] | undef
   const rawOverdue = getSingle(params.overdue).toLowerCase();
   const overdue = rawOverdue === "overdue_only" ? "overdue_only" : "all";
 
+  const rawFollowup = getSingle(params.followup).toLowerCase();
+  const validFollowups = ["all", "today", "overdue", "upcoming", "none"] as const;
+  const followup = (validFollowups as readonly string[]).includes(rawFollowup)
+    ? (rawFollowup as typeof validFollowups[number])
+    : "all";
+
   const rawSort = getSingle(params.sort).toLowerCase();
   const sort = ["oldest", "newest", "due_date"].includes(rawSort) ? rawSort : "oldest";
 
@@ -364,6 +379,7 @@ export function parseDeskParams(params: Record<string, string | string[] | undef
     serviceId,
     paymentStatus,
     overdue,
+    followup,
     sort,
     page,
     limit,

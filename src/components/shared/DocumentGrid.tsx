@@ -181,13 +181,21 @@ export function DocumentGrid({
             </div>
 
             {/* Metadata Badges */}
-            <div className="flex flex-wrap items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mb-3">
-              <span className="truncate max-w-[140px]" title={doc.source_filename}>
-                {doc.source_filename || doc.file_url.split('/').pop()}
-              </span>
-              <span>
-                {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ""}
-              </span>
+            <div className="space-y-1 mb-3">
+              <div className="flex flex-wrap items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
+                <span className="truncate max-w-[140px]" title={doc.source_filename}>
+                  {doc.source_filename || doc.file_url.split('/').pop()}
+                </span>
+                <span>
+                  {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ""}
+                </span>
+              </div>
+              {doc.expiry_date && (
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md w-fit">
+                  <Calendar className="h-3 w-3" />
+                  <span>Expires: {doc.expiry_date}</span>
+                </div>
+              )}
             </div>
 
             {/* Actions Bar */}

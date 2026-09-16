@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, FileText, Clock, RefreshCw, TrendingUp, ArrowRight } from "lucide-react";
+import { Users, FileText, Clock, RefreshCw, TrendingUp, ArrowRight, AlertTriangle, Calendar, CalendarClock } from "lucide-react";
 import type { DashboardMetrics } from "@/app/(dashboard)/dashboard/actions";
 
 interface DashboardKpisProps {
@@ -14,6 +14,9 @@ export function DashboardKpis({ metrics }: DashboardKpisProps) {
     syncedThisWeek,
     pendingVerification,
     renewalsDue,
+    followupsDueToday = 0,
+    followupsOverdue = 0,
+    followupsUpcoming = 0,
   } = metrics;
 
   return (
@@ -144,10 +147,105 @@ export function DashboardKpis({ metrics }: DashboardKpisProps) {
             {renewalsDue > 0 ? "Action recommended" : "No pending expiries"}
           </span>
           <Link
-            href="/documents"
+            href="/documents?renewal=30d"
             className="text-[12px] font-semibold text-purple-600 hover:text-purple-700 hover:underline inline-flex items-center gap-0.5"
           >
             View Documents <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+      </div>
+
+      {/* Operations Desk Dispatch Banner */}
+      <div className="sm:col-span-2 lg:col-span-4 bg-slate-900 dark:bg-zinc-900 rounded-[18px] p-4 text-white shadow-sm border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 shrink-0">
+            <CalendarClock className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-white tracking-wide">
+              Daily Operations Desk
+            </h3>
+            <p className="text-xs text-slate-400">
+              Live follow-up pipeline & document renewals in Asia/Kolkata
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {/* Overdue */}
+          <Link
+            href="/requests?followup=overdue"
+            className={`px-3 py-2 rounded-xl border transition-all flex flex-col justify-between ${
+              followupsOverdue > 0
+                ? "bg-rose-950/40 border-rose-800/80 hover:bg-rose-900/50 text-rose-300"
+                : "bg-slate-800/60 border-slate-700/60 hover:bg-slate-800 text-slate-300"
+            }`}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Overdue
+            </span>
+            <div className="flex items-baseline justify-between mt-1">
+              <span className="text-lg font-bold font-mono text-white">
+                {followupsOverdue}
+              </span>
+              {followupsOverdue > 0 && <AlertTriangle className="h-3.5 w-3.5 text-rose-400" />}
+            </div>
+          </Link>
+
+          {/* Due Today */}
+          <Link
+            href="/requests?followup=today"
+            className={`px-3 py-2 rounded-xl border transition-all flex flex-col justify-between ${
+              followupsDueToday > 0
+                ? "bg-amber-950/40 border-amber-800/80 hover:bg-amber-900/50 text-amber-300"
+                : "bg-slate-800/60 border-slate-700/60 hover:bg-slate-800 text-slate-300"
+            }`}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Due Today
+            </span>
+            <div className="flex items-baseline justify-between mt-1">
+              <span className="text-lg font-bold font-mono text-white">
+                {followupsDueToday}
+              </span>
+              <Clock className="h-3.5 w-3.5 text-amber-400" />
+            </div>
+          </Link>
+
+          {/* Upcoming */}
+          <Link
+            href="/requests?followup=upcoming"
+            className="px-3 py-2 rounded-xl border bg-slate-800/60 border-slate-700/60 hover:bg-slate-800 text-slate-300 transition-all flex flex-col justify-between"
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Upcoming
+            </span>
+            <div className="flex items-baseline justify-between mt-1">
+              <span className="text-lg font-bold font-mono text-white">
+                {followupsUpcoming}
+              </span>
+              <Calendar className="h-3.5 w-3.5 text-slate-400" />
+            </div>
+          </Link>
+
+          {/* Renewals Due */}
+          <Link
+            href="/documents?renewal=30d"
+            className={`px-3 py-2 rounded-xl border transition-all flex flex-col justify-between ${
+              renewalsDue > 0
+                ? "bg-purple-950/40 border-purple-800/80 hover:bg-purple-900/50 text-purple-300"
+                : "bg-slate-800/60 border-slate-700/60 hover:bg-slate-800 text-slate-300"
+            }`}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              30d Expiries
+            </span>
+            <div className="flex items-baseline justify-between mt-1">
+              <span className="text-lg font-bold font-mono text-white">
+                {renewalsDue}
+              </span>
+              <RefreshCw className="h-3.5 w-3.5 text-purple-400" />
+            </div>
           </Link>
         </div>
       </div>

@@ -76,6 +76,7 @@ export function RequestsDeskView({
   const currentService = searchParams.get("service") || "all";
   const currentPayment = searchParams.get("payment") || "all";
   const currentOverdue = searchParams.get("overdue") || "all";
+  const currentFollowup = searchParams.get("followup") || "all";
   const currentSort = searchParams.get("sort") || "oldest";
 
   const hasActiveFilters =
@@ -85,6 +86,7 @@ export function RequestsDeskView({
     currentService !== "all" ||
     currentPayment !== "all" ||
     currentOverdue !== "all" ||
+    currentFollowup !== "all" ||
     currentSort !== "oldest";
 
   const updateUrlParams = (updates: Record<string, string | null | undefined>) => {
@@ -355,6 +357,19 @@ export function RequestsDeskView({
                 Payment: {pay.charAt(0).toUpperCase() + pay.slice(1)}
               </option>
             ))}
+          </select>
+
+          {/* Follow-up Filter Dropdown */}
+          <select
+            value={currentFollowup}
+            onChange={(e) => updateUrlParams({ followup: e.target.value })}
+            className="px-3 py-1.5 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 text-slate-800 dark:text-zinc-200 cursor-pointer"
+          >
+            <option value="all">All Follow-ups</option>
+            <option value="today">Follow-up: Due Today</option>
+            <option value="overdue">Follow-up: Overdue</option>
+            <option value="upcoming">Follow-up: Upcoming</option>
+            <option value="none">No Follow-up</option>
           </select>
 
           {/* Overdue Only Filter Toggle */}

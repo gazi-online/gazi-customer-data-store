@@ -894,3 +894,222 @@ export async function generateInvoiceForRequest(params: {
     data: invoiceRes.data,
   };
 }
+
+// ==============================================================================
+// PHASE 2D: SERVICE REQUEST FOLLOW-UP SERVER ACTIONS
+// ==============================================================================
+
+export interface FollowupMutationResult {
+  success: boolean;
+  followupId?: string;
+  newFollowupId?: string;
+  error?: string | null;
+  errorCode?: string | null;
+}
+
+/**
+ * Schedule a new follow-up for a service request.
+ * Enforces single active open follow-up per request via DB partial unique index.
+ */
+export async function scheduleFollowup(params: {
+  requestId: string;
+  followUpAt: string;
+  note?: string | null;
+}): Promise<FollowupMutationResult> {
+  const { requestId, followUpAt, note } = params;
+
+  if (!isValidUuid(requestId)) {
+    return { success: false, error: "Invalid request ID format.", errorCode: "invalid_input" };
+  }
+
+  if (!followUpAt || isNaN(new Date(followUpAt).getTime())) {
+    return { success: false, error: "A valid follow-up date and time is required.", errorCode: "invalid_input" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: "Authentication required.", errorCode: "auth_required" };
+    }
+
+    // Insert follow-up row (status = 'open')
+    const { data, error } = await supabase
+      .from("service_request_followups")
+      .insert({
+        customer_service_id: requestId,
+        follow_up_at: new Date(followUpAt).toISOString(),
+        note: note ? note.trim() : null,
+        status: "open",
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      if (error.code === "23505") {
+        return {
+          success: false,
+          error: "An active open follow-up already exists for this request. Reschedule or complete the existing one first.",
+          errorCode: "already_exists",
+        };
+      }
+      console.error("[scheduleFollowup] Insert error:", error.message);
+      return { success: false, error: error.message || "Failed to schedule follow-up.", errorCode: "query_failed" };
+    }
+
+    revalidatePath("/requests");
+    revalidatePath(`/requests/${requestId}`);
+    revalidatePath("/dashboard");
+
+    return { success: true, followupId: data.id };
+  } catch (err: unknown) {
+    console.error("[scheduleFollowup] Unexpected error:", err);
+    return { success: false, error: "An unexpected error occurred.", errorCode: "internal_error" };
+  }
+}
+
+/**
+ * Reschedule an existing open follow-up via the canonical atomic RPC.
+ * Closes the old row as 'rescheduled', records resolution note, creates new open row,
+ * and maintains lineage via superseded_by.
+ */
+export async function rescheduleFollowup(params: {
+  followupId: string;
+  requestId: string;
+  newFollowUpAt: string;
+  newNote?: string | null;
+  resolutionNote?: string | null;
+}): Promise<FollowupMutationResult> {
+  const { followupId, requestId, newFollowUpAt, newNote, resolutionNote } = params;
+
+  if (!isValidUuid(followupId) || !isValidUuid(requestId)) {
+    return { success: false, error: "Invalid ID format.", errorCode: "invalid_input" };
+  }
+
+  if (!newFollowUpAt || isNaN(new Date(newFollowUpAt).getTime())) {
+    return { success: false, error: "A valid new follow-up date and time is required.", errorCode: "invalid_input" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: "Authentication required.", errorCode: "auth_required" };
+    }
+
+    const { data: newId, error } = await supabase.rpc("reschedule_service_request_followup", {
+      p_old_followup_id: followupId,
+      p_new_follow_up_at: new Date(newFollowUpAt).toISOString(),
+      p_new_note: newNote ? newNote.trim() : null,
+      p_resolution_note: resolutionNote ? resolutionNote.trim() : null,
+    });
+
+    if (error) {
+      console.error("[rescheduleFollowup] RPC error:", error.message);
+      return { success: false, error: error.message || "Failed to reschedule follow-up.", errorCode: "rpc_failed" };
+    }
+
+    revalidatePath("/requests");
+    revalidatePath(`/requests/${requestId}`);
+    revalidatePath("/dashboard");
+
+    return { success: true, newFollowupId: newId };
+  } catch (err: unknown) {
+    console.error("[rescheduleFollowup] Unexpected error:", err);
+    return { success: false, error: "An unexpected error occurred while rescheduling.", errorCode: "internal_error" };
+  }
+}
+
+/**
+ * Mark an open follow-up as completed.
+ * DB trigger unconditionally sets completed_at = now().
+ */
+export async function completeFollowup(params: {
+  followupId: string;
+  requestId: string;
+  resolutionNote?: string | null;
+}): Promise<FollowupMutationResult> {
+  const { followupId, requestId, resolutionNote } = params;
+
+  if (!isValidUuid(followupId) || !isValidUuid(requestId)) {
+    return { success: false, error: "Invalid ID format.", errorCode: "invalid_input" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: "Authentication required.", errorCode: "auth_required" };
+    }
+
+    const { error } = await supabase
+      .from("service_request_followups")
+      .update({
+        status: "completed",
+        resolution_note: resolutionNote ? resolutionNote.trim() : null,
+      })
+      .eq("id", followupId)
+      .eq("status", "open");
+
+    if (error) {
+      console.error("[completeFollowup] Update error:", error.message);
+      return { success: false, error: error.message || "Failed to complete follow-up.", errorCode: "query_failed" };
+    }
+
+    revalidatePath("/requests");
+    revalidatePath(`/requests/${requestId}`);
+    revalidatePath("/dashboard");
+
+    return { success: true, followupId };
+  } catch (err: unknown) {
+    console.error("[completeFollowup] Unexpected error:", err);
+    return { success: false, error: "An unexpected error occurred.", errorCode: "internal_error" };
+  }
+}
+
+/**
+ * Cancel an open follow-up.
+ */
+export async function cancelFollowup(params: {
+  followupId: string;
+  requestId: string;
+  resolutionNote?: string | null;
+}): Promise<FollowupMutationResult> {
+  const { followupId, requestId, resolutionNote } = params;
+
+  if (!isValidUuid(followupId) || !isValidUuid(requestId)) {
+    return { success: false, error: "Invalid ID format.", errorCode: "invalid_input" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, error: "Authentication required.", errorCode: "auth_required" };
+    }
+
+    const { error } = await supabase
+      .from("service_request_followups")
+      .update({
+        status: "cancelled",
+        resolution_note: resolutionNote ? resolutionNote.trim() : null,
+      })
+      .eq("id", followupId)
+      .eq("status", "open");
+
+    if (error) {
+      console.error("[cancelFollowup] Update error:", error.message);
+      return { success: false, error: error.message || "Failed to cancel follow-up.", errorCode: "query_failed" };
+    }
+
+    revalidatePath("/requests");
+    revalidatePath(`/requests/${requestId}`);
+    revalidatePath("/dashboard");
+
+    return { success: true, followupId };
+  } catch (err: unknown) {
+    console.error("[cancelFollowup] Unexpected error:", err);
+    return { success: false, error: "An unexpected error occurred.", errorCode: "internal_error" };
+  }
+}
