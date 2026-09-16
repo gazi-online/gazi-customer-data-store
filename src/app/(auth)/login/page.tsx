@@ -9,7 +9,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { login } from "./actions";
 
-// ── Validation schema (unchanged) ─────────────────────────────────────────────
+// ── Validation schema (strictly preserved) ──────────────────────────────────
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
@@ -31,7 +31,7 @@ export default function LoginPage() {
     defaultValues: { email: "", password: "" },
   });
 
-  // ── Preserved auth submission flow ────────────────────────────────────────────
+  // ── Preserved auth submission flow ──────────────────────────────────────────
   const onSubmit = async (data: LoginFormValues) => {
     if (isLoading) return;
     setIsLoading(true);
@@ -56,31 +56,40 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-5 py-10">
-      {/* Card */}
-      <div className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-sm px-8 py-10 sm:px-10">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center px-4 py-8 sm:py-12">
+      {/* Login Card */}
+      <div className="w-full max-w-[400px] bg-white rounded-[22px] border border-slate-200/80 shadow-[0_12px_36px_-6px_rgba(99,102,241,0.09),0_2px_8px_-2px_rgba(0,0,0,0.04)] p-7 sm:p-9">
 
-        {/* Official Gazi Online logo */}
-        <div className="mb-8 flex justify-center">
-          <Image
-            src="/branding/gazi-online-logo.jpg"
-            alt="Gazi Online"
-            width={108}
-            height={108}
-            priority
-            className="rounded-full object-cover w-24 h-24 sm:w-28 sm:h-28"
-          />
+        {/* Brand & Heading */}
+        <div className="flex flex-col items-center text-center mb-7">
+          <div className="mb-4 flex justify-center">
+            <Image
+              src="/branding/gazi-online-logo.jpg"
+              alt="Gazi Online"
+              width={110}
+              height={110}
+              priority
+              className="w-[96px] h-[96px] sm:w-[110px] sm:h-[110px] object-contain rounded-full"
+            />
+          </div>
+
+          <h1 className="text-[22px] sm:text-[26px] font-semibold text-slate-900 tracking-tight leading-tight">
+            Welcome Back
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-normal">
+            Login to your account
+          </p>
         </div>
 
-        {/* Auth error */}
+        {/* Auth error message (rendered only when actual error occurs) */}
         <div aria-live="polite" aria-atomic="true">
           {authError && (
             <div
               role="alert"
-              className="mb-5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+              className="mb-5 flex items-start gap-2.5 rounded-[13px] border border-red-200 bg-red-50/90 px-3.5 py-2.5 text-sm text-red-700"
             >
-              <span className="font-bold shrink-0" aria-hidden="true">!</span>
-              <span>{authError}</span>
+              <span className="font-bold shrink-0 mt-0.5" aria-hidden="true">!</span>
+              <span className="break-words leading-snug">{authError}</span>
             </div>
           )}
         </div>
@@ -91,7 +100,7 @@ export default function LoginPage() {
           noValidate
           className="space-y-4"
         >
-          {/* Email */}
+          {/* Email field */}
           <div className="space-y-1.5">
             <label
               htmlFor="email-input"
@@ -108,10 +117,10 @@ export default function LoginPage() {
               placeholder="you@example.com"
               aria-invalid={errors.email ? "true" : "false"}
               aria-describedby={errors.email ? "email-error" : undefined}
-              className={`block w-full rounded-xl border px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 ${
+              className={`block w-full h-12 rounded-[13px] border px-4 text-sm text-slate-900 placeholder:text-slate-400 transition-all duration-150 focus:outline-none focus:ring-4 ${
                 errors.email
-                  ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                  : "border-slate-300 hover:border-slate-400 focus:border-violet-500 focus:ring-violet-100"
+                  ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                  : "border-slate-200 hover:border-slate-300 focus:border-violet-500 focus:ring-violet-500/15"
               }`}
             />
             {errors.email && (
@@ -121,7 +130,7 @@ export default function LoginPage() {
             )}
           </div>
 
-          {/* Password */}
+          {/* Password field */}
           <div className="space-y-1.5">
             <label
               htmlFor="password-input"
@@ -138,18 +147,17 @@ export default function LoginPage() {
                 placeholder="••••••••"
                 aria-invalid={errors.password ? "true" : "false"}
                 aria-describedby={errors.password ? "password-error" : undefined}
-                className={`block w-full rounded-xl border px-4 py-3 pr-11 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 ${
+                className={`block w-full h-12 rounded-[13px] border pl-4 pr-11 text-sm text-slate-900 placeholder:text-slate-400 transition-all duration-150 focus:outline-none focus:ring-4 ${
                   errors.password
-                    ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-                    : "border-slate-300 hover:border-slate-400 focus:border-violet-500 focus:ring-violet-100"
+                    ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                    : "border-slate-200 hover:border-slate-300 focus:border-violet-500 focus:ring-violet-500/15"
                 }`}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((p) => !p)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
-                tabIndex={0}
-                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded-r-xl"
+                className="absolute inset-y-0 right-0 w-11 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded-r-[13px]"
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" aria-hidden="true" />
@@ -165,24 +173,23 @@ export default function LoginPage() {
             )}
           </div>
 
-          {/* Submit */}
+          {/* Login button */}
           <button
             type="submit"
             disabled={isLoading}
-            className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 active:bg-violet-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-3 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
+            className="mt-2 w-full h-12 rounded-[13px] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 active:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 flex items-center justify-center gap-2 transition-all duration-150 shadow-sm hover:shadow-md hover:shadow-indigo-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
           >
             {isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                <span>Signing in…</span>
+                <span>Logging in…</span>
               </>
             ) : (
-              <span>Sign in</span>
+              <span>Login</span>
             )}
           </button>
         </form>
       </div>
-
     </div>
   );
 }
