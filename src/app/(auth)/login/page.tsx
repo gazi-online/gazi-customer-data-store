@@ -67,9 +67,6 @@ export default function LoginPage() {
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">
             GCDS
           </h1>
-          <p className="text-sm text-slate-500">
-            Sign in to your account
-          </p>
         </div>
 
         {/* Auth error */}
@@ -183,10 +180,6 @@ export default function LoginPage() {
         </form>
       </div>
 
-      {/* Footer */}
-      <p className="mt-6 text-xs text-slate-400 select-none">
-        © 2026 Gazi Customer Data Store
-      </p>
     </div>
   );
 }
