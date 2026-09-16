@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -59,14 +60,16 @@ export default function LoginPage() {
       {/* Card */}
       <div className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-sm px-8 py-10 sm:px-10">
 
-        {/* Brand */}
-        <div className="mb-8 flex flex-col items-start gap-1">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-violet-100 mb-3">
-            <span className="font-black text-lg leading-none">G</span>
-          </div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-            GCDS
-          </h1>
+        {/* Official Gazi Online logo */}
+        <div className="mb-8 flex justify-center">
+          <Image
+            src="/branding/gazi-online-logo.jpg"
+            alt="Gazi Online"
+            width={108}
+            height={108}
+            priority
+            className="rounded-full object-cover w-24 h-24 sm:w-28 sm:h-28"
+          />
         </div>
 
         {/* Auth error */}
