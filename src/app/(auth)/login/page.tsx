@@ -58,22 +58,22 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center px-4 py-8 sm:py-12">
       {/* Login Card */}
-      <div className="w-full max-w-[400px] bg-white rounded-[22px] border border-slate-200/80 shadow-[0_12px_36px_-6px_rgba(99,102,241,0.09),0_2px_8px_-2px_rgba(0,0,0,0.04)] p-7 sm:p-9">
+      <div className="w-full max-w-[400px] bg-white rounded-[22px] border border-slate-200/80 shadow-[0_12px_36px_-6px_rgba(99,102,241,0.09),0_2px_8px_-2px_rgba(0,0,0,0.04)] p-6 sm:p-8">
 
         {/* Brand & Heading */}
-        <div className="flex flex-col items-center text-center mb-7">
-          <div className="mb-4 flex justify-center">
+        <div className="flex flex-col items-center text-center mb-5 sm:mb-6">
+          <div className="mb-3 flex justify-center">
             <Image
               src="/branding/gazi-online-logo.jpg"
               alt="Gazi Online"
-              width={110}
-              height={110}
+              width={120}
+              height={120}
               priority
-              className="w-[96px] h-[96px] sm:w-[110px] sm:h-[110px] object-contain rounded-full"
+              className="w-[104px] h-[104px] sm:w-[120px] sm:h-[120px] object-contain rounded-full"
             />
           </div>
 
-          <h1 className="text-[22px] sm:text-[26px] font-semibold text-slate-900 tracking-tight leading-tight">
+          <h1 className="text-[23px] sm:text-[26px] font-semibold text-slate-900 tracking-tight leading-tight">
             Welcome Back
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-normal">
@@ -177,7 +177,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="mt-2 w-full h-12 rounded-[13px] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 active:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 flex items-center justify-center gap-2 transition-all duration-150 shadow-sm hover:shadow-md hover:shadow-indigo-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
+            className="mt-2 w-full h-12 rounded-[13px] bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 active:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 flex items-center justify-center gap-2 transition-all duration-150 shadow-sm hover:shadow-md hover:shadow-blue-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2"
           >
             {isLoading ? (
               <>
