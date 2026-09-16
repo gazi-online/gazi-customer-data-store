@@ -67,18 +67,18 @@ async function runLiveVerification() {
 
   assert.strictEqual(insData, null, "Insert data must be null for anon caller");
   assert.ok(insError, "Direct insert MUST fail for anon caller");
-  assert.strictEqual(insError.code, "42501", "Error code must be 42501 (RLS violation)");
+  assert.strictEqual(insError.code, "42501", "Error code must be 42501 (insufficient privilege)");
   assert.ok(
-    insError.message.includes("violates row-level security policy"),
-    `Error message must confirm RLS violation. Got: ${insError.message}`
+    insError.message.includes("permission denied for table") || insError.message.includes("violates row-level security policy"),
+    `Error message must confirm least-privilege table revocation or RLS block. Got: ${insError.message}`
   );
-  console.log("  ✓ [PASS] Multi-tenant RLS INSERT policy verified live: anon callers cannot insert follow-ups.\n");
+  console.log("  ✓ [PASS] Least-privilege table revocation & RLS INSERT guard verified live: anon callers cannot insert follow-ups.\n");
 
   // --------------------------------------------------------------------------
   // TEST 3: Unauthenticated Direct UPDATE Rejection (RLS Guard)
   // --------------------------------------------------------------------------
   console.log("[TEST 3] Testing direct UPDATE against public.service_request_followups from anon client...");
-  const { data: updData, error: updError } = await anonClient
+  const { data: updData } = await anonClient
     .from("service_request_followups")
     .update({ note: "Malicious update" })
     .eq("id", "00000000-0000-0000-0000-000000000000")
@@ -91,7 +91,7 @@ async function runLiveVerification() {
   // TEST 4: Unauthenticated Direct DELETE Prohibition (No Delete Policy)
   // --------------------------------------------------------------------------
   console.log("[TEST 4] Testing direct DELETE against public.service_request_followups from anon client...");
-  const { data: delData, error: delError } = await anonClient
+  const { data: delData } = await anonClient
     .from("service_request_followups")
     .delete()
     .eq("id", "00000000-0000-0000-0000-000000000000")

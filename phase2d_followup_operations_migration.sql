@@ -70,7 +70,10 @@ CREATE INDEX IF NOT EXISTS idx_service_request_followups_superseded_by
 
 -- 4. Lifecycle Trigger: Insert Guard
 CREATE OR REPLACE FUNCTION public.check_service_request_followup_insert_guard()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
 BEGIN
   IF NEW.status <> 'open' THEN
     RAISE EXCEPTION 'New follow-ups must be inserted with status open' USING ERRCODE = '23514';
@@ -88,7 +91,7 @@ BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trg_service_request_followups_insert_guard ON public.service_request_followups;
 CREATE TRIGGER trg_service_request_followups_insert_guard
@@ -98,20 +101,17 @@ CREATE TRIGGER trg_service_request_followups_insert_guard
 
 -- 5. Lifecycle Trigger: Update Guard & Immutability
 CREATE OR REPLACE FUNCTION public.check_service_request_followup_update_guard()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
 BEGIN
-  -- Immutability of origin & initial schedule
+  -- Immutability of origin & creator
   IF NEW.customer_service_id <> OLD.customer_service_id THEN
     RAISE EXCEPTION 'customer_service_id is strictly immutable' USING ERRCODE = '42501';
   END IF;
   IF NEW.created_by <> OLD.created_by THEN
     RAISE EXCEPTION 'created_by is strictly immutable' USING ERRCODE = '42501';
-  END IF;
-  IF NEW.follow_up_at <> OLD.follow_up_at THEN
-    RAISE EXCEPTION 'follow_up_at is immutable; rescheduling must use canonical reschedule function' USING ERRCODE = '42501';
-  END IF;
-  IF (NEW.note IS DISTINCT FROM OLD.note) THEN
-    RAISE EXCEPTION 'note is immutable; rescheduling or resolution must use designated fields' USING ERRCODE = '42501';
   END IF;
 
   -- Terminal rows cannot be modified or reopened
@@ -119,26 +119,78 @@ BEGIN
     RAISE EXCEPTION 'Terminal follow-up records cannot be updated or reopened' USING ERRCODE = '42501';
   END IF;
 
-  -- Allowed state transitions from open
-  IF NEW.status = 'completed' THEN
-    NEW.completed_at = now();
-  ELSIF NEW.status = 'cancelled' THEN
-    NEW.completed_at = NULL;
-  ELSIF NEW.status = 'rescheduled' THEN
-    IF current_setting('app.canonical_reschedule', true) IS DISTINCT FROM 'true' THEN
-      RAISE EXCEPTION 'Status rescheduled is only permitted through canonical reschedule_service_request_followup RPC' USING ERRCODE = '42501';
+  -- Lifecycle rules from OLD.status = 'open'
+  IF OLD.status = 'open' THEN
+    -- A) Remaining in 'open' status
+    IF NEW.status = 'open' THEN
+      IF NEW.follow_up_at <> OLD.follow_up_at THEN
+        RAISE EXCEPTION 'follow_up_at is immutable; rescheduling must use canonical reschedule function' USING ERRCODE = '42501';
+      END IF;
+      IF (NEW.note IS DISTINCT FROM OLD.note) THEN
+        RAISE EXCEPTION 'note is immutable; rescheduling or resolution must use designated fields' USING ERRCODE = '42501';
+      END IF;
+      IF (NEW.resolution_note IS DISTINCT FROM OLD.resolution_note) THEN
+        RAISE EXCEPTION 'resolution_note cannot be modified while status remains open' USING ERRCODE = '42501';
+      END IF;
+      IF (NEW.superseded_by IS DISTINCT FROM OLD.superseded_by) THEN
+        RAISE EXCEPTION 'superseded_by cannot be modified while status remains open' USING ERRCODE = '42501';
+      END IF;
+      IF NEW.completed_at IS NOT NULL THEN
+        RAISE EXCEPTION 'completed_at must be NULL while status remains open' USING ERRCODE = '42501';
+      END IF;
+      NEW.completed_at = NULL;
+
+    -- B) Transition to 'completed'
+    ELSIF NEW.status = 'completed' THEN
+      IF NEW.follow_up_at <> OLD.follow_up_at THEN
+        RAISE EXCEPTION 'follow_up_at is immutable' USING ERRCODE = '42501';
+      END IF;
+      IF (NEW.note IS DISTINCT FROM OLD.note) THEN
+        RAISE EXCEPTION 'note is immutable' USING ERRCODE = '42501';
+      END IF;
+      IF NEW.superseded_by IS NOT NULL THEN
+        RAISE EXCEPTION 'superseded_by must be NULL when completing a follow-up' USING ERRCODE = '42501';
+      END IF;
+      NEW.completed_at = now();
+
+    -- C) Transition to 'cancelled'
+    ELSIF NEW.status = 'cancelled' THEN
+      IF NEW.follow_up_at <> OLD.follow_up_at THEN
+        RAISE EXCEPTION 'follow_up_at is immutable' USING ERRCODE = '42501';
+      END IF;
+      IF (NEW.note IS DISTINCT FROM OLD.note) THEN
+        RAISE EXCEPTION 'note is immutable' USING ERRCODE = '42501';
+      END IF;
+      IF NEW.superseded_by IS NOT NULL THEN
+        RAISE EXCEPTION 'superseded_by must be NULL when cancelling a follow-up' USING ERRCODE = '42501';
+      END IF;
+      NEW.completed_at = NULL;
+
+    -- D) Transition to 'rescheduled'
+    ELSIF NEW.status = 'rescheduled' THEN
+      IF current_setting('app.canonical_reschedule', true) IS DISTINCT FROM 'true' THEN
+        RAISE EXCEPTION 'Status rescheduled is only permitted through canonical reschedule_service_request_followup RPC' USING ERRCODE = '42501';
+      END IF;
+      IF NEW.superseded_by IS NULL THEN
+        RAISE EXCEPTION 'superseded_by is required when status is rescheduled' USING ERRCODE = '42501';
+      END IF;
+      IF NEW.follow_up_at <> OLD.follow_up_at THEN
+        RAISE EXCEPTION 'Original follow_up_at cannot be modified during reschedule' USING ERRCODE = '42501';
+      END IF;
+      IF (NEW.note IS DISTINCT FROM OLD.note) THEN
+        RAISE EXCEPTION 'Original note cannot be modified during reschedule' USING ERRCODE = '42501';
+      END IF;
+      NEW.completed_at = NULL;
+
+    ELSE
+      RAISE EXCEPTION 'Invalid follow-up status transition' USING ERRCODE = '23514';
     END IF;
-    NEW.completed_at = NULL;
-  ELSIF NEW.status = 'open' THEN
-    NEW.completed_at = NULL;
-  ELSE
-    RAISE EXCEPTION 'Invalid follow-up status transition' USING ERRCODE = '23514';
   END IF;
 
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trg_service_request_followups_update_guard ON public.service_request_followups;
 CREATE TRIGGER trg_service_request_followups_update_guard
@@ -305,5 +357,10 @@ CREATE POLICY "service_request_followups_tenant_update"
 
 -- No DELETE policy (hard deletions prohibited)
 DROP POLICY IF EXISTS "service_request_followups_tenant_delete" ON public.service_request_followups;
+
+-- 8. Least-Privilege Table Grants
+REVOKE ALL ON public.service_request_followups FROM anon;
+REVOKE DELETE ON public.service_request_followups FROM authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.service_request_followups TO authenticated, service_role;
 
 NOTIFY pgrst, 'reload schema';

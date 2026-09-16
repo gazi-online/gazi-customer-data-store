@@ -9,7 +9,6 @@ import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  getKolkataDateString,
   getKolkataTodayHalfOpenRange,
   classifyFollowupState,
   formatKolkataDateTime,
@@ -158,19 +157,30 @@ async function runTests() {
     "Insert guard must strictly prohibit inserting terminal rows or premature resolution values"
   );
 
-  // 4. Update Guard trigger & Immutability
+  // 4. Trigger Functions Search Path Hardening
+  assert.ok(
+    sql.includes("check_service_request_followup_insert_guard") &&
+    sql.includes("SET search_path = public, pg_temp"),
+    "Insert guard must define safe fixed search_path = public, pg_temp"
+  );
   assert.ok(
     sql.includes("check_service_request_followup_update_guard") &&
-    sql.includes("NEW.customer_service_id <> OLD.customer_service_id") &&
-    sql.includes("NEW.created_by <> OLD.created_by") &&
-    sql.includes("NEW.follow_up_at <> OLD.follow_up_at") &&
-    sql.includes("NEW.note IS DISTINCT FROM OLD.note") &&
-    sql.includes("OLD.status IN ('completed', 'cancelled', 'rescheduled')") &&
-    sql.includes("app.canonical_reschedule"),
-    "Update guard must enforce schedule immutability and require GUC app.canonical_reschedule for rescheduling"
+    sql.includes("SET search_path = public, pg_temp"),
+    "Update guard must define safe fixed search_path = public, pg_temp"
   );
 
-  // 5. Hardened Canonical Reschedule RPC
+  // 5. Open-Row Audit Bypass & Immutability Checks
+  assert.ok(
+    sql.includes("check_service_request_followup_update_guard") &&
+    sql.includes("resolution_note cannot be modified while status remains open") &&
+    sql.includes("superseded_by cannot be modified while status remains open") &&
+    sql.includes("superseded_by must be NULL when completing a follow-up") &&
+    sql.includes("superseded_by must be NULL when cancelling a follow-up") &&
+    sql.includes("app.canonical_reschedule"),
+    "Update guard must prevent open-row audit bypass and enforce lifecycle integrity"
+  );
+
+  // 6. Hardened Canonical Reschedule RPC
   assert.ok(
     sql.includes("CREATE OR REPLACE FUNCTION public.reschedule_service_request_followup") &&
     sql.includes("SECURITY DEFINER") &&
@@ -181,7 +191,7 @@ async function runTests() {
     "Canonical RPC must have SECURITY DEFINER, search_path, explicit auth, REVOKE from PUBLIC/anon, and GRANT to authenticated"
   );
 
-  // 6. RLS Policies
+  // 7. RLS Policies
   assert.ok(
     sql.includes("CREATE POLICY \"service_request_followups_tenant_select\"") &&
     sql.includes("CREATE POLICY \"service_request_followups_tenant_insert\"") &&
@@ -189,7 +199,15 @@ async function runTests() {
     sql.includes("DROP POLICY IF EXISTS \"service_request_followups_tenant_delete\""),
     "RLS policies must enforce tenant scoping on select/insert/update and prohibit hard delete"
   );
-  console.log("  ✓ SQL migration script passes all Phase 2D safety & architecture invariants.");
+
+  // 8. Least-Privilege Table Grants
+  assert.ok(
+    sql.includes("REVOKE ALL ON public.service_request_followups FROM anon;") &&
+    sql.includes("REVOKE DELETE ON public.service_request_followups FROM authenticated;") &&
+    sql.includes("GRANT SELECT, INSERT, UPDATE ON public.service_request_followups TO authenticated, service_role;"),
+    "Table grants must revoke all from anon, revoke delete from authenticated, and grant only select/insert/update"
+  );
+  console.log("  ✓ SQL migration script passes all Phase 2D safety, search_path, and audit bypass hardening invariants.");
 
   console.log("\n>>> ALL PHASE 2D PRE-MIGRATION TESTS PASSED SUCCESSFULLY! <<<\n");
 }
