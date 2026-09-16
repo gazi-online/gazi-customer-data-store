@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import {
-  Home,
-  Users,
-  FileText,
-  Wrench,
-  BarChart2,
-  Settings,
+import { usePathname, useRouter } from "next/navigation";
+import { 
+  Home, 
+  Users, 
+  FileText, 
+  Wrench, 
+  BarChart2, 
+  Settings, 
   LogOut,
   Menu,
   X,
@@ -17,53 +17,26 @@ import {
   CreditCard,
   ClipboardList,
   MessageSquare,
-  Bell,
-  ChevronRight,
+  Bell
 } from "lucide-react";
 import { logout } from "./actions";
 import { useState, useEffect } from "react";
 import { GlobalCommandSearchModal } from "@/components/search/GlobalCommandSearchModal";
 
-/* ─────────────────────────────────────────────
-   Navigation groups
-───────────────────────────────────────────── */
-const navGroups = [
-  {
-    label: "Operations",
-    items: [
-      { name: "Dashboard",      href: "/dashboard",      icon: Home },
-      { name: "Operations",     href: "/operations",     icon: Bell },
-      { name: "Communications", href: "/communications", icon: MessageSquare },
-    ],
-  },
-  {
-    label: "Work",
-    items: [
-      { name: "Requests",  href: "/requests",  icon: ClipboardList },
-      { name: "Customers", href: "/customers", icon: Users },
-      { name: "Documents", href: "/documents", icon: FileText },
-      { name: "Services",  href: "/services",  icon: Wrench },
-    ],
-  },
-  {
-    label: "Finance",
-    items: [
-      { name: "Invoices", href: "/invoices", icon: Receipt },
-      { name: "Payments", href: "/payments", icon: CreditCard },
-      { name: "Reports",  href: "/reports",  icon: BarChart2 },
-    ],
-  },
-  {
-    label: "Admin",
-    items: [
-      { name: "Settings", href: "/settings", icon: Settings },
-    ],
-  },
+const navigation = [
+  { name: "Dashboard", href: "/dashboard", icon: Home },
+  { name: "Operations", href: "/operations", icon: Bell },
+  { name: "Communications", href: "/communications", icon: MessageSquare },
+  { name: "Requests", href: "/requests", icon: ClipboardList },
+  { name: "Customers", href: "/customers", icon: Users },
+  { name: "Invoices", href: "/invoices", icon: Receipt },
+  { name: "Payments", href: "/payments", icon: CreditCard },
+  { name: "Documents", href: "/documents", icon: FileText },
+  { name: "Services", href: "/services", icon: Wrench },
+  { name: "Reports", href: "/reports", icon: BarChart2 },
+  { name: "Settings", href: "/settings", icon: Settings },
 ];
 
-/* ─────────────────────────────────────────────
-   Sidebar Content
-───────────────────────────────────────────── */
 interface SidebarContentProps {
   pathname: string;
   onClose?: () => void;
@@ -71,96 +44,83 @@ interface SidebarContentProps {
 
 function SidebarContent({ pathname, onClose }: SidebarContentProps) {
   return (
-    <div className="flex flex-col h-full">
-      {/* Brand */}
-      <div className="h-16 flex items-center px-5 border-b border-slate-100 shrink-0">
-        <Link href="/dashboard" className="flex items-center gap-3 group" onClick={onClose}>
-          <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-violet-200">
-            <span className="font-black text-base leading-none tracking-tight">G</span>
+    <>
+      {/* Brand Logo Header */}
+      <div className="h-16 flex items-center px-5 border-b border-slate-200/80 shrink-0">
+        <Link href="/dashboard" className="flex items-center gap-3 group">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-xs">
+            <span className="font-extrabold text-base leading-none tracking-tight">G</span>
           </div>
-          <div className="flex flex-col gap-px">
-            <span className="text-[15px] font-bold text-slate-900 tracking-tight leading-none">GCDS</span>
-            <span className="text-[10px] uppercase font-semibold tracking-widest text-slate-400 leading-none">
-              Customer Data
+          <div className="flex flex-col">
+            <span className="text-base font-bold text-slate-900 tracking-tight leading-none mb-1">GCDS</span>
+            <span className="text-[10px] uppercase font-semibold tracking-wider text-slate-400">
+              Customer Data Store
             </span>
           </div>
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5" aria-label="Sidebar navigation">
-        {navGroups.map((group) => (
-          <div key={group.label}>
-            <div className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400/70">
-              {group.label}
-            </div>
-            <div className="space-y-0.5">
-              {group.items.map((item) => {
-                const isActive =
-                  pathname === item.href ||
-                  (item.href !== "/dashboard" && pathname.startsWith(item.href));
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    onClick={onClose}
-                    aria-current={isActive ? "page" : undefined}
-                    className={`relative flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 group ${
-                      isActive
-                        ? "bg-violet-50 text-violet-700"
-                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                  >
-                    {/* Active left accent */}
-                    {isActive && (
-                      <span
-                        className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-violet-600"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <Icon
-                      className={`h-[17px] w-[17px] shrink-0 transition-colors ${
-                        isActive
-                          ? "text-violet-600"
-                          : "text-slate-400 group-hover:text-slate-600"
-                      }`}
-                    />
-                    <span className="flex-1 truncate">{item.name}</span>
-                    {isActive && (
-                      <ChevronRight className="h-3.5 w-3.5 text-violet-400 shrink-0" />
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto" aria-label="Sidebar Navigation">
+        <div className="px-3 text-[11px] font-bold tracking-wider uppercase text-slate-400 mb-2">
+          Main Menu
+        </div>
+        {navigation.map((item) => {
+          const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+          const Icon = item.icon;
+          
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              onClick={onClose}
+              aria-current={isActive ? "page" : undefined}
+              className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs md:text-sm font-medium transition-colors group ${
+                isActive 
+                  ? "bg-violet-50 text-violet-700 font-semibold" 
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Icon className={`h-4 w-4 transition-colors ${
+                  isActive 
+                    ? "text-violet-600" 
+                    : "text-slate-400 group-hover:text-slate-600"
+                }`} />
+                <span>{item.name}</span>
+              </div>
+              {isActive && (
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-600 shrink-0" aria-hidden="true" />
+              )}
+            </Link>
+          );
+        })}
       </nav>
 
-      {/* Sign out */}
-      <div className="p-3 border-t border-slate-100 shrink-0">
+      {/* Sidebar Footer */}
+      <div className="p-3 border-t border-slate-200/80 shrink-0">
         <button
           onClick={() => logout()}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors group"
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors group"
         >
-          <LogOut className="h-[17px] w-[17px] shrink-0 text-slate-400 group-hover:text-red-500 transition-colors" />
+          <LogOut className="h-4 w-4 text-slate-400 group-hover:text-red-500 transition-colors" />
           <span>Sign Out</span>
         </button>
       </div>
-    </div>
+    </>
   );
 }
 
-/* ─────────────────────────────────────────────
-   Dashboard Layout
-───────────────────────────────────────────── */
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
 
-  // ⌘K / Ctrl+K shortcut
+  // Global shortcut for Command/Ctrl + K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -176,7 +136,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (isPrintRoute) {
     return (
-      <div className="min-h-screen bg-zinc-100 print:bg-white print:min-h-0">
+      <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 print:bg-white print:min-h-0">
         {children}
       </div>
     );
@@ -184,27 +144,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F8FAFF] print:block print:h-auto print:overflow-visible print:bg-white">
-
-      {/* ── Sidebar: Desktop ───────────────────────── */}
-      <aside className="w-60 bg-white border-r border-slate-100 flex-col hidden md:flex shrink-0 print:hidden select-none">
+      {/* Sidebar - Desktop */}
+      <aside className="w-64 bg-white border-r border-slate-200/80 flex-col hidden md:flex shrink-0 print:hidden select-none">
         <SidebarContent pathname={pathname} />
       </aside>
 
-      {/* ── Sidebar: Mobile overlay ─────────────────── */}
+      {/* Sidebar - Mobile (Overlay) */}
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex print:hidden">
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setMobileMenuOpen(false)}
-            aria-hidden="true"
-          />
-          {/* Drawer */}
-          <aside className="relative w-72 max-w-[85vw] bg-white h-full flex flex-col shadow-2xl animate-in slide-in-from-left duration-250 ease-out">
-            <button
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setMobileMenuOpen(false)} />
+          <aside className="relative w-64 max-w-sm bg-white h-full flex flex-col shadow-xl animate-in slide-in-from-left-4 duration-300">
+            <button 
               onClick={() => setMobileMenuOpen(false)}
               aria-label="Close menu"
-              className="absolute top-3.5 right-3.5 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors z-10"
+              className="absolute top-4 right-4 p-2 text-slate-500 hover:bg-slate-100 rounded-full"
             >
               <X className="h-5 w-5" />
             </button>
@@ -213,94 +166,81 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       )}
 
-      {/* ── Main Content ─────────────────────────────── */}
-      <main className="flex-1 flex flex-col overflow-hidden w-full min-w-0 print:block print:overflow-visible">
-
+      {/* Main Content Container */}
+      <main className="flex-1 flex flex-col overflow-hidden w-full print:block print:overflow-visible">
         {/* Top Header */}
-        <header className="bg-white border-b border-slate-100 h-14 px-4 md:px-6 flex items-center justify-between shrink-0 print:hidden z-10">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            {/* Mobile hamburger */}
-            <button
-              className="md:hidden p-2 -ml-1 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
-              aria-label="Open navigation"
+        <header className="bg-white border-b border-slate-200/80 h-16 px-4 md:px-8 flex items-center justify-between shadow-xs z-10 shrink-0 print:hidden">
+          <div className="flex items-center gap-4 flex-1">
+            <button 
+              className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
+              aria-label="Open navigation menu"
               onClick={() => setMobileMenuOpen(true)}
             >
               <Menu className="h-5 w-5" />
             </button>
-
-            {/* Mobile brand (shown only when sidebar hidden) */}
-            <Link
-              href="/dashboard"
-              className="md:hidden flex items-center gap-2.5"
-            >
-              <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-500 flex items-center justify-center text-white shadow-sm">
-                <span className="font-black text-sm leading-none">G</span>
-              </div>
-              <span className="text-sm font-bold text-slate-900 tracking-tight">GCDS</span>
-            </Link>
-
-            {/* Search bar — hidden on smallest screens, visible sm+ */}
+            
+            {/* Global Search Trigger */}
             <div
               onClick={() => setSearchModalOpen(true)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && setSearchModalOpen(true)}
-              aria-label="Open global search"
-              className="hidden sm:flex flex-1 max-w-md items-center relative cursor-pointer group"
+              className="w-full max-w-md relative hidden sm:flex items-center cursor-pointer group"
             >
-              <Search className="absolute left-3 h-4 w-4 text-slate-400 group-hover:text-violet-500 transition-colors pointer-events-none" />
-              <div className="w-full pl-9 pr-14 py-2 bg-slate-50 border border-slate-200 group-hover:border-violet-300 group-hover:bg-white rounded-xl text-sm text-slate-400 transition-all select-none">
-                Search customers, requests, invoices…
+              <Search className="absolute left-3.5 h-4 w-4 text-slate-400 group-hover:text-violet-600 transition-colors" />
+              <div className="w-full pl-10 pr-12 py-2 bg-slate-50/80 border border-slate-200 group-hover:border-violet-300 group-hover:bg-slate-50 rounded-[12px] text-xs md:text-sm text-slate-400 transition-all select-none">
+                Search customers, requests, invoices (⌘K)...
               </div>
-              <kbd className="absolute right-3 hidden lg:flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] font-semibold text-slate-400 pointer-events-none">
+              <div className="absolute right-2.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-medium text-slate-400 pointer-events-none">
                 <span>⌘</span>K
-              </kbd>
+              </div>
             </div>
           </div>
 
-          {/* Right side */}
-          <div className="flex items-center gap-2 pl-3">
-            {/* Mobile search icon */}
-            <button
-              className="sm:hidden p-2 text-slate-500 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-colors"
-              aria-label="Search"
-              onClick={() => setSearchModalOpen(true)}
-            >
-              <Search className="h-5 w-5" />
-            </button>
-
-            {/* Operations bell */}
+          {/* Right Header: Operations Bell + User Profile */}
+          <div className="flex items-center gap-3 pl-2">
+            {/* Operations Inbox Quick Bell */}
             <Link
               href="/operations"
               title="Operations Inbox"
               className="relative p-2 text-slate-500 hover:text-violet-700 hover:bg-violet-50 rounded-xl transition-colors"
             >
               <Bell className="h-5 w-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" aria-label="Alerts pending" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
             </Link>
 
-            {/* User chip */}
-            <div className="flex items-center gap-2.5 pl-2 ml-1 border-l border-slate-100">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-500 text-white font-bold text-xs flex items-center justify-center ring-2 ring-violet-100 shadow-sm select-none">
+            {/* Authenticated User Profile */}
+            <div className="flex items-center gap-2.5 pl-1 border-l border-slate-200">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-bold text-sm flex items-center justify-center ring-2 ring-slate-100 shadow-xs">
                 GO
               </div>
-              <div className="hidden md:flex flex-col text-left">
-                <span className="text-sm font-semibold text-slate-800 leading-tight">Gazi Online</span>
-                <span className="text-[11px] text-slate-400 font-medium leading-tight">Owner</span>
+              <div className="hidden sm:flex flex-col text-left">
+                <span className="text-sm font-semibold text-slate-900 leading-tight">Gazi Online</span>
+                <span className="text-[11px] text-slate-400 font-medium leading-tight">Admin / Principal ID</span>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Page content */}
-        <div className="flex-1 overflow-y-auto bg-[#F8FAFF] print:p-0 print:overflow-visible print:bg-white">
-          <div className="w-full mx-auto max-w-screen-2xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+        {/* Mobile Search Bar (Only visible below sm breakpoints) */}
+        <div className="sm:hidden p-3 bg-white border-b border-slate-200/80 shrink-0 print:hidden">
+          <div
+            onClick={() => setSearchModalOpen(true)}
+            className="w-full relative flex items-center cursor-pointer"
+          >
+            <Search className="absolute left-3 h-4 w-4 text-slate-400" />
+            <div className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-[12px] text-xs text-slate-400">
+              Search customers, requests, invoices...
+            </div>
+          </div>
+        </div>
+
+        {/* Page Content Scrollable Area */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#F8FAFF] print:p-0 print:overflow-visible print:bg-white relative">
+          <div className="relative z-10 w-full mx-auto">
             {children}
           </div>
         </div>
       </main>
 
-      {/* Global search modal */}
+      {/* Universal Search & Command Palette Modal */}
       <GlobalCommandSearchModal
         isOpen={searchModalOpen}
         onClose={() => setSearchModalOpen(false)}
