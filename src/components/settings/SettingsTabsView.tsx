@@ -118,81 +118,87 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+    <div className="p-3.5 sm:p-6 md:p-8 space-y-5 sm:space-y-6 max-w-6xl mx-auto w-full overflow-x-hidden sm:overflow-visible">
       {/* Page Title */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
-          <SettingsIcon className="h-6 w-6 text-violet-600" />
-          Shop Settings & Daily Business Readiness
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-start sm:items-center gap-2.5">
+          <SettingsIcon className="h-5 w-5 sm:h-6 sm:w-6 text-violet-600 shrink-0 mt-0.5 sm:mt-0" />
+          <span>Shop Settings & Daily Business Readiness</span>
         </h1>
-        <p className="text-sm text-slate-500 mt-1">
+        <p className="text-xs sm:text-sm text-slate-500 mt-1 leading-relaxed">
           Manage shop identity, address, UPI payment details, team roles, and data export archives.
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 overflow-x-auto gap-2">
-        <button
-          onClick={() => setActiveTab("profile")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === "profile"
-              ? "border-violet-600 text-violet-700 bg-violet-50/40 rounded-t-xl"
-              : "border-transparent text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          <Store className="h-4 w-4" />
-          Shop Profile & Address
-        </button>
+      {/* Tabs Navigation */}
+      <div className="relative -mx-3.5 sm:mx-0 px-3.5 sm:px-0">
+        <div className="flex border-b border-slate-200 overflow-x-auto gap-1.5 sm:gap-2 pb-px scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            onClick={() => setActiveTab("profile")}
+            className={`flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 min-h-[44px] text-xs font-bold border-b-2 transition-colors whitespace-nowrap shrink-0 rounded-t-xl ${
+              activeTab === "profile"
+                ? "border-violet-600 text-violet-700 bg-violet-50/60"
+                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50/60"
+            }`}
+          >
+            <Store className="h-4 w-4 shrink-0" />
+            <span>Shop Profile & Address</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab("billing")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === "billing"
-              ? "border-violet-600 text-violet-700 bg-violet-50/40 rounded-t-xl"
-              : "border-transparent text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          <CreditCard className="h-4 w-4" />
-          Billing & UPI Details
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("billing")}
+            className={`flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 min-h-[44px] text-xs font-bold border-b-2 transition-colors whitespace-nowrap shrink-0 rounded-t-xl ${
+              activeTab === "billing"
+                ? "border-violet-600 text-violet-700 bg-violet-50/60"
+                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50/60"
+            }`}
+          >
+            <CreditCard className="h-4 w-4 shrink-0" />
+            <span>Billing & UPI Details</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab("team")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === "team"
-              ? "border-violet-600 text-violet-700 bg-violet-50/40 rounded-t-xl"
-              : "border-transparent text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          <Users className="h-4 w-4" />
-          Team & Staff Roles ({teamMembers.length})
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("team")}
+            className={`flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 min-h-[44px] text-xs font-bold border-b-2 transition-colors whitespace-nowrap shrink-0 rounded-t-xl ${
+              activeTab === "team"
+                ? "border-violet-600 text-violet-700 bg-violet-50/60"
+                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50/60"
+            }`}
+          >
+            <Users className="h-4 w-4 shrink-0" />
+            <span>Team & Staff Roles ({teamMembers.length})</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab("exports")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === "exports"
-              ? "border-violet-600 text-violet-700 bg-violet-50/40 rounded-t-xl"
-              : "border-transparent text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          <Download className="h-4 w-4" />
-          Data Exports & Backups
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("exports")}
+            className={`flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 min-h-[44px] text-xs font-bold border-b-2 transition-colors whitespace-nowrap shrink-0 rounded-t-xl ${
+              activeTab === "exports"
+                ? "border-violet-600 text-violet-700 bg-violet-50/60"
+                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50/60"
+            }`}
+          >
+            <Download className="h-4 w-4 shrink-0" />
+            <span>Data Exports & Backups</span>
+          </button>
+        </div>
       </div>
 
       {/* TAB 1: SHOP PROFILE & ADDRESS */}
       {activeTab === "profile" && (
-        <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-5 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-base font-bold text-slate-900">Shop Identity & Location</h2>
-              <p className="text-xs text-slate-500">Displayed on printed invoices, customer receipts, and communications.</p>
+              <h2 className="text-sm sm:text-base font-bold text-slate-900">Shop Identity & Location</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Displayed on printed invoices, customer receipts, and communications.</p>
             </div>
             <button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center gap-2 px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] sm:min-h-[38px] bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors shrink-0"
             >
               <Save className="h-3.5 w-3.5" />
               {isSaving ? "Saving..." : "Save Changes"}
@@ -208,7 +214,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 value={formData.business_name || ""}
                 onChange={handleChange}
                 required
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:ring-2 focus:ring-violet-500/20"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 focus:ring-2 focus:ring-violet-500/20"
               />
             </div>
 
@@ -219,7 +225,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 name="legal_name"
                 value={formData.legal_name || ""}
                 onChange={handleChange}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
               />
             </div>
 
@@ -231,7 +237,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 value={formData.phone || ""}
                 onChange={handleChange}
                 placeholder="6295051584"
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
               />
             </div>
 
@@ -243,7 +249,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 value={formData.email || ""}
                 onChange={handleChange}
                 placeholder="shop@example.com"
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
               />
             </div>
 
@@ -255,7 +261,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 value={formData.gstin || ""}
                 onChange={handleChange}
                 placeholder="19XXXXX0000X1Z5"
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
               />
             </div>
 
@@ -265,7 +271,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 type="text"
                 value="Asia/Kolkata (IST = UTC+05:30)"
                 disabled
-                className="w-full text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 cursor-not-allowed"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-500 cursor-not-allowed"
               />
             </div>
           </div>
@@ -281,7 +287,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                   value={formData.address_line1 || ""}
                   onChange={handleChange}
                   placeholder="Street / Village / Post Office"
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
                 />
               </div>
 
@@ -293,7 +299,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                   value={formData.city || ""}
                   onChange={handleChange}
                   placeholder="Basirhat - I"
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
                 />
               </div>
 
@@ -305,7 +311,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                   value={formData.district || ""}
                   onChange={handleChange}
                   placeholder="North 24 Parganas"
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
                 />
               </div>
 
@@ -316,7 +322,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                   name="state"
                   value={formData.state || "West Bengal"}
                   onChange={handleChange}
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
                 />
               </div>
 
@@ -328,7 +334,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                   value={formData.pincode || ""}
                   onChange={handleChange}
                   placeholder="743422"
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
                 />
               </div>
             </div>
@@ -338,16 +344,16 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
 
       {/* TAB 2: BILLING & UPI */}
       {activeTab === "billing" && (
-        <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-5 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-base font-bold text-slate-900">Billing & Payment Configuration</h2>
-              <p className="text-xs text-slate-500">Controls UPI QR details and default invoice terms.</p>
+              <h2 className="text-sm sm:text-base font-bold text-slate-900">Billing & Payment Configuration</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Controls UPI QR details and default invoice terms.</p>
             </div>
             <button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center gap-2 px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] sm:min-h-[38px] bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors shrink-0"
             >
               <Save className="h-3.5 w-3.5" />
               {isSaving ? "Saving..." : "Save Changes"}
@@ -363,7 +369,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 value={formData.upi_id || ""}
                 onChange={handleChange}
                 placeholder="example@upi"
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 focus:ring-2 focus:ring-violet-500/20"
               />
               <p className="text-[11px] text-slate-400">Printed on invoice for instant QR scanning by customers.</p>
             </div>
@@ -375,7 +381,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 name="invoice_prefix"
                 value={formData.invoice_prefix || "INV"}
                 onChange={handleChange}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
               />
             </div>
 
@@ -387,7 +393,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 value={formData.bank_name || ""}
                 onChange={handleChange}
                 placeholder="State Bank of India"
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
               />
             </div>
 
@@ -398,7 +404,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 name="bank_account_name"
                 value={formData.bank_account_name || ""}
                 onChange={handleChange}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
               />
             </div>
 
@@ -409,7 +415,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 name="bank_account_number"
                 value={formData.bank_account_number || ""}
                 onChange={handleChange}
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
               />
             </div>
 
@@ -421,7 +427,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 value={formData.bank_ifsc || ""}
                 onChange={handleChange}
                 placeholder="SBIN000XXXX"
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
               />
             </div>
 
@@ -433,7 +439,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
                 value={formData.invoice_footer || ""}
                 onChange={handleChange}
                 placeholder="Thank you for your business!"
-                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
               />
             </div>
           </div>
@@ -442,14 +448,14 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
 
       {/* TAB 3: TEAM MEMBERS & ROLES */}
       {activeTab === "team" && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-6">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-5 sm:space-y-6">
           <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-base font-bold text-slate-900">Shop Staff & Role Privileges</h2>
-            <p className="text-xs text-slate-500">Active operators and administrators authorized to access this tenant database.</p>
+            <h2 className="text-sm sm:text-base font-bold text-slate-900">Shop Staff & Role Privileges</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Active operators and administrators authorized to access this tenant database.</p>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="-mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-auto">
+            <table className="w-full min-w-[480px] text-left text-xs">
               <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
                 <tr>
                   <th className="py-3 px-4">User</th>
@@ -504,15 +510,15 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
 
       {/* TAB 4: DATA EXPORTS & BACKUP READINESS */}
       {activeTab === "exports" && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-6">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-5 sm:space-y-6">
           <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-base font-bold text-slate-900">Operator Data Exports & Disaster Recovery</h2>
-            <p className="text-xs text-slate-500">Export complete shop datasets in universal CSV format for offline reporting and backups.</p>
+            <h2 className="text-sm sm:text-base font-bold text-slate-900">Operator Data Exports & Disaster Recovery</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Export complete shop datasets in universal CSV format for offline reporting and backups.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Customers Export */}
-            <div className="border border-slate-200 rounded-2xl p-5 hover:border-slate-300 transition-all flex flex-col justify-between">
+            <div className="border border-slate-200 rounded-2xl p-4 sm:p-5 hover:border-slate-300 transition-all flex flex-col justify-between">
               <div className="space-y-1.5">
                 <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center font-bold">
                   <Users className="h-5 w-5" />
@@ -525,7 +531,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
               <button
                 onClick={() => handleExport("customers")}
                 disabled={isExporting !== null}
-                className="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors"
+                className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] sm:min-h-[38px] bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors"
               >
                 <Download className="h-3.5 w-3.5" />
                 {isExporting === "customers" ? "Generating..." : "Export Customers (CSV)"}
@@ -533,7 +539,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
             </div>
 
             {/* Requests Export */}
-            <div className="border border-slate-200 rounded-2xl p-5 hover:border-slate-300 transition-all flex flex-col justify-between">
+            <div className="border border-slate-200 rounded-2xl p-4 sm:p-5 hover:border-slate-300 transition-all flex flex-col justify-between">
               <div className="space-y-1.5">
                 <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
                   <FileText className="h-5 w-5" />
@@ -546,7 +552,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
               <button
                 onClick={() => handleExport("requests")}
                 disabled={isExporting !== null}
-                className="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors"
+                className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] sm:min-h-[38px] bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors"
               >
                 <Download className="h-3.5 w-3.5" />
                 {isExporting === "requests" ? "Generating..." : "Export Requests (CSV)"}
@@ -554,7 +560,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
             </div>
 
             {/* Documents Catalog Export */}
-            <div className="border border-slate-200 rounded-2xl p-5 hover:border-slate-300 transition-all flex flex-col justify-between">
+            <div className="border border-slate-200 rounded-2xl p-4 sm:p-5 hover:border-slate-300 transition-all flex flex-col justify-between">
               <div className="space-y-1.5">
                 <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
                   <FileSpreadsheet className="h-5 w-5" />
@@ -567,7 +573,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
               <button
                 onClick={() => handleExport("documents")}
                 disabled={isExporting !== null}
-                className="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors"
+                className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] sm:min-h-[38px] bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors"
               >
                 <Download className="h-3.5 w-3.5" />
                 {isExporting === "documents" ? "Generating..." : "Export Documents (CSV)"}
@@ -575,7 +581,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
             </div>
 
             {/* Invoices Export */}
-            <div className="border border-slate-200 rounded-2xl p-5 hover:border-slate-300 transition-all flex flex-col justify-between">
+            <div className="border border-slate-200 rounded-2xl p-4 sm:p-5 hover:border-slate-300 transition-all flex flex-col justify-between">
               <div className="space-y-1.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
                   <Receipt className="h-5 w-5" />
@@ -588,7 +594,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
               <button
                 onClick={() => handleExport("invoices")}
                 disabled={isExporting !== null}
-                className="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors"
+                className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] sm:min-h-[38px] bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors"
               >
                 <Download className="h-3.5 w-3.5" />
                 {isExporting === "invoices" ? "Generating..." : "Export Invoices (CSV)"}
@@ -611,7 +617,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
               </p>
               <p>
                 <strong>Manual Backup Dump:</strong> To create an immediate offline PostgreSQL logical dump, run:
-                <code className="block bg-slate-900 text-slate-200 p-2.5 rounded-xl font-mono text-[11px] mt-1">
+                <code className="block bg-slate-900 text-slate-200 p-2.5 rounded-xl font-mono text-[11px] mt-1 break-all sm:break-normal overflow-x-auto">
                   supabase db dump -p ilsgrjcmyoufkeiqlaxm &gt; backup_$(date +%Y%m%d).sql
                 </code>
               </p>
