@@ -11,16 +11,20 @@ export default async function ServicesPage({
   const services = await getServices(search, status, category);
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 flex items-center">
-            <Briefcase className="mr-3 h-8 w-8 text-indigo-600 dark:text-indigo-500" />
-            Service Catalog
-          </h1>
-          <p className="text-zinc-500 dark:text-zinc-400 mt-1 ml-11">
-            Manage the master list of services available for your customers.
-          </p>
+    <div className="space-y-5 sm:space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-200 w-full max-w-full overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-xs shrink-0 mt-0.5 sm:mt-0">
+            <Briefcase className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 leading-tight">
+              Service Catalog
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+              Manage the master list of services available for your customers.
+            </p>
+          </div>
         </div>
       </div>
 
