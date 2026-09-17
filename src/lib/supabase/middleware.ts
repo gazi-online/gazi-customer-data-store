@@ -8,7 +8,7 @@ export async function updateSession(request: NextRequest) {
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!,
     {
       cookies: {
         getAll() {
@@ -35,7 +35,19 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   
-  const protectedRoutes = ["/dashboard", "/customers", "/reports", "/settings"];
+  const protectedRoutes = [
+    "/dashboard",
+    "/operations",
+    "/communications",
+    "/requests",
+    "/customers",
+    "/invoices",
+    "/payments",
+    "/documents",
+    "/services",
+    "/reports",
+    "/settings",
+  ];
   const isProtectedRoute = protectedRoutes.some((route) =>
     pathname.startsWith(route)
   );

@@ -215,6 +215,28 @@ export async function getAllDocuments(params?: {
   limit?: number;
 }) {
   const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError
+  } = await supabase.auth.getUser();
+
+  console.log("[getAllDocuments][auth]", {
+    authenticated: Boolean(user),
+    authError: authError?.message ?? null
+  });
+
+  if (!user) {
+    return {
+      documents: [],
+      totalCount: 0,
+      stats: { total: 0, active: 0, archived: 0, totalSizeBytes: 0 },
+      error: "Authentication required. Please sign in again."
+    };
+  }
+
+  console.log("[getAllDocuments][auth] role:", user?.role ?? "unknown");
+
   const search = params?.search?.trim() || "";
   const documentType = params?.documentType?.trim() || "";
   const status = params?.status?.trim() || "all";
