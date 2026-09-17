@@ -144,8 +144,8 @@ export function CustomerProfileTabs({
   return (
     <div className="space-y-6">
       {/* Navigation Tabs */}
-      <div className="border-b border-zinc-200 dark:border-zinc-800">
-        <nav className="flex space-x-8" aria-label="Tabs">
+      <div className="border-b border-zinc-200 dark:border-zinc-800 -mx-4 sm:mx-0 px-4 sm:px-0">
+        <nav className="flex space-x-2 sm:space-x-8 overflow-x-auto scrollbar-none py-1" aria-label="Tabs">
           {[
             { id: 'documents', label: 'Documents Timeline', icon: FileText, count: documents.length },
             { id: 'ai-imports', label: 'AI Imports Audit', icon: Cpu, count: aiImports.length },
@@ -161,16 +161,16 @@ export function CustomerProfileTabs({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`py-4 px-1 inline-flex items-center text-sm font-semibold border-b-2 transition-colors ${
+                className={`py-3 sm:py-4 px-2 sm:px-1 inline-flex items-center text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap shrink-0 min-h-[44px] ${
                   isActive
                     ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                     : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
                 }`}
               >
-                <Icon className="mr-2 h-4 w-4" />
+                <Icon className="mr-1.5 sm:mr-2 h-4 w-4 shrink-0" />
                 {tab.label}
                 {tab.count !== undefined && (
-                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-mono ${
+                  <span className={`ml-1.5 sm:ml-2 px-1.5 sm:px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-mono ${
                     isActive
                       ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
                       : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
@@ -207,7 +207,7 @@ export function CustomerProfileTabs({
             </h4>
             <button 
               onClick={() => setRerunReviewResult(null)}
-              className="text-xs text-zinc-500 hover:text-zinc-900 font-semibold"
+              className="text-xs text-zinc-500 hover:text-zinc-900 font-semibold p-1 min-h-[36px]"
             >
               Close Review
             </button>
@@ -225,31 +225,31 @@ export function CustomerProfileTabs({
       {/* DOCUMENTS TIMELINE TAB */}
       {activeTab === 'documents' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center">
-              <Layers className="h-5 w-5 mr-2 text-indigo-600" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center">
+              <Layers className="h-5 w-5 mr-2 text-indigo-600 shrink-0" />
               Customer Documents Timeline
             </h3>
-            <div className="flex items-center space-x-2 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg text-xs font-medium">
+            <div className="flex flex-wrap items-center gap-1.5 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg text-xs font-medium">
               <button
                 onClick={() => setFilterDocStatus('active')}
-                className={`px-3 py-1 rounded-md transition-colors ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-md transition-colors min-h-[36px] sm:min-h-0 ${
                   filterDocStatus === 'active' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500'
                 }`}
               >
-                Active Only ({allDocuments.filter(d => d.status === 'active' || !d.status).length})
+                Active ({allDocuments.filter(d => d.status === 'active' || !d.status).length})
               </button>
               <button
                 onClick={() => setFilterDocStatus('all')}
-                className={`px-3 py-1 rounded-md transition-colors ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-md transition-colors min-h-[36px] sm:min-h-0 ${
                   filterDocStatus === 'all' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500'
                 }`}
               >
-                All Versions ({allDocuments.length})
+                All ({allDocuments.length})
               </button>
               <button
                 onClick={() => setFilterDocStatus('archived')}
-                className={`px-3 py-1 rounded-md transition-colors ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-md transition-colors min-h-[36px] sm:min-h-0 ${
                   filterDocStatus === 'archived' ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500'
                 }`}
               >
@@ -307,13 +307,13 @@ export function CustomerProfileTabs({
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-zinc-100 dark:border-zinc-800">
                       {doc.signed_url && (
                         <a
                           href={doc.signed_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-semibold transition-colors"
+                          className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-semibold transition-colors min-h-[38px] inline-flex items-center"
                         >
                           Preview
                         </a>
@@ -322,13 +322,13 @@ export function CustomerProfileTabs({
                       <button
                         onClick={() => handleDownloadDoc(doc)}
                         disabled={downloadingDocId === doc.id}
-                        className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-semibold transition-colors flex items-center disabled:opacity-50"
+                        className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-semibold transition-colors flex items-center disabled:opacity-50 min-h-[38px]"
                         title="Download Document"
                       >
                         {downloadingDocId === doc.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
                         ) : (
-                          <Download className="h-3.5 w-3.5 mr-1" />
+                          <Download className="h-3.5 w-3.5 mr-1.5" />
                         )}
                         Download
                       </button>
@@ -338,17 +338,17 @@ export function CustomerProfileTabs({
                           <button
                             onClick={() => handleRerun(doc.id)}
                             disabled={runningRerunId === doc.id}
-                            className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-semibold transition-colors flex items-center"
+                            className="px-3 py-2 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-semibold transition-colors flex items-center min-h-[38px]"
                           >
-                            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${runningRerunId === doc.id ? 'animate-spin' : ''}`} />
+                            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${runningRerunId === doc.id ? 'animate-spin' : ''}`} />
                             Re-run AI
                           </button>
 
                           <button
                             onClick={() => handleArchive(doc.id)}
-                            className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-zinc-600 dark:text-zinc-400 rounded-lg text-xs font-semibold transition-colors flex items-center"
+                            className="px-3 py-2 border border-zinc-300 dark:border-zinc-700 hover:bg-red-50 hover:border-red-200 hover:text-red-600 text-zinc-600 dark:text-zinc-400 rounded-lg text-xs font-semibold transition-colors flex items-center min-h-[38px]"
                           >
-                            <Archive className="h-3.5 w-3.5 mr-1" />
+                            <Archive className="h-3.5 w-3.5 mr-1.5" />
                             Archive
                           </button>
                         </>
