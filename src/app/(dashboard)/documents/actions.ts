@@ -276,31 +276,50 @@ export async function getAllDocuments(params?: {
     query = query.eq("document_type", documentType);
   }
 
-  let documents: any[] = [];
-  let count: number | null = 0;
+  let res: Awaited<ReturnType<(typeof query)["order"]>>;
 
   try {
-    const res = await query.order("created_at", { ascending: false });
-    if (res.error) {
-      console.error("[getAllDocuments] Query error:", res.error.message);
-      return {
-        documents: [],
-        totalCount: 0,
-        stats: { total: 0, active: 0, archived: 0, totalSizeBytes: 0 },
-        error: res.error.message
-      };
-    }
-    documents = res.data || [];
-    count = res.count;
-  } catch (err: any) {
-    console.error("[getAllDocuments] Unexpected query failure:", err?.message || err);
+    res = await query.order("created_at", { ascending: false });
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Failed to load documents";
+
+    console.error(
+      "[getAllDocuments] Unexpected query failure:",
+      message
+    );
+
     return {
       documents: [],
       totalCount: 0,
-      stats: { total: 0, active: 0, archived: 0, totalSizeBytes: 0 },
-      error: err?.message || "Failed to load documents"
+      stats: {
+        total: 0,
+        active: 0,
+        archived: 0,
+        totalSizeBytes: 0
+      },
+      error: message
     };
   }
+
+  if (res.error) {
+    console.error("[getAllDocuments] Query error:", res.error.message);
+
+    return {
+      documents: [],
+      totalCount: 0,
+      stats: {
+        total: 0,
+        active: 0,
+        archived: 0,
+        totalSizeBytes: 0
+      },
+      error: res.error.message
+    };
+  }
+
+  const documents = res.data || [];
+  const count = res.count;
 
   let filteredDocs = documents || [];
 

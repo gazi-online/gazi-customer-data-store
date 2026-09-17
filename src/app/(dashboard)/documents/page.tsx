@@ -82,8 +82,8 @@ function DocumentsContent() {
         renewalWindow: renewalFilter
       });
 
-      if ((res as any).error) {
-        toast.error((res as any).error);
+      if ("error" in res && res.error) {
+        toast.error(res.error);
       }
 
       setDocuments(res.documents || []);
