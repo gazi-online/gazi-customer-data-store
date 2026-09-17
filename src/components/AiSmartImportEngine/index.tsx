@@ -269,8 +269,8 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
       }
 
       const res = await extractDataFromDocuments(formData) as 
-        | { success: true; data: Record<string, unknown>; perfSummary?: ImportJob['perfSummary'] }
-        | { success: false; error?: string };
+        | { success: true; data: Record<string, unknown>; perfSummary?: ImportJob['perfSummary']; code?: string; warning?: string }
+        | { success: false; error?: string; code?: string };
       if (!res.success) {
         throw new Error(res.error || "Document extraction failed.");
       }
@@ -345,7 +345,11 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
       const merged = MergeEngine.merge([newJob]);
       setMergedResult(merged);
 
-      toast.success("Document analysis complete — Review extracted details", { id: toastId });
+      if (res.warning) {
+        toast.info(res.warning, { id: toastId });
+      } else {
+        toast.success("Document analysis complete — Review extracted details", { id: toastId });
+      }
     } catch (error: unknown) {
       const errObj = error as { message?: string } | null;
       let errMsg = errObj?.message || "Failed to extract information from documents";

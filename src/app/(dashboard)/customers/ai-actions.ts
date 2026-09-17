@@ -15,6 +15,12 @@ import { ExtractionCompletenessEvaluator } from "@/lib/ocr/ExtractionCompletenes
 import { DocumentPreprocessorRouter } from "@/lib/document-preprocessing";
 import { ParsedDocumentFields } from "@/lib/ocr/ocr-types";
 
+import {
+  countUsableFields,
+  getSmartImportFailure,
+  type SmartImportFailureResult
+} from "@/lib/ocr/errorClassification";
+
 export async function extractDataFromDocuments(formData: FormData) {
   const fullServerActionStart = performance.now();
   const perfTimings: Record<string, number> = {};
@@ -49,6 +55,7 @@ export async function extractDataFromDocuments(formData: FormData) {
     let hasMarkItDownText = false;
     let anyFallbackTriggered = false;
     let totalPreprocessingMs = 0;
+    let anyTextExtracted = false;
 
     const allParsedData: ParsedDocumentFields[] = [];
     const sourcesUsed: string[] = [];
@@ -108,6 +115,10 @@ export async function extractDataFromDocuments(formData: FormData) {
           });
 
           if (ocrRes.success && ocrRes.text) {
+            const trimmed = ocrRes.text.trim();
+            if (trimmed.length > 0) {
+              anyTextExtracted = true;
+            }
             const classification = DocumentClassifier.classify(ocrRes.text);
             const parsed = DocumentTextParser.parse(ocrRes.text, classification.documentType, file.name);
             allParsedData.push(parsed);
@@ -135,6 +146,10 @@ export async function extractDataFromDocuments(formData: FormData) {
         totalPreprocessingMs += performance.now() - prepStart;
 
         if (prepRes.source === 'markitdown' && prepRes.markdown) {
+          const trimmed = prepRes.markdown.trim();
+          if (trimmed.length > 0) {
+            anyTextExtracted = true;
+          }
           hasMarkItDownText = true;
           extractedMarkdownSections.push(`Source Document: ${file.name}\n${prepRes.markdown}`);
           const structured = MarkdownTextAdapter.adaptToStructuredText(prepRes.markdown);
@@ -152,6 +167,10 @@ export async function extractDataFromDocuments(formData: FormData) {
           });
 
           if (ocrRes.success && ocrRes.text) {
+            const trimmed = ocrRes.text.trim();
+            if (trimmed.length > 0) {
+              anyTextExtracted = true;
+            }
             const classification = DocumentClassifier.classify(ocrRes.text);
             const parsed = DocumentTextParser.parse(ocrRes.text, classification.documentType, file.name);
             allParsedData.push(parsed);
@@ -176,6 +195,10 @@ export async function extractDataFromDocuments(formData: FormData) {
         totalPreprocessingMs += performance.now() - prepStart;
 
         if (prepRes.source === 'markitdown' && prepRes.markdown) {
+          const trimmed = prepRes.markdown.trim();
+          if (trimmed.length > 0) {
+            anyTextExtracted = true;
+          }
           hasMarkItDownText = true;
           extractedMarkdownSections.push(`Source Document: ${file.name}\n${prepRes.markdown}`);
           const structured = MarkdownTextAdapter.adaptToStructuredText(prepRes.markdown);
@@ -243,6 +266,12 @@ export async function extractDataFromDocuments(formData: FormData) {
       };
     }
 
+    const hasOcrUnavailableImages = fileDataArray.some(
+      f => (f as unknown as { _ocrUnavailable?: boolean })._ocrUnavailable === true
+    );
+
+    const localUsableFieldCount = countUsableFields(canonicalJson);
+
     // Evaluate Completeness
     const evaluation = canonicalJson
       ? ExtractionCompletenessEvaluator.evaluate(canonicalJson)
@@ -254,7 +283,7 @@ export async function extractDataFromDocuments(formData: FormData) {
 
     // AI Trigger Condition:
     // Requires BOTH: flag === 'true' (or explicit user request) AND local extraction requires enhancement
-    const needsAi = evaluation.requiresAiEnhancement || allParsedData.length === 0;
+    const needsAi = evaluation.requiresAiEnhancement || allParsedData.length === 0 || localUsableFieldCount === 0;
     const shouldTriggerAi = allowAiEnhancement && needsAi;
 
     const primarySource = sourcesUsed.includes('markitdown')
@@ -279,7 +308,7 @@ export async function extractDataFromDocuments(formData: FormData) {
 
     // PATH A: Standard Local Extraction (AI Enhancement NOT needed or disabled)
     if (!shouldTriggerAi) {
-      if (canonicalJson && allParsedData.length > 0) {
+      if (canonicalJson && allParsedData.length > 0 && localUsableFieldCount > 0) {
         extractionResult = {
           status: 'success',
           parsedJson: canonicalJson,
@@ -290,10 +319,11 @@ export async function extractDataFromDocuments(formData: FormData) {
           estimatedCost: 0
         };
       } else {
-        return {
-          success: false,
-          error: "Unable to read text from document. Please review or enter details manually."
-        };
+        return getSmartImportFailure({
+          hasExtractedText: anyTextExtracted,
+          usableFieldCount: localUsableFieldCount,
+          hasOcrUnavailableImages
+        });
       }
     }
     // PATH B: Optional AI Enhancement
@@ -303,7 +333,7 @@ export async function extractDataFromDocuments(formData: FormData) {
 
       // If neither AI key is configured, fallback to local extraction without error!
       if (!hasGeminiKey && !hasOpenRouterKey) {
-        if (canonicalJson && allParsedData.length > 0) {
+        if (canonicalJson && allParsedData.length > 0 && localUsableFieldCount > 0) {
           extractionResult = {
             status: 'success',
             parsedJson: canonicalJson,
@@ -314,10 +344,11 @@ export async function extractDataFromDocuments(formData: FormData) {
             estimatedCost: 0
           };
         } else {
-          return {
-            success: false,
-            error: "Unable to read text from document. Please review or enter details manually."
-          };
+          return getSmartImportFailure({
+            hasExtractedText: anyTextExtracted,
+            usableFieldCount: localUsableFieldCount,
+            hasOcrUnavailableImages
+          });
         }
       } else {
         const promptProvider: 'gemini' | 'openai' | 'claude' = hasGeminiKey ? 'gemini' : 'openai';
@@ -334,10 +365,6 @@ export async function extractDataFromDocuments(formData: FormData) {
 
         const reqId = uuidv4().substring(0, 8);
 
-        // Check if any images are marked as unavailable for OCR (key absent)
-        const hasOcrUnavailableImages = fileDataArray.some(
-          f => (f as unknown as { _ocrUnavailable?: boolean })._ocrUnavailable === true
-        );
         // Remove OCR-unavailable files from the AI fileDataArray — never send image to AI unless
         // both AI enhancement is enabled AND the failure is transient (not key-missing)
         const aiFileDataArray = hasOcrUnavailableImages
@@ -528,7 +555,7 @@ export async function extractDataFromDocuments(formData: FormData) {
         }
 
         // If AI enhancement failed, fall back to local parsed data if we have any
-        if (!extractionResult && canonicalJson && allParsedData.length > 0) {
+        if (!extractionResult && canonicalJson && allParsedData.length > 0 && localUsableFieldCount > 0) {
           extractionResult = {
             status: 'success',
             parsedJson: canonicalJson,
@@ -541,21 +568,39 @@ export async function extractDataFromDocuments(formData: FormData) {
           finalProviderName = primarySource;
           aiEnhancementUsed = false;
         } else if (!extractionResult) {
-          // All sources (including OCR.Space key absent for images) failed
-          // Return a safe manual-review result rather than an error with key details
-          if (hasOcrUnavailableImages && fileDataArray.length > 0 && allParsedData.length === 0) {
-            return {
-              success: false,
-              error: "Document scanning is currently unavailable. Please enter the customer details manually."
-            };
-          }
-          return {
-            success: false,
-            error: "Unable to read text from document. Please review or enter details manually."
-          };
+          return getSmartImportFailure({
+            hasExtractedText: anyTextExtracted,
+            usableFieldCount: localUsableFieldCount,
+            hasOcrUnavailableImages
+          });
         }
       }
     }
+
+    if (!extractionResult || !extractionResult.parsedJson) {
+      return getSmartImportFailure({
+        hasExtractedText: anyTextExtracted,
+        usableFieldCount: 0,
+        hasOcrUnavailableImages
+      });
+    }
+
+    const finalUsableFieldCount = countUsableFields(extractionResult.parsedJson as Record<string, unknown>);
+    if (finalUsableFieldCount === 0) {
+      return getSmartImportFailure({
+        hasExtractedText: anyTextExtracted,
+        usableFieldCount: 0,
+        hasOcrUnavailableImages
+      });
+    }
+
+    const finalEval = extractionResult.parsedJson
+      ? ExtractionCompletenessEvaluator.evaluate(extractionResult.parsedJson as Record<string, unknown>)
+      : evaluation;
+
+    const isPartial = finalEval.completeness < 0.95 || finalEval.missingImportantFields.length > 0;
+    const extractionCode = isPartial ? 'PARTIAL_EXTRACTION' : 'FULL_PARSE';
+    const warningMessage = isPartial ? "We could read the document, but some details need your review." : undefined;
 
     // Save audit log asynchronously
     after(async () => {
@@ -586,12 +631,14 @@ export async function extractDataFromDocuments(formData: FormData) {
     const resultResponse = { 
       success: true, 
       data: extractionResult.parsedJson,
+      code: extractionCode,
+      warning: warningMessage,
       perfSummary: {
         provider: finalProviderName,
         model: extractionResult.modelName || modelName,
         extractionSource: primarySource,
         aiEnhancementUsed: aiEnhancementUsed,
-        completeness: evaluation.completeness,
+        completeness: finalEval.completeness,
         documentCount: files.length,
         imagePrepTime: perfTimings.imagePreparation || 0,
         primaryAttemptDuration: 0,
