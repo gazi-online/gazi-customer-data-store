@@ -61,22 +61,22 @@ export function RecentActivityTable({ activities }: RecentActivityTableProps) {
   };
 
   return (
-    <section className="bg-white rounded-[18px] border border-slate-200 shadow-[0_4px_18px_rgba(15,23,42,0.04)] overflow-hidden" aria-label="Recent Activity">
+    <section className="bg-white rounded-[16px] sm:rounded-[18px] border border-slate-200 shadow-[0_4px_18px_rgba(15,23,42,0.04)] overflow-hidden" aria-label="Recent Activity">
       {/* Table Header Panel */}
-      <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <h2 className="text-base font-bold text-slate-900">Recent Activity</h2>
-          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[11px] font-semibold rounded-full border border-emerald-200/60">
+      <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <h2 className="text-sm sm:text-base font-bold text-slate-900">Recent Activity</h2>
+          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] sm:text-[11px] font-semibold rounded-full border border-emerald-200/60">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" />
             Live feed
           </span>
         </div>
         <Link
           href="/customers"
-          className="text-sm font-semibold text-violet-600 hover:text-violet-800 flex items-center gap-1 transition-colors"
+          className="text-xs sm:text-sm font-semibold text-violet-600 hover:text-violet-800 flex items-center gap-1 transition-colors min-h-[36px] sm:min-h-0"
         >
           View All Customers
-          <ArrowRight className="h-4 w-4" />
+          <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </Link>
       </div>
 
@@ -145,32 +145,34 @@ export function RecentActivityTable({ activities }: RecentActivityTableProps) {
           {/* Mobile Card Rows (Prevents horizontal overflow on small screens) */}
           <div className="md:hidden divide-y divide-slate-100">
             {activities.map((item) => (
-              <div key={item.id} className="p-4 flex flex-col gap-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
+              <div key={item.id} className="p-3.5 sm:p-4 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <div className={`w-8 h-8 rounded-full ring-1 font-bold text-xs flex items-center justify-center shrink-0 ${getAvatarColor(item.initials)}`}>
                       {item.initials}
                     </div>
-                    <div>
-                      <div className="font-semibold text-slate-900 text-sm">{item.customerName}</div>
-                      <div className="text-[11px] font-mono text-slate-400">{item.customerCode}</div>
+                    <div className="min-w-0 truncate">
+                      <div className="font-semibold text-slate-900 text-sm truncate">{item.customerName}</div>
+                      <div className="text-[11px] font-mono text-slate-400 truncate">{item.customerCode}</div>
                     </div>
                   </div>
-                  {getStatusBadge(item.status, item.statusType)}
+                  <div className="shrink-0">
+                    {getStatusBadge(item.status, item.statusType)}
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <div className="flex items-center gap-1.5 text-slate-600 font-medium truncate max-w-[200px]">
+                <div className="flex items-center justify-between gap-2 text-xs pt-0.5">
+                  <div className="flex items-center gap-1.5 text-slate-600 font-medium min-w-0 truncate flex-1">
                     {getActivityIcon(item.iconType)}
                     <span className="truncate">{item.activity}</span>
                   </div>
                   <span className="text-slate-400 font-mono text-[11px] shrink-0">{item.timestamp}</span>
                 </div>
 
-                <div className="pt-1 flex justify-end">
+                <div className="pt-0.5 flex justify-end">
                   <Link
                     href={item.actionUrl}
-                    className="px-3 py-1 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors inline-flex items-center gap-1"
+                    className="px-3.5 py-1.5 min-h-[36px] text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors inline-flex items-center gap-1"
                   >
                     Details <ExternalLink className="h-3 w-3" />
                   </Link>
@@ -182,7 +184,7 @@ export function RecentActivityTable({ activities }: RecentActivityTableProps) {
       )}
 
       {/* Privacy Notice (Subtle, no DATA PROTECTED badge) */}
-      <div className="p-3.5 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+      <div className="p-3 sm:p-3.5 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
         <div className="flex items-center gap-2">
           <Lock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
           <span>Sensitive identifiers are masked on this dashboard.</span>

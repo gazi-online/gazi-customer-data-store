@@ -94,18 +94,18 @@ export function CustomerGrowthChart({
 
   return (
     <section
-      className="bg-white rounded-[18px] border border-slate-200 p-6 shadow-[0_4px_18px_rgba(15,23,42,0.04)]"
+      className="bg-white rounded-[16px] sm:rounded-[18px] border border-slate-200 p-4 sm:p-6 shadow-[0_4px_18px_rgba(15,23,42,0.04)]"
       aria-label="Customer Growth & Verification Trend"
     >
       {/* Chart Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-5 gap-4 border-b border-slate-100">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 sm:pb-5 gap-3 sm:gap-4 border-b border-slate-100">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-slate-900">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-sm sm:text-base font-bold text-slate-900">
               Customer Growth Trend
             </h2>
             {stats.totalInPeriod === 0 && !loading && !hasNoPoints && (
-              <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+              <span className="text-[10px] sm:text-[11px] font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
                 No customer growth data for this period
               </span>
             )}
@@ -123,7 +123,7 @@ export function CustomerGrowthChart({
 
         {/* Timeframe Selector */}
         <div
-          className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/70"
+          className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/70 self-start sm:self-auto overflow-x-auto"
           role="group"
           aria-label="Timeframe selector"
         >
@@ -131,7 +131,7 @@ export function CustomerGrowthChart({
             <button
               key={p.value}
               onClick={() => handlePeriod(p.value)}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-violet-500 ${
+              className={`px-3 py-1.5 min-h-[36px] sm:min-h-0 rounded-lg text-xs font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-violet-500 ${
                 period === p.value
                   ? "bg-violet-600 text-white shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
@@ -150,8 +150,8 @@ export function CustomerGrowthChart({
       </div>
 
       {/* Chart Canvas */}
-      <div className="py-6 relative">
-        <div className="w-full h-64 relative" aria-hidden="true">
+      <div className="py-4 sm:py-6 relative">
+        <div className="w-full h-56 sm:h-64 relative" aria-hidden="true">
           {loading ? (
             <div className="h-full flex items-center justify-center">
               <div className="h-8 w-8 rounded-full border-2 border-violet-600 border-t-transparent animate-spin" />
@@ -164,7 +164,7 @@ export function CustomerGrowthChart({
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+              <AreaChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -22 }}>
                 <defs>
                   <linearGradient id="chartGradient" x1="0%" x2="0%" y1="0%" y2="100%">
                     <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.16} />
@@ -212,7 +212,7 @@ export function CustomerGrowthChart({
       </div>
 
       {/* Micro-stats strip */}
-      <div className="pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="pt-4 sm:pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
             <UserPlus className="h-4 w-4" />
