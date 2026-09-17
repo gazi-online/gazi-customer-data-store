@@ -218,13 +218,7 @@ export async function getAllDocuments(params?: {
 
   const {
     data: { user },
-    error: authError
   } = await supabase.auth.getUser();
-
-  console.log("[getAllDocuments][auth]", {
-    authenticated: Boolean(user),
-    authError: authError?.message ?? null
-  });
 
   if (!user) {
     return {
@@ -234,8 +228,6 @@ export async function getAllDocuments(params?: {
       error: "Authentication required. Please sign in again."
     };
   }
-
-  console.log("[getAllDocuments][auth] role:", user?.role ?? "unknown");
 
   const search = params?.search?.trim() || "";
   const documentType = params?.documentType?.trim() || "";
