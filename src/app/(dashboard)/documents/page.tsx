@@ -82,6 +82,10 @@ function DocumentsContent() {
         renewalWindow: renewalFilter
       });
 
+      if ((res as any).error) {
+        toast.error((res as any).error);
+      }
+
       setDocuments(res.documents || []);
       setStats(res.stats || { total: 0, active: 0, archived: 0, totalSizeBytes: 0 });
     } catch (err: any) {

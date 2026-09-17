@@ -262,11 +262,30 @@ export async function getAllDocuments(params?: {
     query = query.eq("document_type", documentType);
   }
 
-  const { data: documents, count, error } = await query.order("created_at", { ascending: false });
+  let documents: any[] = [];
+  let count: number | null = 0;
 
-  if (error) {
-    console.error("[getAllDocuments] Query error:", error.message);
-    throw new Error("Failed to load documents");
+  try {
+    const res = await query.order("created_at", { ascending: false });
+    if (res.error) {
+      console.error("[getAllDocuments] Query error:", res.error.message);
+      return {
+        documents: [],
+        totalCount: 0,
+        stats: { total: 0, active: 0, archived: 0, totalSizeBytes: 0 },
+        error: res.error.message
+      };
+    }
+    documents = res.data || [];
+    count = res.count;
+  } catch (err: any) {
+    console.error("[getAllDocuments] Unexpected query failure:", err?.message || err);
+    return {
+      documents: [],
+      totalCount: 0,
+      stats: { total: 0, active: 0, archived: 0, totalSizeBytes: 0 },
+      error: err?.message || "Failed to load documents"
+    };
   }
 
   let filteredDocs = documents || [];
