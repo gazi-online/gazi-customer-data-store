@@ -161,7 +161,7 @@ export function DocumentUploadForm({
             value={selectedCustomerId}
             onChange={(e) => setSelectedCustomerId(e.target.value)}
             disabled={loadingCustomers || isUploading}
-            className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 transition-shadow disabled:opacity-50"
+            className="w-full px-3 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs sm:text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 transition-shadow disabled:opacity-50"
             required
           >
             {customerList.length === 0 ? (
@@ -178,7 +178,7 @@ export function DocumentUploadForm({
       )}
 
       {/* Row: Document Type & Label */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
             Document Type <span className="text-red-500">*</span>
@@ -187,7 +187,7 @@ export function DocumentUploadForm({
             value={docType}
             onChange={(e) => setDocType(e.target.value as DocumentType)}
             disabled={isUploading}
-            className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 transition-shadow"
+            className="w-full px-3 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs sm:text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 transition-shadow cursor-pointer"
             required
           >
             {DOCUMENT_TYPES.map((dt) => (
@@ -208,13 +208,13 @@ export function DocumentUploadForm({
             value={docName}
             onChange={(e) => setDocName(e.target.value)}
             disabled={isUploading}
-            className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:ring-2 focus:ring-blue-500 transition-shadow"
+            className="w-full px-3 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs sm:text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:ring-2 focus:ring-blue-500 transition-shadow"
           />
         </div>
       </div>
 
       {/* Row: Document Number & Notes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
             Document Number (Optional)
@@ -225,7 +225,7 @@ export function DocumentUploadForm({
             value={docNumber}
             onChange={(e) => setDocNumber(e.target.value)}
             disabled={isUploading}
-            className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:ring-2 focus:ring-blue-500 transition-shadow"
+            className="w-full px-3 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs sm:text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:ring-2 focus:ring-blue-500 transition-shadow"
           />
         </div>
 
@@ -239,7 +239,7 @@ export function DocumentUploadForm({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             disabled={isUploading}
-            className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:ring-2 focus:ring-blue-500 transition-shadow"
+            className="w-full px-3 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs sm:text-sm bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:ring-2 focus:ring-blue-500 transition-shadow"
           />
         </div>
       </div>
@@ -319,13 +319,13 @@ export function DocumentUploadForm({
       </div>
 
       {/* Footer Controls */}
-      <div className="flex items-center justify-end space-x-3 pt-2">
+      <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-2 sm:gap-3 pt-2">
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
             disabled={isUploading}
-            className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+            className="w-full sm:w-auto px-4 py-2.5 min-h-[44px] text-xs sm:text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors text-center"
           >
             Cancel
           </button>
@@ -333,7 +333,7 @@ export function DocumentUploadForm({
         <button
           type="submit"
           disabled={!file || isUploading}
-          className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full sm:w-auto px-5 py-2.5 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition-colors flex items-center justify-center shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isUploading ? (
             <>

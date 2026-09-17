@@ -92,7 +92,7 @@ export function DocumentGrid({
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
       {documents.map((doc) => {
         const isPdf = doc.mime_type?.includes('pdf') || doc.file_url.toLowerCase().endsWith('.pdf') || (doc.source_filename && doc.source_filename.toLowerCase().endsWith('.pdf'));
         const customerName = doc.customer
@@ -102,16 +102,16 @@ export function DocumentGrid({
         return (
           <div
             key={doc.id}
-            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm flex flex-col group relative overflow-hidden hover:border-blue-400 dark:hover:border-blue-600 transition-all"
+            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col group relative overflow-hidden hover:border-blue-400 dark:hover:border-blue-600 transition-all"
           >
             {/* Top Bar: Privacy Badge & Status */}
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 shrink-0">
                 <ShieldCheck className="h-3 w-3 mr-1 text-emerald-600 dark:text-emerald-400" /> Private
               </span>
 
               <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
                   doc.status === 'archived'
                     ? 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
                     : doc.status === 'superseded'
@@ -125,11 +125,11 @@ export function DocumentGrid({
 
             {/* Document Header */}
             <div className="mb-2">
-              <h4 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm truncate" title={doc.document_type}>
+              <h4 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm leading-snug break-words" title={doc.document_type}>
                 {doc.document_type}
               </h4>
               {doc.document_name && (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate" title={doc.document_name}>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 break-words mt-0.5" title={doc.document_name}>
                   {doc.document_name}
                 </p>
               )}
@@ -137,12 +137,12 @@ export function DocumentGrid({
 
             {/* Customer Info (Global view) */}
             {showCustomerInfo && doc.customer && (
-              <div className="mb-3 p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs">
-                <div className="flex items-center space-x-1.5 truncate">
+              <div className="mb-3 p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center space-x-1.5 min-w-0 flex-1">
                   <User className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
                   <Link
                     href={`/customers/${doc.customer_id}`}
-                    className="font-semibold text-zinc-800 dark:text-zinc-200 hover:text-blue-600 truncate"
+                    className="font-semibold text-zinc-800 dark:text-zinc-200 hover:text-blue-600 truncate min-w-0"
                   >
                     {customerName}
                   </Link>
@@ -181,40 +181,40 @@ export function DocumentGrid({
             </div>
 
             {/* Metadata Badges */}
-            <div className="space-y-1 mb-3">
-              <div className="flex flex-wrap items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
-                <span className="truncate max-w-[140px]" title={doc.source_filename}>
+            <div className="space-y-1.5 mb-3 text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate flex-1 min-w-0" title={doc.source_filename || doc.file_url.split('/').pop()}>
                   {doc.source_filename || doc.file_url.split('/').pop()}
                 </span>
-                <span>
+                <span className="shrink-0 text-zinc-400">
                   {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ""}
                 </span>
               </div>
               {doc.expiry_date && (
-                <div className="flex items-center gap-1 text-[11px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md w-fit">
-                  <Calendar className="h-3 w-3" />
+                <div className="flex items-center gap-1 font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md w-fit">
+                  <Calendar className="h-3 w-3 shrink-0" />
                   <span>Expires: {doc.expiry_date}</span>
                 </div>
               )}
             </div>
 
             {/* Actions Bar */}
-            <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-800 mt-auto">
-              <div className="flex items-center space-x-1.5">
+            <div className="flex items-center justify-between pt-2.5 border-t border-zinc-100 dark:border-zinc-800 mt-auto gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {doc.signed_url ? (
                   <a
                     href={doc.signed_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center px-2.5 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-lg transition-colors"
+                    className="inline-flex items-center px-3 py-2 min-h-[38px] text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-xl transition-colors"
                     title="View Full Document via Signed URL"
                   >
-                    <ExternalLink className="h-3.5 w-3.5 mr-1" /> View
+                    <ExternalLink className="h-3.5 w-3.5 mr-1 shrink-0" /> View
                   </a>
                 ) : (
                   <button
                     disabled
-                    className="px-2.5 py-1.5 text-xs font-medium text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded-lg"
+                    className="px-3 py-2 min-h-[38px] text-xs font-medium text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded-xl"
                   >
                     Unavailable
                   </button>
@@ -223,23 +223,22 @@ export function DocumentGrid({
                 <button
                   onClick={() => handleDownload(doc)}
                   disabled={downloadingId === doc.id}
-                  className="inline-flex items-center px-2.5 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors disabled:opacity-50"
+                  className="inline-flex items-center px-3 py-2 min-h-[38px] text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-xl transition-colors disabled:opacity-50"
                   title="Download File via Signed URL"
                 >
                   {downloadingId === doc.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1 shrink-0" />
                   ) : (
-                    <>
-                      <Download className="h-3.5 w-3.5 mr-1" /> Download
-                    </>
+                    <Download className="h-3.5 w-3.5 mr-1 shrink-0" />
                   )}
+                  Download
                 </button>
               </div>
 
               <button
                 onClick={() => handleDelete(doc)}
                 disabled={isDeleting === doc.id}
-                className="p-1.5 text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors disabled:opacity-50"
+                className="p-2 min-h-[38px] min-w-[38px] flex items-center justify-center text-zinc-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition-colors disabled:opacity-50"
                 title="Delete Document Securely"
               >
                 {isDeleting === doc.id ? (
