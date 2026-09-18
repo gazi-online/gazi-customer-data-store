@@ -120,7 +120,7 @@ export default async function CustomerProfilePage({
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-5 sm:space-y-6 w-full max-w-full overflow-x-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="max-w-5xl mx-auto space-y-5 sm:space-y-6 w-full max-w-full overflow-x-hidden animate-in fade-in slide-in-from-bottom-4 duration-150">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
         <Link 
           href="/customers" 

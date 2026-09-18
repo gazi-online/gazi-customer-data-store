@@ -375,7 +375,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   };
 
   return (
-    <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8 pb-12">
+    <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-150 space-y-8 pb-12">
       <div className="flex items-center">
         <button 
           onClick={() => router.back()} 

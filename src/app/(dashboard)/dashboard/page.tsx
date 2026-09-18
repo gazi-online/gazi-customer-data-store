@@ -19,7 +19,7 @@ export default async function DashboardPage() {
   ]);
 
   return (
-    <div className="flex flex-col gap-5 sm:gap-6 animate-in fade-in slide-in-from-bottom-2 duration-500 w-full max-w-full overflow-x-hidden">
+    <div className="flex flex-col gap-5 sm:gap-6 animate-in fade-in slide-in-from-bottom-2 duration-150 w-full max-w-full overflow-x-hidden">
       {/* Page Header Area */}
       <div className="flex flex-col gap-0.5 sm:gap-1 pb-0.5">
         <h1 className="text-xl sm:text-2xl lg:text-[26px] font-bold text-slate-900 tracking-tight leading-tight">

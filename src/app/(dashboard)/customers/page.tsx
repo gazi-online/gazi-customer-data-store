@@ -12,7 +12,7 @@ export default async function CustomersPage({
   const customers = await getCustomers(search, status);
 
   return (
-    <div className="space-y-5 sm:space-y-6 w-full max-w-full overflow-x-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-5 sm:space-y-6 w-full max-w-full overflow-x-hidden animate-in fade-in slide-in-from-bottom-4 duration-150">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Customers</h1>
