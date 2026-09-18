@@ -1,4 +1,4 @@
-﻿import { RouteLoadingSkeleton } from "@/components/ui/RouteLoadingSkeleton";
+import { RouteLoadingSkeleton } from "@/components/ui/RouteLoadingSkeleton";
 
 /**
  * Initial route-level loading for /reports.

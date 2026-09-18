@@ -1,4 +1,4 @@
-﻿/**
+/**
  * RouteLoadingSkeleton — shared lightweight loading placeholder for dashboard routes.
  *
  * Rules:
