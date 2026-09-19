@@ -123,7 +123,8 @@ export function CustomerProfileTabs({
     setDownloadingDocId(doc.id);
     try {
       const targetFilename = doc.source_filename || `${doc.document_type.replace(/\s+/g, '_')}_${doc.id.slice(0, 6)}`;
-      const result = await getDocumentSignedUrl(doc.file_url, true, targetFilename);
+      // Security: pass doc.id (server resolves storage path and validates authorization)
+      const result = await getDocumentSignedUrl(doc.id, true, targetFilename);
       if (result.error || !result.signedUrl) {
         throw new Error(result.error || "Failed to generate download URL");
       }
@@ -134,8 +135,9 @@ export function CustomerProfileTabs({
       link.click();
       document.body.removeChild(link);
       toast.success("Secure download started");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to download document");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to download document";
+      toast.error(msg);
     } finally {
       setDownloadingDocId(null);
     }

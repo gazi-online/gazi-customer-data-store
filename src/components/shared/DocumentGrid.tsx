@@ -32,6 +32,48 @@ export function DocumentGrid({
 }: DocumentGridProps) {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+
+  const handleView = async (doc: CustomerDocument) => {
+    if (doc.signed_url) {
+      window.open(doc.signed_url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    // Popup-safe: open window synchronously within the user click gesture before async server action
+    let newTab: Window | null = null;
+    try {
+      newTab = window.open("about:blank", "_blank");
+      if (newTab) {
+        newTab.opener = null;
+      }
+    } catch {
+      newTab = null;
+    }
+
+    setViewingId(doc.id);
+    try {
+      // Security: pass doc.id (server resolves storage path and validates authorization)
+      const result = await getDocumentSignedUrl(doc.id, false);
+      if (result.error || !result.signedUrl) {
+        if (newTab && !newTab.closed) newTab.close();
+        throw new Error(result.error || "Could not generate secure view link");
+      }
+
+      if (newTab && !newTab.closed) {
+        newTab.location.href = result.signedUrl;
+      } else {
+        // Fallback to same-tab secure navigation if popup was blocked or unavailable
+        window.location.assign(result.signedUrl);
+      }
+    } catch (err: unknown) {
+      if (newTab && !newTab.closed) newTab.close();
+      const message = err instanceof Error ? err.message : "Failed to view document";
+      toast.error(message);
+    } finally {
+      setViewingId(null);
+    }
+  };
 
   const handleDelete = async (doc: CustomerDocument) => {
     const docTitle = doc.document_name || doc.document_type;
@@ -47,8 +89,9 @@ export function DocumentGrid({
       if (onDocumentDeleted) {
         onDocumentDeleted();
       }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to delete document");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to delete document";
+      toast.error(message);
     } finally {
       setIsDeleting(null);
     }
@@ -58,7 +101,8 @@ export function DocumentGrid({
     setDownloadingId(doc.id);
     try {
       const targetFilename = doc.source_filename || `${doc.document_type.replace(/\s+/g, '_')}_${doc.id.slice(0, 6)}`;
-      const result = await getDocumentSignedUrl(doc.file_url, true, targetFilename);
+      // Security: pass doc.id (server resolves storage path and validates authorization)
+      const result = await getDocumentSignedUrl(doc.id, true, targetFilename);
       if (result.error || !result.signedUrl) {
         throw new Error(result.error || "Could not generate secure download URL");
       }
@@ -72,8 +116,9 @@ export function DocumentGrid({
       document.body.removeChild(link);
 
       toast.success("Secure download started");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to download document");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to download document";
+      toast.error(message);
     } finally {
       setDownloadingId(null);
     }
@@ -201,24 +246,19 @@ export function DocumentGrid({
             {/* Actions Bar */}
             <div className="flex items-center justify-between pt-2.5 border-t border-zinc-100 dark:border-zinc-800 mt-auto gap-2">
               <div className="flex items-center gap-1.5 flex-wrap">
-                {doc.signed_url ? (
-                  <a
-                    href={doc.signed_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-3 py-2 min-h-[38px] text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-xl transition-colors"
-                    title="View Full Document via Signed URL"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5 mr-1 shrink-0" /> View
-                  </a>
-                ) : (
-                  <button
-                    disabled
-                    className="px-3 py-2 min-h-[38px] text-xs font-medium text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded-xl"
-                  >
-                    Unavailable
-                  </button>
-                )}
+                <button
+                  onClick={() => handleView(doc)}
+                  disabled={viewingId === doc.id}
+                  className="inline-flex items-center px-3 py-2 min-h-[38px] text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-xl transition-colors disabled:opacity-50"
+                  title="View Full Document via Signed URL"
+                >
+                  {viewingId === doc.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1 shrink-0" />
+                  ) : (
+                    <ExternalLink className="h-3.5 w-3.5 mr-1 shrink-0" />
+                  )}
+                  View
+                </button>
 
                 <button
                   onClick={() => handleDownload(doc)}

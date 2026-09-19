@@ -41,8 +41,70 @@ export async function getContactQueue(): Promise<ContactQueueItem[]> {
   const supabase = await createClient();
   const items: ContactQueueItem[] = [];
 
+  // Compute date strings locally (no DB call — safe to do before parallelizing)
+  const todayStr = getKolkataDateString(new Date());
+  const in30DaysStr = getKolkataFutureDateString(30);
+
+  // All 6 queries are fully independent — parallelize for reduced latency
+  const [
+    { items: overdueFollowups },
+    { items: todayFollowups },
+    { items: upcomingFollowups },
+    { data: actionRequests },
+    { data: expiredDocs },
+    { data: expiringDocs },
+  ] = await Promise.all([
+    // 1. Overdue follow-ups
+    getOverdueFollowups(),
+    // 2. Due Today follow-ups
+    getDueTodayFollowups(),
+    // 3. Upcoming follow-ups
+    getUpcomingFollowups(),
+    // 4. Action-required service requests
+    supabase
+      .from("customer_services")
+      .select(`
+        id,
+        request_number,
+        status,
+        due_date,
+        customer:customers(id, first_name, middle_name, last_name, phone),
+        service:services(service_name)
+      `)
+      .eq("status", "action_required")
+      .limit(25),
+    // 5. Expired documents
+    supabase
+      .from("customer_documents")
+      .select(`
+        id,
+        document_name,
+        document_number,
+        expiry_date,
+        customer:customers(id, first_name, middle_name, last_name, phone)
+      `)
+      .eq("archived", false)
+      .not("expiry_date", "is", null)
+      .lt("expiry_date", todayStr)
+      .limit(25),
+    // 6. Documents expiring soon (within next 30 days)
+    supabase
+      .from("customer_documents")
+      .select(`
+        id,
+        document_name,
+        document_number,
+        expiry_date,
+        customer:customers(id, first_name, middle_name, last_name, phone)
+      `)
+      .eq("archived", false)
+      .not("expiry_date", "is", null)
+      .gte("expiry_date", todayStr)
+      .lte("expiry_date", in30DaysStr)
+      .limit(25),
+  ]);
+
   // 1. Overdue follow-ups
-  const { items: overdueFollowups } = await getOverdueFollowups();
   for (const f of overdueFollowups) {
     const cust = f.customerService?.customer;
     if (!cust) continue;
@@ -66,7 +128,6 @@ export async function getContactQueue(): Promise<ContactQueueItem[]> {
   }
 
   // 2. Due Today follow-ups
-  const { items: todayFollowups } = await getDueTodayFollowups();
   for (const f of todayFollowups) {
     const cust = f.customerService?.customer;
     if (!cust) continue;
@@ -90,7 +151,6 @@ export async function getContactQueue(): Promise<ContactQueueItem[]> {
   }
 
   // 3. Upcoming follow-ups
-  const { items: upcomingFollowups } = await getUpcomingFollowups();
   for (const f of upcomingFollowups) {
     const cust = f.customerService?.customer;
     if (!cust) continue;
@@ -114,19 +174,6 @@ export async function getContactQueue(): Promise<ContactQueueItem[]> {
   }
 
   // 4. Action-required service requests
-  const { data: actionRequests } = await supabase
-    .from("customer_services")
-    .select(`
-      id,
-      request_number,
-      status,
-      due_date,
-      customer:customers(id, first_name, middle_name, last_name, phone),
-      service:services(service_name)
-    `)
-    .eq("status", "action_required")
-    .limit(25);
-
   if (actionRequests) {
     for (const r of actionRequests) {
       const cust = Array.isArray(r.customer) ? r.customer[0] : r.customer;
@@ -153,21 +200,6 @@ export async function getContactQueue(): Promise<ContactQueueItem[]> {
   }
 
   // 5. Expired documents
-  const todayStr = getKolkataDateString(new Date());
-  const { data: expiredDocs } = await supabase
-    .from("customer_documents")
-    .select(`
-      id,
-      document_name,
-      document_number,
-      expiry_date,
-      customer:customers(id, first_name, middle_name, last_name, phone)
-    `)
-    .eq("archived", false)
-    .not("expiry_date", "is", null)
-    .lt("expiry_date", todayStr)
-    .limit(25);
-
   if (expiredDocs) {
     for (const d of expiredDocs) {
       const cust = Array.isArray(d.customer) ? d.customer[0] : d.customer;
@@ -193,22 +225,6 @@ export async function getContactQueue(): Promise<ContactQueueItem[]> {
   }
 
   // 6. Documents expiring soon (within next 30 days)
-  const in30DaysStr = getKolkataFutureDateString(30);
-  const { data: expiringDocs } = await supabase
-    .from("customer_documents")
-    .select(`
-      id,
-      document_name,
-      document_number,
-      expiry_date,
-      customer:customers(id, first_name, middle_name, last_name, phone)
-    `)
-    .eq("archived", false)
-    .not("expiry_date", "is", null)
-    .gte("expiry_date", todayStr)
-    .lte("expiry_date", in30DaysStr)
-    .limit(25);
-
   if (expiringDocs) {
     for (const d of expiringDocs) {
       const cust = Array.isArray(d.customer) ? d.customer[0] : d.customer;

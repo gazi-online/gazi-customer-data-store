@@ -47,8 +47,95 @@ export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary
   const supabase = await createClient();
   const alerts: OperationAlert[] = [];
 
+  const todayStr = getKolkataDateString(new Date());
+  const in30DaysStr = getKolkataFutureDateString(30);
+
+  // All 7 alert queries are completely independent — run in parallel for reduced latency
+  const [
+    { items: overdueFollowups },
+    { items: todayFollowups },
+    { data: actionRequests },
+    { data: expiredDocs },
+    { data: expiringDocs },
+    { data: overdueInvoices },
+    { data: unverifiedDocs },
+  ] = await Promise.all([
+    // 1. Overdue follow-ups (Urgent)
+    getOverdueFollowups(),
+    // 2. Follow-ups Due Today (High)
+    getDueTodayFollowups(),
+    // 3. Requests with status = 'action_required' (High)
+    supabase
+      .from("customer_services")
+      .select(`
+        id,
+        request_number,
+        due_date,
+        customer:customers(id, first_name, middle_name, last_name),
+        service:services(service_name)
+      `)
+      .eq("status", "action_required")
+      .limit(25),
+    // 4. Expired Documents (High)
+    supabase
+      .from("customer_documents")
+      .select(`
+        id,
+        document_name,
+        expiry_date,
+        customer:customers(id, first_name, middle_name, last_name)
+      `)
+      .eq("archived", false)
+      .not("expiry_date", "is", null)
+      .lt("expiry_date", todayStr)
+      .limit(25),
+    // 5. Documents Expiring Soon (Normal)
+    supabase
+      .from("customer_documents")
+      .select(`
+        id,
+        document_name,
+        expiry_date,
+        customer:customers(id, first_name, middle_name, last_name)
+      `)
+      .eq("archived", false)
+      .not("expiry_date", "is", null)
+      .gte("expiry_date", todayStr)
+      .lte("expiry_date", in30DaysStr)
+      .limit(25),
+    // 6. Overdue Invoices (High)
+    supabase
+      .from("invoices")
+      .select(`
+        id,
+        invoice_number,
+        due_date,
+        total_amount,
+        due_amount,
+        customer:customers(id, first_name, middle_name, last_name)
+      `)
+      .in("status", ["issued", "partially_paid"])
+      .not("due_date", "is", null)
+      .lt("due_date", todayStr)
+      .limit(25),
+    // 7. Pending Document Verifications on active requests (Normal)
+    supabase
+      .from("service_request_documents")
+      .select(`
+        id,
+        requirement_tag,
+        request:customer_services!inner(
+          id,
+          request_number,
+          status,
+          customer:customers(id, first_name, middle_name, last_name)
+        )
+      `)
+      .eq("is_verified", false)
+      .limit(20),
+  ]);
+
   // 1. Overdue follow-ups (Urgent)
-  const { items: overdueFollowups } = await getOverdueFollowups();
   for (const f of overdueFollowups) {
     const cust = f.customerService?.customer;
     const custName = cust
@@ -72,7 +159,6 @@ export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary
   }
 
   // 2. Follow-ups Due Today (High)
-  const { items: todayFollowups } = await getDueTodayFollowups();
   for (const f of todayFollowups) {
     const cust = f.customerService?.customer;
     const custName = cust
@@ -96,18 +182,6 @@ export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary
   }
 
   // 3. Requests with status = 'action_required' (High)
-  const { data: actionRequests } = await supabase
-    .from("customer_services")
-    .select(`
-      id,
-      request_number,
-      due_date,
-      customer:customers(id, first_name, middle_name, last_name),
-      service:services(service_name)
-    `)
-    .eq("status", "action_required")
-    .limit(25);
-
   if (actionRequests) {
     for (const r of actionRequests) {
       const cust = Array.isArray(r.customer) ? r.customer[0] : r.customer;
@@ -132,20 +206,6 @@ export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary
   }
 
   // 4. Expired Documents (High)
-  const todayStr = getKolkataDateString(new Date());
-  const { data: expiredDocs } = await supabase
-    .from("customer_documents")
-    .select(`
-      id,
-      document_name,
-      expiry_date,
-      customer:customers(id, first_name, middle_name, last_name)
-    `)
-    .eq("archived", false)
-    .not("expiry_date", "is", null)
-    .lt("expiry_date", todayStr)
-    .limit(25);
-
   if (expiredDocs) {
     for (const d of expiredDocs) {
       const cust = Array.isArray(d.customer) ? d.customer[0] : d.customer;
@@ -167,21 +227,6 @@ export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary
   }
 
   // 5. Documents Expiring Soon (Normal)
-  const in30DaysStr = getKolkataFutureDateString(30);
-  const { data: expiringDocs } = await supabase
-    .from("customer_documents")
-    .select(`
-      id,
-      document_name,
-      expiry_date,
-      customer:customers(id, first_name, middle_name, last_name)
-    `)
-    .eq("archived", false)
-    .not("expiry_date", "is", null)
-    .gte("expiry_date", todayStr)
-    .lte("expiry_date", in30DaysStr)
-    .limit(25);
-
   if (expiringDocs) {
     for (const d of expiringDocs) {
       const cust = Array.isArray(d.customer) ? d.customer[0] : d.customer;
@@ -203,21 +248,6 @@ export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary
   }
 
   // 6. Overdue Invoices (High)
-  const { data: overdueInvoices } = await supabase
-    .from("invoices")
-    .select(`
-      id,
-      invoice_number,
-      due_date,
-      total_amount,
-      due_amount,
-      customer:customers(id, first_name, middle_name, last_name)
-    `)
-    .in("status", ["issued", "partially_paid"])
-    .not("due_date", "is", null)
-    .lt("due_date", todayStr)
-    .limit(25);
-
   if (overdueInvoices) {
     for (const inv of overdueInvoices) {
       const cust = Array.isArray(inv.customer) ? inv.customer[0] : inv.customer;
@@ -239,21 +269,6 @@ export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary
   }
 
   // 7. Pending Document Verifications on active requests (Normal)
-  const { data: unverifiedDocs } = await supabase
-    .from("service_request_documents")
-    .select(`
-      id,
-      requirement_tag,
-      request:customer_services!inner(
-        id,
-        request_number,
-        status,
-        customer:customers(id, first_name, middle_name, last_name)
-      )
-    `)
-    .eq("is_verified", false)
-    .limit(20);
-
   if (unverifiedDocs) {
     for (const doc of unverifiedDocs) {
       const req = Array.isArray(doc.request) ? doc.request[0] : doc.request;

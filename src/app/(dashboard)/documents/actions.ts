@@ -350,24 +350,13 @@ export async function getAllDocuments(params?: {
     });
   }
 
-  // Generate short-lived signed URLs (15 minutes) for safe preview
-  const docsWithSignedUrls: CustomerDocument[] = await Promise.all(
-    filteredDocs.map(async (doc: any) => {
-      let signedUrl = "";
-      try {
-        const { data } = await createSignedUrlSafe(supabase, doc.file_url, 15 * 60);
-        signedUrl = data?.signedUrl || "";
-      } catch {
-        signedUrl = "";
-      }
-
-      return {
-        ...doc,
-        uploaded_at: doc.uploaded_at || doc.created_at,
-        signed_url: signedUrl
-      };
-    })
-  );
+  // Eliminate N+1 signed-URL generation on initial listing.
+  // Load metadata immediately; signed URLs are fetched on-demand when preview or download is clicked.
+  const docsWithMetadata: CustomerDocument[] = filteredDocs.map((doc: any) => ({
+    ...doc,
+    uploaded_at: doc.uploaded_at || doc.created_at,
+    signed_url: ""
+  }));
 
   // Compute summary stats
   const totalCount = count || filteredDocs.length;
@@ -376,7 +365,7 @@ export async function getAllDocuments(params?: {
   const totalSizeBytes = filteredDocs.reduce((acc: number, d: any) => acc + (d.file_size || 0), 0);
 
   return {
-    documents: docsWithSignedUrls,
+    documents: docsWithMetadata,
     totalCount,
     stats: {
       total: totalCount,
@@ -433,18 +422,53 @@ export async function getCustomerDocuments(customerId: string, includeHistory = 
 
 /**
  * Request an on-demand fresh signed URL for viewing or downloading a private document.
+ *
+ * SECURITY ARCHITECTURE:
+ * 1. Creates authenticated Supabase server client (auth cookie session)
+ * 2. Fetches the customer_documents row by documentId
+ * 3. Relies on existing DB/RLS authorization to restrict access to authorized tenants/users
+ * 4. Obtains file_url from the server-fetched row (never trusts client-supplied storage path)
+ * 5. Signs ONLY that server-resolved path
+ * 6. Returns short-lived signed URL (15 mins)
  */
-export async function getDocumentSignedUrl(storagePath: string, download = false, customFilename?: string) {
+export async function getDocumentSignedUrl(documentId: string, download = false, customFilename?: string) {
   const supabase = await createClient();
-  
-  if (!storagePath) {
-    return { error: "Storage path is required" };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Authentication required to access documents" };
+  }
+
+  if (!documentId) {
+    return { error: "Document ID is required" };
   }
 
   try {
+    // 2 & 3: Fetch document row by document ID relying on Supabase RLS
+    const { data: doc, error: fetchErr } = await supabase
+      .from("customer_documents")
+      .select("id, file_url, source_filename, document_name")
+      .eq("id", documentId)
+      .single();
+
+    if (fetchErr || !doc) {
+      console.error("[getDocumentSignedUrl] Document access denied or not found:", fetchErr?.message);
+      return { error: "Document not found or access denied" };
+    }
+
+    // 4: Obtains file_url from the server-fetched row
+    const storagePath = doc.file_url;
+    if (!storagePath) {
+      return { error: "Document has no associated file path" };
+    }
+
+    // 5: Signs ONLY that server-resolved path
     const options: { download?: string | boolean } = {};
     if (download) {
-      options.download = customFilename || true;
+      options.download = customFilename || doc.source_filename || true;
     }
 
     const { data, error } = await createSignedUrlSafe(supabase, storagePath, 15 * 60, options);
@@ -454,9 +478,11 @@ export async function getDocumentSignedUrl(storagePath: string, download = false
       return { error: "Failed to generate secure document access link" };
     }
 
+    // 6: Returns short-lived signed URL
     return { signedUrl: data.signedUrl };
-  } catch (err: any) {
-    console.error("[getDocumentSignedUrl] Exception:", err?.message || err);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[getDocumentSignedUrl] Exception:", msg);
     return { error: "Failed to generate secure document link" };
   }
 }
