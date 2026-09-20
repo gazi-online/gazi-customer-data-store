@@ -22,6 +22,8 @@ import {
 import { logout } from "./actions";
 import { useState, useEffect } from "react";
 import { GlobalCommandSearchModal } from "@/components/search/GlobalCommandSearchModal";
+import { useQueryClient } from "@tanstack/react-query";
+import { QueryProvider } from "@/providers/QueryProvider";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -44,6 +46,13 @@ interface SidebarContentProps {
 }
 
 function SidebarContent({ pathname, onClose, isMobileDrawer = false }: SidebarContentProps) {
+  const queryClient = useQueryClient();
+
+  const handleLogout = async () => {
+    queryClient.clear();
+    await logout();
+  };
+
   return (
     <div className="flex flex-col h-full select-none">
       {/* Brand Header */}
@@ -130,7 +139,7 @@ function SidebarContent({ pathname, onClose, isMobileDrawer = false }: SidebarCo
 
         <button
           type="button"
-          onClick={() => logout()}
+          onClick={handleLogout}
           className="w-full min-h-[44px] flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-600 transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
         >
           <LogOut className="h-5 w-5 text-slate-400 group-hover:text-rose-500 transition-colors shrink-0" />
@@ -141,7 +150,7 @@ function SidebarContent({ pathname, onClose, isMobileDrawer = false }: SidebarCo
   );
 }
 
-export default function DashboardLayout({
+function DashboardShell({
   children,
 }: {
   children: React.ReactNode;
@@ -333,5 +342,17 @@ export default function DashboardLayout({
         onClose={() => setSearchModalOpen(false)}
       />
     </div>
+  );
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <QueryProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </QueryProvider>
   );
 }
