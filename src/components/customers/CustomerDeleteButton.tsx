@@ -13,6 +13,7 @@ interface CustomerDeleteButtonProps {
   customerName?: string;
   redirectTo?: string;
   onDeleted?: (id: string) => void;
+  onRestored?: (id: string) => void;
   variant?: "icon" | "button";
 }
 
@@ -21,6 +22,7 @@ export function CustomerDeleteButton({
   customerName,
   redirectTo,
   onDeleted,
+  onRestored,
   variant = "icon",
 }: CustomerDeleteButtonProps) {
   const router = useRouter();
@@ -69,6 +71,7 @@ export function CustomerDeleteButton({
               const restoreRes = await restoreCustomer(customerId);
               if (restoreRes.success) {
                 toast.success(customerName ? `Customer "${customerName}" restored` : "Customer restored", { id: toastId });
+                onRestored?.(customerId);
                 await queryClient.invalidateQueries({
                   queryKey: queryKeys.customers.lists(DASHBOARD_MEMORY_SCOPE),
                 });

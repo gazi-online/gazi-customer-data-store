@@ -189,7 +189,8 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
                       <CustomerDeleteButton
                         customerId={customer.id}
                         customerName={`${customer.first_name} ${customer.last_name}`}
-                        onDeleted={(id) => setDeletedIds(prev => [...prev, id])}
+                        onDeleted={(id) => setDeletedIds(prev => prev.includes(id) ? prev : [...prev, id])}
+                        onRestored={(id) => setDeletedIds(prev => prev.filter(deletedId => deletedId !== id))}
                         variant="icon"
                       />
                     </div>
@@ -303,7 +304,8 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
                 <CustomerDeleteButton
                   customerId={customer.id}
                   customerName={`${customer.first_name} ${customer.last_name}`}
-                  onDeleted={(id) => setDeletedIds(prev => [...prev, id])}
+                  onDeleted={(id) => setDeletedIds(prev => prev.includes(id) ? prev : [...prev, id])}
+                  onRestored={(id) => setDeletedIds(prev => prev.filter(deletedId => deletedId !== id))}
                   variant="icon"
                 />
               </div>
