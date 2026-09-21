@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { uploadCustomerDocument } from "@/app/(dashboard)/documents/actions";
-import { getCustomers } from "@/app/(dashboard)/customers/actions";
+import { getCustomerLookupRows } from "@/app/(dashboard)/customers/actions";
 import { toast } from "sonner";
-import { Loader2, UploadCloud, FileText, CheckCircle2, X } from "lucide-react";
+import { Loader2, UploadCloud, CheckCircle2, X } from "lucide-react";
 import { DocumentType } from "@/types/document";
+import { CustomerLookupRow } from "@/types/customer";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 
 const DOCUMENT_TYPES: { label: string; value: DocumentType }[] = [
   { label: "Aadhaar Card (Front)", value: "Aadhaar Card (Front)" },
@@ -25,14 +28,7 @@ const DOCUMENT_TYPES: { label: string; value: DocumentType }[] = [
 
 interface DocumentUploadFormProps {
   customerId?: string;
-  customers?: Array<{
-    id: string;
-    customer_code: string;
-    first_name: string;
-    middle_name?: string | null;
-    last_name: string;
-    phone: string;
-  }>;
+  customers?: CustomerLookupRow[];
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -43,6 +39,7 @@ export function DocumentUploadForm({
   onSuccess,
   onCancel,
 }: DocumentUploadFormProps) {
+  const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(initialCustomerId || "");
   const [docType, setDocType] = useState<DocumentType>("Aadhaar Card (Front)");
@@ -52,24 +49,33 @@ export function DocumentUploadForm({
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
-  const [customerList, setCustomerList] = useState<any[]>(initialCustomers || []);
-  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [customerList, setCustomerList] = useState<CustomerLookupRow[]>(initialCustomers || []);
+  const [loadingCustomers, setLoadingCustomers] = useState(
+    !initialCustomerId && (!initialCustomers || initialCustomers.length === 0)
+  );
 
-  // If customerId is not provided and customers list is empty, fetch active customers
+  // If customerId is not provided and customers list is empty, fetch active customers lookup
   useEffect(() => {
-    if (!initialCustomerId && (!customerList || customerList.length === 0)) {
-      setLoadingCustomers(true);
-      getCustomers("", "active")
+    if (!initialCustomerId && customerList.length === 0) {
+      let isMounted = true;
+      getCustomerLookupRows()
         .then((data) => {
+          if (!isMounted) return;
           setCustomerList(data || []);
           if (data && data.length > 0 && !selectedCustomerId) {
             setSelectedCustomerId(data[0].id);
           }
         })
         .catch((err) => console.error("Failed to load customers for upload form:", err))
-        .finally(() => setLoadingCustomers(false));
+        .finally(() => {
+          if (isMounted) setLoadingCustomers(false);
+        });
+
+      return () => {
+        isMounted = false;
+      };
     }
-  }, [initialCustomerId, customerList, selectedCustomerId]);
+  }, [initialCustomerId, customerList.length, selectedCustomerId]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -139,11 +145,16 @@ export function DocumentUploadForm({
       const fileInput = document.getElementById("document-file-input") as HTMLInputElement;
       if (fileInput) fileInput.value = "";
 
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.vaultLists(DASHBOARD_MEMORY_SCOPE),
+      });
+
       if (onSuccess) {
         onSuccess();
       }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to upload document");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to upload document";
+      toast.error(message);
     } finally {
       setIsUploading(false);
     }

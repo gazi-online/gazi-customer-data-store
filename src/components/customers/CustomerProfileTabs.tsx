@@ -13,6 +13,8 @@ import { Service, CustomerServiceWithDetails } from "@/types/service";
 import { CustomerServiceFormData } from "@/app/(dashboard)/services/schema";
 import { CustomerBillingTab } from "./CustomerBillingTab";
 import { CustomerCommunicationsTimeline } from "./CustomerCommunicationsTimeline";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 
 interface CustomerProfileTabsProps {
   customerId: string;
@@ -44,6 +46,7 @@ export function CustomerProfileTabs({
   billingSummary = { totalBilled: 0, totalPaid: 0, outstanding: 0, overdue: 0, invoices: [], payments: [] },
   billingError = null,
 }: CustomerProfileTabsProps) {
+  const queryClient = useQueryClient();
   console.log(`[TRACE] CustomerProfileTabs activeServices: ${availableServices?.length || 0}`);
   
   const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'ai-imports' | 'services' | 'billing' | 'communications' | 'activity'>('documents');
@@ -114,6 +117,9 @@ export function CustomerProfileTabs({
       const res = await archiveDocument(docId, customerId);
       if (res.error) throw new Error(res.error);
       toast.success("Document archived cleanly.");
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.vaultLists(DASHBOARD_MEMORY_SCOPE),
+      });
     } catch (err: any) {
       toast.error(err.message || "Failed to archive document");
     }

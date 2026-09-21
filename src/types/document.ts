@@ -35,7 +35,7 @@ export interface CustomerDocument {
 
   // AI Extracted Data
   ai_processed: boolean;
-  ai_extracted_json: Record<string, any> | null;
+  ai_extracted_json: Record<string, unknown> | null;
   verified: boolean;
   
   uploaded_at: string;
@@ -61,6 +61,41 @@ export interface CustomerDocument {
   signed_url?: string;
 }
 
+export interface DocumentVaultRow {
+  id: string;
+  customer_id: string;
+  document_type: DocumentType;
+  document_name?: string | null;
+  status?: DocumentStatus;
+  source_filename?: string | null;
+  file_size?: number | null;
+  mime_type?: string | null;
+  expiry_date?: string | null;
+  uploaded_at: string;
+  created_at?: string;
+  customer?: {
+    id: string;
+    customer_code: string;
+    first_name: string;
+    middle_name?: string | null;
+    last_name: string;
+  } | null;
+}
+
+export interface DocumentVaultStats {
+  total: number;
+  active: number;
+  archived: number;
+  totalSizeBytes: number;
+}
+
+export interface DocumentVaultResponse {
+  documents: DocumentVaultRow[];
+  totalCount: number;
+  stats: DocumentVaultStats;
+  error?: string;
+}
+
 export interface AiImportHistoryRecord {
   id: string;
   created_by: string;
@@ -68,7 +103,7 @@ export interface AiImportHistoryRecord {
   document_ids?: string[];
   original_images?: string;
   ai_raw_response?: string;
-  final_json?: Record<string, any> | null;
+  final_json?: Record<string, unknown> | null;
   ai_provider?: string;
   prompt_version?: string;
   status?: string;

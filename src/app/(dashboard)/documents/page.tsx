@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useEffect, useTransition, Suspense } from "react";
+import { useState, useDeferredValue, Suspense } from "react";
 import { 
   FileText, 
   UploadCloud, 
   Search, 
-  Filter, 
   Plus, 
-  ShieldCheck, 
   HardDrive, 
   CheckCircle2, 
   Archive, 
@@ -19,16 +17,19 @@ import {
   Loader2, 
   User, 
   X,
-  RefreshCw
+  RefreshCw,
+  AlertCircle
 } from "lucide-react";
-import { getAllDocuments, deleteCustomerDocument, getDocumentSignedUrl } from "./actions";
-import { getCustomers } from "../customers/actions";
+import { getDocumentVaultRows, deleteCustomerDocument, getDocumentSignedUrl } from "./actions";
+import { getCustomerLookupRows } from "../customers/actions";
 import { DocumentUploadForm } from "@/components/forms/DocumentUploadForm";
 import { DocumentGrid } from "@/components/shared/DocumentGrid";
-import { CustomerDocument, DocumentType } from "@/types/document";
+import { DocumentVaultRow } from "@/types/document";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 
 const DOCUMENT_TYPES = [
   "All Types",
@@ -50,64 +51,64 @@ const DOCUMENT_TYPES = [
 function DocumentsContent() {
   const searchParams = useSearchParams();
   const initialRenewal = searchParams.get("renewal") || "all";
-  const [isPending, startTransition] = useTransition();
-  const [documents, setDocuments] = useState<CustomerDocument[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [stats, setStats] = useState({
-    total: 0,
-    active: 0,
-    archived: 0,
-    totalSizeBytes: 0
-  });
+  const queryClient = useQueryClient();
 
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearch = useDeferredValue(searchQuery);
+
   const [selectedDocType, setSelectedDocType] = useState("All Types");
   const [statusFilter, setStatusFilter] = useState<"active" | "all" | "archived">("active");
   const [renewalFilter, setRenewalFilter] = useState<string>(initialRenewal);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
 
-  // Load documents and customers list
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const typeParam = selectedDocType === "All Types" ? "" : selectedDocType;
-      const res = await getAllDocuments({
-        search: searchQuery,
-        documentType: typeParam,
+  const normalizedSearch = deferredSearch.trim() || undefined;
+  const normalizedDocType = selectedDocType === "All Types" ? undefined : selectedDocType;
+  const normalizedStatus = statusFilter === "all" ? undefined : statusFilter;
+  const normalizedRenewal = renewalFilter === "all" ? undefined : renewalFilter;
+
+  // Primary TanStack Query for Document Vault Metadata
+  const {
+    data: vaultData,
+    isLoading,
+    isError,
+    refetch,
+    isFetching,
+  } = useQuery({
+    queryKey: queryKeys.documents.vaultList(DASHBOARD_MEMORY_SCOPE, {
+      search: normalizedSearch,
+      documentType: normalizedDocType,
+      status: normalizedStatus,
+      renewalWindow: normalizedRenewal,
+    }),
+    queryFn: () =>
+      getDocumentVaultRows({
+        search: normalizedSearch,
+        documentType: normalizedDocType,
         status: statusFilter,
-        renewalWindow: renewalFilter
-      });
+        renewalWindow: renewalFilter,
+      }),
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
+  });
 
-      if ("error" in res && res.error) {
-        toast.error(res.error);
-      }
+  const documents = vaultData?.documents || [];
+  const stats = vaultData?.stats || { total: 0, active: 0, archived: 0, totalSizeBytes: 0 };
 
-      setDocuments(res.documents || []);
-      setStats(res.stats || { total: 0, active: 0, archived: 0, totalSizeBytes: 0 });
-    } catch (err: any) {
-      toast.error(err.message || "Failed to load customer documents");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Cached Customer Lookup Query for Upload Dropdown
+  const { data: customerLookup = [] } = useQuery({
+    queryKey: queryKeys.customers.lookup(DASHBOARD_MEMORY_SCOPE),
+    queryFn: () => getCustomerLookupRows(),
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
 
-  useEffect(() => {
-    loadData();
-  }, [searchQuery, selectedDocType, statusFilter, renewalFilter]);
-
-  // Load customer list for upload dropdown once
-  useEffect(() => {
-    getCustomers("", "active")
-      .then((data) => setCustomers(data || []))
-      .catch((err) => console.error("Error fetching customers list:", err));
-  }, []);
-
-  const handleDeleteDocument = async (doc: CustomerDocument) => {
+  const handleDeleteDocument = async (doc: DocumentVaultRow) => {
     const docTitle = doc.document_name || doc.document_type;
     if (!confirm(`Are you sure you want to securely delete "${docTitle}"?`)) return;
 
@@ -116,15 +117,18 @@ function DocumentsContent() {
       const result = await deleteCustomerDocument(doc.id, true);
       if (result.error) throw new Error(result.error);
       toast.success("Document deleted securely from private storage");
-      loadData();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete document");
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.vaultLists(DASHBOARD_MEMORY_SCOPE),
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to delete document";
+      toast.error(message);
     } finally {
       setDeletingId(null);
     }
   };
 
-  const handleDownloadDocument = async (doc: CustomerDocument) => {
+  const handleDownloadDocument = async (doc: DocumentVaultRow) => {
     setDownloadingId(doc.id);
     try {
       const targetFilename = doc.source_filename || `${doc.document_type.replace(/\s+/g, '_')}_${doc.id.slice(0, 6)}`;
@@ -150,12 +154,7 @@ function DocumentsContent() {
     }
   };
 
-  const handleViewDocument = async (doc: CustomerDocument) => {
-    if (doc.signed_url) {
-      window.open(doc.signed_url, "_blank", "noopener,noreferrer");
-      return;
-    }
-
+  const handleViewDocument = async (doc: DocumentVaultRow) => {
     // Popup-safe: open window synchronously within user click gesture before async server action
     let newTab: Window | null = null;
     try {
@@ -211,11 +210,11 @@ function DocumentsContent() {
 
         <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
           <button
-            onClick={() => loadData()}
+            onClick={() => refetch()}
             className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700/50 rounded-xl text-sm font-medium transition-colors shadow-xs"
             title="Refresh documents list"
           >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
           </button>
 
           <button
@@ -403,6 +402,21 @@ function DocumentsContent() {
           <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
           <p className="text-sm text-zinc-500">Loading secure documents...</p>
         </div>
+      ) : isError ? (
+        <div className="py-16 text-center border border-red-200 dark:border-red-900/40 rounded-2xl bg-white dark:bg-zinc-900">
+          <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-2" />
+          <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Unable to load document vault</h3>
+          <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
+            Please check your connection and try again.
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-colors inline-flex items-center gap-1.5 shadow-sm"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>Retry</span>
+          </button>
+        </div>
       ) : documents.length === 0 ? (
         <div className="py-16 text-center border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-900">
           <FileText className="h-12 w-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
@@ -423,7 +437,11 @@ function DocumentsContent() {
         <DocumentGrid
           documents={documents}
           showCustomerInfo={true}
-          onDocumentDeleted={loadData}
+          onDocumentDeleted={() =>
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.documents.vaultLists(DASHBOARD_MEMORY_SCOPE),
+            })
+          }
         />
       ) : (
         /* Table View */
@@ -442,10 +460,14 @@ function DocumentsContent() {
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {documents.map((doc) => {
-                  const isPdf = doc.mime_type?.includes("pdf") || doc.file_url.toLowerCase().endsWith(".pdf");
+                  const isPdf = Boolean(
+                    doc.mime_type?.includes("pdf") ||
+                    (doc.source_filename && doc.source_filename.toLowerCase().endsWith(".pdf"))
+                  );
                   const customerName = doc.customer
                     ? [doc.customer.first_name, doc.customer.middle_name, doc.customer.last_name].filter(Boolean).join(" ")
                     : "Unknown Customer";
+                  const displayFilename = doc.document_name || doc.source_filename || doc.document_type;
 
                   return (
                     <tr key={doc.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors">
@@ -465,7 +487,7 @@ function DocumentsContent() {
                               {doc.document_type}
                             </p>
                             <p className="text-xs text-zinc-400 truncate">
-                              {doc.document_name || doc.source_filename || doc.file_url.split("/").pop()}
+                              {displayFilename}
                             </p>
                           </div>
                         </div>
@@ -591,10 +613,12 @@ function DocumentsContent() {
             </div>
 
             <DocumentUploadForm
-              customers={customers}
+              customers={customerLookup}
               onSuccess={() => {
                 setIsUploadModalOpen(false);
-                loadData();
+                queryClient.invalidateQueries({
+                  queryKey: queryKeys.documents.vaultLists(DASHBOARD_MEMORY_SCOPE),
+                });
               }}
               onCancel={() => setIsUploadModalOpen(false)}
             />

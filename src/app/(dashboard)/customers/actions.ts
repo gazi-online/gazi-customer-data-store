@@ -2,7 +2,20 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { CustomerFormData, CustomerListRow } from "@/types/customer";
+import { CustomerFormData, CustomerListRow, CustomerLookupRow } from "@/types/customer";
+
+export async function getCustomerLookupRows(): Promise<CustomerLookupRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("customers")
+    .select("id, customer_code, first_name, middle_name, last_name, phone")
+    .is("deleted_at", null)
+    .eq("status", "active")
+    .order("first_name", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data || []) as CustomerLookupRow[];
+}
 
 export async function getCustomerListRows(searchQuery?: string, statusFilter?: string): Promise<CustomerListRow[]> {
   const supabase = await createClient();

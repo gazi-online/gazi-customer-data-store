@@ -1,10 +1,10 @@
 /**
- * GCDS Phase 3C: Query Key Factory & In-Memory Namespace
+ * GCDS Phase 3D: Query Key Factory & In-Memory Namespace
  *
  * Centralized, typed, hierarchical query key definitions for TanStack Query.
  *
  * ARCHITECTURAL SAFETY BOUNDARY:
- * - Phase 3C uses the dashboard QueryClient as the actual session isolation boundary.
+ * - Phase 3D uses the dashboard QueryClient as the actual session isolation boundary.
  * - The QueryClient is in-memory only, instantiated once per dashboard provider lifecycle,
  *   cleared completely on logout, and destroyed on dashboard tree unmount.
  * - DASHBOARD_MEMORY_SCOPE is strictly an opaque, in-memory namespace constant inside
@@ -19,6 +19,10 @@
  * - Contains NO financial amounts, balance states, or ledger values.
  * - Services display catalog keys are explicitly DISPLAY-ONLY and MUST NEVER be used for
  *   transactional active service queries, request creation, billing, or FSM.
+ * - Document vault keys cache metadata ONLY: strictly NO signed URLs, NO storage paths, NO KYC/Aadhaar/PAN.
+ * - Customer lookup keys provide minimal name/code/phone for dropdowns only.
+ * - OPERATIONS ALERT CACHE IS DISPLAY-ONLY DERIVED STATE and MUST NEVER be used for
+ *   financial, invoice, billing, or request FSM authority.
  */
 
 export const DASHBOARD_MEMORY_SCOPE = "dashboard-memory-v1";
@@ -28,7 +32,7 @@ export interface CustomerListFilters {
   status?: string;
 }
 
-export interface DocumentListFilters {
+export interface DocumentVaultFilters {
   search?: string;
   documentType?: string;
   status?: string;
@@ -54,11 +58,9 @@ export const queryKeys = {
   },
   documents: {
     all: (cacheScope: string) => ["gcds", cacheScope, "documents"] as const,
-    lists: (cacheScope: string) => ["gcds", cacheScope, "documents", "list"] as const,
-    list: (cacheScope: string, filters?: DocumentListFilters) =>
-      ["gcds", cacheScope, "documents", "list", filters ?? {}] as const,
-    customer: (cacheScope: string, customerId: string, options?: { includeHistory?: boolean }) =>
-      ["gcds", cacheScope, "documents", "customer", customerId, options ?? {}] as const,
+    vaultLists: (cacheScope: string) => ["gcds", cacheScope, "documents", "vault-list"] as const,
+    vaultList: (cacheScope: string, filters?: DocumentVaultFilters) =>
+      ["gcds", cacheScope, "documents", "vault-list", filters ?? {}] as const,
   },
   services: {
     all: (cacheScope: string) => ["gcds", cacheScope, "services"] as const,

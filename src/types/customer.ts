@@ -54,6 +54,16 @@ export type CustomerListRow = Pick<
   | "created_at"
 >;
 
+export type CustomerLookupRow = Pick<
+  Customer,
+  | "id"
+  | "customer_code"
+  | "first_name"
+  | "middle_name"
+  | "last_name"
+  | "phone"
+>;
+
 export interface CustomerFormData {
   customer_code?: string;
   first_name: string;

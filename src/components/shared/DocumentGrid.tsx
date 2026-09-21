@@ -1,6 +1,6 @@
 "use client";
 
-import { CustomerDocument } from "@/types/document";
+import { CustomerDocument, DocumentVaultRow } from "@/types/document";
 import { 
   FileText, 
   Trash2, 
@@ -10,15 +10,16 @@ import {
   User, 
   Loader2,
   Calendar,
-  AlertCircle
 } from "lucide-react";
 import { deleteCustomerDocument, getDocumentSignedUrl } from "@/app/(dashboard)/documents/actions";
 import { toast } from "sonner";
 import { useState } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 
 interface DocumentGridProps {
-  documents: CustomerDocument[];
+  documents: (DocumentVaultRow | CustomerDocument)[];
   customerId?: string;
   showCustomerInfo?: boolean;
   onDocumentDeleted?: () => void;
@@ -26,16 +27,16 @@ interface DocumentGridProps {
 
 export function DocumentGrid({
   documents,
-  customerId,
   showCustomerInfo = false,
   onDocumentDeleted,
 }: DocumentGridProps) {
+  const queryClient = useQueryClient();
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
 
-  const handleView = async (doc: CustomerDocument) => {
-    if (doc.signed_url) {
+  const handleView = async (doc: DocumentVaultRow | CustomerDocument) => {
+    if ("signed_url" in doc && doc.signed_url) {
       window.open(doc.signed_url, "_blank", "noopener,noreferrer");
       return;
     }
@@ -44,11 +45,8 @@ export function DocumentGrid({
     let newTab: Window | null = null;
     try {
       newTab = window.open("about:blank", "_blank");
-      if (newTab) {
-        newTab.opener = null;
-      }
     } catch {
-      newTab = null;
+      // If browser blocks opening a blank window, continue and open directly once signed URL is ready
     }
 
     setViewingId(doc.id);
@@ -56,18 +54,18 @@ export function DocumentGrid({
       // Security: pass doc.id (server resolves storage path and validates authorization)
       const result = await getDocumentSignedUrl(doc.id, false);
       if (result.error || !result.signedUrl) {
-        if (newTab && !newTab.closed) newTab.close();
-        throw new Error(result.error || "Could not generate secure view link");
+        throw new Error(result.error || "Could not generate secure viewing link");
       }
 
-      if (newTab && !newTab.closed) {
+      if (newTab) {
         newTab.location.href = result.signedUrl;
       } else {
-        // Fallback to same-tab secure navigation if popup was blocked or unavailable
-        window.location.assign(result.signedUrl);
+        window.open(result.signedUrl, "_blank", "noopener,noreferrer");
       }
     } catch (err: unknown) {
-      if (newTab && !newTab.closed) newTab.close();
+      if (newTab) {
+        newTab.close();
+      }
       const message = err instanceof Error ? err.message : "Failed to view document";
       toast.error(message);
     } finally {
@@ -75,7 +73,7 @@ export function DocumentGrid({
     }
   };
 
-  const handleDelete = async (doc: CustomerDocument) => {
+  const handleDelete = async (doc: DocumentVaultRow | CustomerDocument) => {
     const docTitle = doc.document_name || doc.document_type;
     if (!confirm(`Are you sure you want to securely delete "${docTitle}"? This will remove the file from private storage.`)) {
       return;
@@ -86,6 +84,9 @@ export function DocumentGrid({
       const result = await deleteCustomerDocument(doc.id, true);
       if (result.error) throw new Error(result.error);
       toast.success("Document deleted securely from private storage");
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.documents.vaultLists(DASHBOARD_MEMORY_SCOPE),
+      });
       if (onDocumentDeleted) {
         onDocumentDeleted();
       }
@@ -97,7 +98,7 @@ export function DocumentGrid({
     }
   };
 
-  const handleDownload = async (doc: CustomerDocument) => {
+  const handleDownload = async (doc: DocumentVaultRow | CustomerDocument) => {
     setDownloadingId(doc.id);
     try {
       const targetFilename = doc.source_filename || `${doc.document_type.replace(/\s+/g, '_')}_${doc.id.slice(0, 6)}`;
@@ -139,10 +140,14 @@ export function DocumentGrid({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
       {documents.map((doc) => {
-        const isPdf = doc.mime_type?.includes('pdf') || doc.file_url.toLowerCase().endsWith('.pdf') || (doc.source_filename && doc.source_filename.toLowerCase().endsWith('.pdf'));
+        const isPdf = Boolean(
+          doc.mime_type?.includes('pdf') ||
+          (doc.source_filename && doc.source_filename.toLowerCase().endsWith('.pdf'))
+        );
         const customerName = doc.customer
           ? [doc.customer.first_name, doc.customer.middle_name, doc.customer.last_name].filter(Boolean).join(" ")
           : null;
+        const filenameDisplay = doc.source_filename || doc.document_name || doc.document_type;
 
         return (
           <div
@@ -210,7 +215,7 @@ export function DocumentGrid({
                     {doc.file_size ? `${(doc.file_size / 1024).toFixed(0)} KB` : 'Secured'}
                   </span>
                 </div>
-              ) : doc.signed_url ? (
+              ) : ("signed_url" in doc && doc.signed_url) ? (
                 <img
                   src={doc.signed_url}
                   alt={doc.document_type}
@@ -228,8 +233,8 @@ export function DocumentGrid({
             {/* Metadata Badges */}
             <div className="space-y-1.5 mb-3 text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate flex-1 min-w-0" title={doc.source_filename || doc.file_url.split('/').pop()}>
-                  {doc.source_filename || doc.file_url.split('/').pop()}
+                <span className="truncate flex-1 min-w-0" title={filenameDisplay}>
+                  {filenameDisplay}
                 </span>
                 <span className="shrink-0 text-zinc-400">
                   {doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString() : ""}

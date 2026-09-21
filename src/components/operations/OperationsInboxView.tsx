@@ -13,22 +13,43 @@ import {
   Check,
   RefreshCw,
   MessageSquare,
+  AlertCircle,
 } from "lucide-react";
-import {
+import type {
   OperationsInboxSummary,
   AlertCategory,
 } from "@/lib/operations/operationsInboxQuery";
-import { useRouter } from "next/navigation";
+import { getOperationsInboxAlerts } from "@/app/(dashboard)/operations/actions";
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 
 interface OperationsInboxViewProps {
-  initialSummary: OperationsInboxSummary;
+  initialSummary?: OperationsInboxSummary;
 }
 
-export function OperationsInboxView({ initialSummary }: OperationsInboxViewProps) {
-  const router = useRouter();
+export function OperationsInboxView({ initialSummary }: OperationsInboxViewProps = {}) {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedSeverity, setSelectedSeverity] = useState<string>("all");
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+
+  const {
+    data: summary = initialSummary || {
+      alerts: [],
+      totalCount: 0,
+      urgentCount: 0,
+      highCount: 0,
+      normalCount: 0,
+    },
+    isLoading,
+    isError,
+    refetch,
+    isFetching,
+  } = useQuery({
+    queryKey: queryKeys.operations.alerts(DASHBOARD_MEMORY_SCOPE),
+    queryFn: () => getOperationsInboxAlerts(),
+    staleTime: 10 * 1000,
+    refetchOnWindowFocus: true,
+  });
 
   const handleDismiss = (id: string) => {
     setDismissedIds((prev) => {
@@ -39,11 +60,11 @@ export function OperationsInboxView({ initialSummary }: OperationsInboxViewProps
   };
 
   const handleDismissAll = () => {
-    const allIds = initialSummary.alerts.map((a) => a.id);
+    const allIds = summary.alerts.map((a) => a.id);
     setDismissedIds(new Set(allIds));
   };
 
-  const activeAlerts = initialSummary.alerts.filter((a) => !dismissedIds.has(a.id));
+  const activeAlerts = summary.alerts.filter((a) => !dismissedIds.has(a.id));
 
   const filteredAlerts = activeAlerts.filter((a) => {
     if (selectedCategory !== "all" && a.category !== selectedCategory) return false;
@@ -86,10 +107,10 @@ export function OperationsInboxView({ initialSummary }: OperationsInboxViewProps
             Outreach Queue
           </Link>
           <button
-            onClick={() => router.refresh()}
+            onClick={() => refetch()}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold rounded-xl shadow-xs transition-colors"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
             Refresh
           </button>
         </div>
@@ -198,7 +219,35 @@ export function OperationsInboxView({ initialSummary }: OperationsInboxViewProps
 
       {/* Alert Feed */}
       <div className="space-y-3">
-        {filteredAlerts.length === 0 ? (
+        {isError ? (
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-6 text-center">
+            <AlertCircle className="h-8 w-8 text-rose-500 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-rose-900">Failed to load operations alerts</p>
+            <p className="text-xs text-rose-600 mt-1 mb-3">An error occurred while fetching real-time operational alerts.</p>
+            <button
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl transition-colors shadow-xs"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Retry
+            </button>
+          </div>
+        ) : isLoading ? (
+          <div className="space-y-3 animate-pulse">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-white rounded-2xl border border-slate-200/80 p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-9 h-9 rounded-xl bg-slate-200" />
+                  <div className="space-y-2">
+                    <div className="h-4 w-48 bg-slate-200 rounded" />
+                    <div className="h-3 w-80 bg-slate-100 rounded" />
+                  </div>
+                </div>
+                <div className="h-8 w-24 bg-slate-200 rounded-xl" />
+              </div>
+            ))}
+          </div>
+        ) : filteredAlerts.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center shadow-xs">
             <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
             <h3 className="text-base font-semibold text-slate-900">Operations Inbox Clear!</h3>

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { AIProviderRegistry } from "@/lib/ai/providers";
 import { PromptManager } from "@/lib/ai/prompts/PromptManager";
 import { ExtractionCache } from "@/lib/ai/cache/ExtractionCache";
-import { CustomerDocument } from "@/types/document";
+import { CustomerDocument, DocumentVaultRow, DocumentVaultResponse } from "@/types/document";
 import { v4 as uuidv4 } from "uuid";
 import { getKolkataDateString, getKolkataFutureDateString } from "@/lib/operations/dateUtils";
 
@@ -200,6 +200,222 @@ export async function uploadCustomerDocument(formData: FormData) {
  */
 export async function uploadDocument(formData: FormData) {
   return uploadCustomerDocument(formData);
+}
+
+/**
+ * Dedicated server action for cached Document Vault listings.
+ *
+ * ARCHITECTURAL & PRIVACY SAFETY BOUNDARY:
+ * - Queries minimal fields needed for listing & filtering.
+ * - Server-side search may temporarily evaluate customer.phone or document_number to preserve search UX,
+ *   but the RETURNED client DTO strictly STRIPS:
+ *     - file_url
+ *     - signed_url
+ *     - document_number
+ *     - notes
+ *     - AI JSON / extraction data
+ *     - created_by
+ *     - storage paths
+ *     - customer phone
+ *     - Aadhaar / PAN / KYC fields
+ * - Returns clean DocumentVaultRow[] suitable for in-memory TanStack Query caching.
+ * - View / Download operations remain on-demand via getDocumentSignedUrl(doc.id).
+ */
+export async function getDocumentVaultRows(params?: {
+  search?: string;
+  documentType?: string;
+  status?: string;
+  renewalWindow?: string;
+}): Promise<DocumentVaultResponse> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      documents: [],
+      totalCount: 0,
+      stats: { total: 0, active: 0, archived: 0, totalSizeBytes: 0 },
+      error: "Authentication required. Please sign in again."
+    };
+  }
+
+  const search = params?.search?.trim() || "";
+  const documentType = params?.documentType?.trim() || "";
+  const status = params?.status?.trim() || "all";
+  const renewalWindow = params?.renewalWindow?.trim() || "all";
+
+  // Select minimal fields from customer_documents & joined customer
+  let query = supabase
+    .from("customer_documents")
+    .select(`
+      id,
+      customer_id,
+      document_type,
+      document_name,
+      document_number,
+      status,
+      source_filename,
+      file_size,
+      mime_type,
+      expiry_date,
+      uploaded_at,
+      created_at,
+      customer:customers (
+        id,
+        customer_code,
+        first_name,
+        middle_name,
+        last_name,
+        phone
+      )
+    `, { count: 'exact' });
+
+  // Renewal Window Filter (strictly targets active versions with expiry_date)
+  if (renewalWindow && renewalWindow !== "all") {
+    query = query.eq("status", "active").not("expiry_date", "is", null);
+    const todayStr = getKolkataDateString();
+    if (renewalWindow === "expired") {
+      query = query.lt("expiry_date", todayStr);
+    } else if (renewalWindow === "7d") {
+      query = query.gte("expiry_date", todayStr).lte("expiry_date", getKolkataFutureDateString(7));
+    } else if (renewalWindow === "30d") {
+      query = query.gte("expiry_date", todayStr).lte("expiry_date", getKolkataFutureDateString(30));
+    } else if (renewalWindow === "60d") {
+      query = query.gte("expiry_date", todayStr).lte("expiry_date", getKolkataFutureDateString(60));
+    }
+  } else if (status && status !== "all") {
+    try {
+      query = query.eq("status", status);
+    } catch {
+      // Ignore if status column does not exist
+    }
+  }
+
+  // Document Type Filter
+  if (documentType && documentType !== "all") {
+    query = query.eq("document_type", documentType);
+  }
+
+  let res: Awaited<ReturnType<(typeof query)["order"]>>;
+
+  try {
+    res = await query.order("created_at", { ascending: false });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to load documents";
+    console.error("[getDocumentVaultRows] Query failure:", message);
+    return {
+      documents: [],
+      totalCount: 0,
+      stats: { total: 0, active: 0, archived: 0, totalSizeBytes: 0 },
+      error: message
+    };
+  }
+
+  if (res.error) {
+    console.error("[getDocumentVaultRows] Query error:", res.error.message);
+    return {
+      documents: [],
+      totalCount: 0,
+      stats: { total: 0, active: 0, archived: 0, totalSizeBytes: 0 },
+      error: res.error.message
+    };
+  }
+
+  interface RawVaultRow {
+    id: string;
+    customer_id: string;
+    document_type: string;
+    document_name?: string | null;
+    document_number?: string | null;
+    status?: string | null;
+    source_filename?: string | null;
+    file_size?: number | null;
+    mime_type?: string | null;
+    expiry_date?: string | null;
+    uploaded_at?: string | null;
+    created_at?: string;
+    customer?: {
+      id: string;
+      customer_code: string;
+      first_name: string;
+      middle_name?: string | null;
+      last_name: string;
+      phone?: string | null;
+    } | null;
+  }
+
+  const count = res.count;
+  const rawDocs = (res.data || []) as unknown as RawVaultRow[];
+  let filteredDocs: RawVaultRow[] = rawDocs;
+
+  // Server-side search filtering across customer name, code, phone, filename, document_name, document_type, document_number
+  if (search) {
+    const q = search.toLowerCase();
+    filteredDocs = filteredDocs.filter((doc) => {
+      const custName = [doc.customer?.first_name, doc.customer?.middle_name, doc.customer?.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const code = (doc.customer?.customer_code || "").toLowerCase();
+      const phone = (doc.customer?.phone || "").toLowerCase();
+      const docType = (doc.document_type || "").toLowerCase();
+      const filename = (doc.source_filename || "").toLowerCase();
+      const docName = (doc.document_name || "").toLowerCase();
+      const docNum = (doc.document_number || "").toLowerCase();
+
+      return (
+        custName.includes(q) ||
+        code.includes(q) ||
+        phone.includes(q) ||
+        docType.includes(q) ||
+        filename.includes(q) ||
+        docName.includes(q) ||
+        docNum.includes(q)
+      );
+    });
+  }
+
+  // Compute summary stats before stripping
+  const totalCount = count || filteredDocs.length;
+  const activeCount = filteredDocs.filter((d) => d.status === 'active' || !d.status).length;
+  const archivedCount = filteredDocs.filter((d) => d.status === 'archived').length;
+  const totalSizeBytes = filteredDocs.reduce((acc, d) => acc + (d.file_size || 0), 0);
+
+  // Strip all non-whitelisted fields before returning DTO
+  const cleanRows: DocumentVaultRow[] = filteredDocs.map((doc) => ({
+    id: doc.id,
+    customer_id: doc.customer_id,
+    document_type: doc.document_type as DocumentVaultRow["document_type"],
+    document_name: doc.document_name || null,
+    status: (doc.status || "active") as DocumentVaultRow["status"],
+    source_filename: doc.source_filename || null,
+    file_size: doc.file_size || null,
+    mime_type: doc.mime_type || null,
+    expiry_date: doc.expiry_date || null,
+    uploaded_at: doc.uploaded_at || doc.created_at || new Date().toISOString(),
+    created_at: doc.created_at,
+    customer: doc.customer ? {
+      id: doc.customer.id,
+      customer_code: doc.customer.customer_code,
+      first_name: doc.customer.first_name,
+      middle_name: doc.customer.middle_name || null,
+      last_name: doc.customer.last_name,
+    } : null,
+  }));
+
+  return {
+    documents: cleanRows,
+    totalCount,
+    stats: {
+      total: totalCount,
+      active: activeCount,
+      archived: archivedCount,
+      totalSizeBytes
+    }
+  };
 }
 
 /**
