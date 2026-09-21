@@ -6,6 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { X, Save, AlertCircle } from "lucide-react";
 import { ServiceFormData, serviceSchema } from "@/app/(dashboard)/services/schema";
 import { upsertService, checkDuplicateServiceCode } from "@/app/(dashboard)/services/actions";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 
 export function ServiceForm({ 
   service, 
@@ -16,6 +18,7 @@ export function ServiceForm({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
@@ -47,10 +50,13 @@ export function ServiceForm({
       if (result.error) {
         setGlobalError(result.error);
       } else {
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.services.displayCatalogs(DASHBOARD_MEMORY_SCOPE),
+        });
         onSuccess();
       }
-    } catch (err: any) {
-      setGlobalError(err.message || "An unexpected error occurred.");
+    } catch (err: unknown) {
+      setGlobalError(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       setIsSubmitting(false);
     }

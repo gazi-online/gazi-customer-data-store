@@ -41,6 +41,19 @@ export interface Customer {
   updated_at: string;
 }
 
+export type CustomerListRow = Pick<
+  Customer,
+  | "id"
+  | "customer_code"
+  | "first_name"
+  | "middle_name"
+  | "last_name"
+  | "phone"
+  | "email"
+  | "status"
+  | "created_at"
+>;
+
 export interface CustomerFormData {
   customer_code?: string;
   first_name: string;

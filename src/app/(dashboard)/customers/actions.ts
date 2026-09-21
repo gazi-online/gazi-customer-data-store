@@ -2,7 +2,28 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { CustomerFormData } from "@/types/customer";
+import { CustomerFormData, CustomerListRow } from "@/types/customer";
+
+export async function getCustomerListRows(searchQuery?: string, statusFilter?: string): Promise<CustomerListRow[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("customers")
+    .select("id, customer_code, first_name, middle_name, last_name, phone, email, status, created_at")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  if (searchQuery) {
+    query = query.or(`first_name.ilike.%${searchQuery}%,middle_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%`);
+  }
+
+  if (statusFilter && statusFilter !== "all") {
+    query = query.eq("status", statusFilter);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data || []) as CustomerListRow[];
+}
 
 export async function getCustomers(searchQuery?: string, statusFilter?: string) {
   const supabase = await createClient();
@@ -24,6 +45,7 @@ export async function getCustomers(searchQuery?: string, statusFilter?: string) 
   if (error) throw new Error(error.message);
   return data;
 }
+
 
 export async function getCustomerById(id: string) {
   const supabase = await createClient();

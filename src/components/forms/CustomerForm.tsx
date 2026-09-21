@@ -12,6 +12,8 @@ import { getProfilePhotoSignedUrl } from "@/app/(dashboard)/customers/ai-actions
 import { createClient } from "@/lib/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { createCustomer, updateCustomer, checkDuplicateCustomer } from "@/app/(dashboard)/customers/actions";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { AiSmartImportEngine } from "../AiSmartImportEngine";
 import { IndiaPincodeProvider } from "@/lib/address/IndiaPincodeProvider";
@@ -66,6 +68,7 @@ interface CustomerFormProps {
 
 export function CustomerForm({ initialData }: CustomerFormProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [aiDataApplied, setAiDataApplied] = useState(false);
@@ -366,9 +369,12 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         if (result.error) throw new Error(result.error);
         toast.success("Customer added successfully");
       }
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.customers.lists(DASHBOARD_MEMORY_SCOPE),
+      });
       router.push("/customers");
-    } catch (error: any) {
-      toast.error(error.message || "Something went wrong");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Something went wrong");
     } finally {
       setIsLoading(false);
     }

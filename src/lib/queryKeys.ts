@@ -1,15 +1,27 @@
 /**
- * GCDS Phase 3B: Query Key Factory Foundation
+ * GCDS Phase 3C: Query Key Factory & In-Memory Namespace
  *
  * Centralized, typed, hierarchical query key definitions for TanStack Query.
  *
- * SAFETY CONSTRAINTS:
- * - Requires an explicit `cacheScope` (tenant/business/account identifier); never fabricates one.
- * - Does NOT assume auth.uid === business_id.
+ * ARCHITECTURAL SAFETY BOUNDARY:
+ * - Phase 3C uses the dashboard QueryClient as the actual session isolation boundary.
+ * - The QueryClient is in-memory only, instantiated once per dashboard provider lifecycle,
+ *   cleared completely on logout, and destroyed on dashboard tree unmount.
+ * - DASHBOARD_MEMORY_SCOPE is strictly an opaque, in-memory namespace constant inside
+ *   the isolated QueryClient.
+ * - DASHBOARD_MEMORY_SCOPE is NOT:
+ *   - business_id
+ *   - auth.uid()
+ *   - tenant identity
+ *   - authorization or permissions
+ * - Never fabricates business IDs or tenant identifiers.
  * - Contains NO signed URLs, raw storage paths, document secrets, or PII (Aadhaar/PAN).
  * - Contains NO financial amounts, balance states, or ledger values.
- * - Foundation only: not consumed by any active route in Phase 3B.
+ * - Services display catalog keys are explicitly DISPLAY-ONLY and MUST NEVER be used for
+ *   transactional active service queries, request creation, billing, or FSM.
  */
+
+export const DASHBOARD_MEMORY_SCOPE = "dashboard-memory-v1";
 
 export interface CustomerListFilters {
   search?: string;
@@ -50,10 +62,10 @@ export const queryKeys = {
   },
   services: {
     all: (cacheScope: string) => ["gcds", cacheScope, "services"] as const,
-    catalogs: (cacheScope: string) => ["gcds", cacheScope, "services", "catalog"] as const,
-    catalog: (cacheScope: string, filters?: ServiceCatalogFilters) =>
-      ["gcds", cacheScope, "services", "catalog", filters ?? {}] as const,
-    active: (cacheScope: string) => ["gcds", cacheScope, "services", "active"] as const,
+    displayCatalogs: (cacheScope: string) =>
+      ["gcds", cacheScope, "services", "display-catalog"] as const,
+    displayCatalog: (cacheScope: string, filters?: ServiceCatalogFilters) =>
+      ["gcds", cacheScope, "services", "display-catalog", filters ?? {}] as const,
   },
   communications: {
     all: (cacheScope: string) => ["gcds", cacheScope, "communications"] as const,

@@ -1,16 +1,8 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { CustomerTable } from "@/components/tables/CustomerTable";
-import { getCustomers } from "./actions";
 
-export default async function CustomersPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ search?: string; status?: string }>;
-}) {
-  const { search, status } = await searchParams;
-  const customers = await getCustomers(search, status);
-
+export default function CustomersPage() {
   return (
     <div className="space-y-5 sm:space-y-6 w-full max-w-full overflow-x-hidden animate-in fade-in slide-in-from-bottom-4 duration-150">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
@@ -29,7 +21,7 @@ export default async function CustomersPage({
         </div>
       </div>
 
-      <CustomerTable customers={customers || []} />
+      <CustomerTable />
     </div>
   );
 }

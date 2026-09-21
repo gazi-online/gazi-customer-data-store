@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Trash2, AlertTriangle, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { softDeleteCustomer, restoreCustomer } from "@/app/(dashboard)/customers/actions";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 
 interface CustomerDeleteButtonProps {
   customerId: string;
@@ -22,6 +24,7 @@ export function CustomerDeleteButton({
   variant = "icon",
 }: CustomerDeleteButtonProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -44,6 +47,10 @@ export function CustomerDeleteButton({
         onDeleted(customerId);
       }
 
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.customers.lists(DASHBOARD_MEMORY_SCOPE),
+      });
+
       if (redirectTo) {
         router.push(redirectTo);
       } else {
@@ -62,18 +69,21 @@ export function CustomerDeleteButton({
               const restoreRes = await restoreCustomer(customerId);
               if (restoreRes.success) {
                 toast.success(customerName ? `Customer "${customerName}" restored` : "Customer restored", { id: toastId });
+                await queryClient.invalidateQueries({
+                  queryKey: queryKeys.customers.lists(DASHBOARD_MEMORY_SCOPE),
+                });
                 router.refresh();
               } else {
                 toast.error(restoreRes.error || "Failed to restore customer", { id: toastId });
               }
-            } catch (err: any) {
-              toast.error(err.message || "Failed to restore customer", { id: toastId });
+            } catch (err: unknown) {
+              toast.error(err instanceof Error ? err.message : "Failed to restore customer", { id: toastId });
             }
           },
         },
       });
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete customer");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete customer");
       setIsDeleting(false);
     }
   };

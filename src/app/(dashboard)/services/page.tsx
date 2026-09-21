@@ -1,15 +1,7 @@
-import { getServices } from "./actions";
 import { ServiceTable } from "@/components/tables/ServiceTable";
 import { Briefcase } from "lucide-react";
 
-export default async function ServicesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ search?: string; status?: string; category?: string }>;
-}) {
-  const { search, status, category } = await searchParams;
-  const services = await getServices(search, status, category);
-
+export default function ServicesPage() {
   return (
     <div className="space-y-5 sm:space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-200 w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
@@ -28,7 +20,7 @@ export default async function ServicesPage({
         </div>
       </div>
 
-      <ServiceTable services={services || []} />
+      <ServiceTable />
     </div>
   );
 }

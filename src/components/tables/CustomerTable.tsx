@@ -1,19 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { Search, Filter, Edit, Eye } from "lucide-react";
-import { Customer } from "@/types/customer";
+import { Search, Filter, Edit, Eye, AlertCircle, RefreshCw } from "lucide-react";
+import { CustomerListRow } from "@/types/customer";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { CustomerDeleteButton } from "@/components/customers/CustomerDeleteButton";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
+import { getCustomerListRows } from "@/app/(dashboard)/customers/actions";
 
-export function CustomerTable({ customers }: { customers: Customer[] }) {
+interface CustomerTableProps {
+  initialCustomers?: CustomerListRow[];
+}
+
+export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
 
-  const visibleCustomers = customers.filter(c => !deletedIds.includes(c.id));
+  const normalizedSearch = searchParams.get("search")?.trim() || undefined;
+  const normalizedStatus = searchParams.get("status") || undefined;
+
+  const {
+    data: customers = initialCustomers || [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.customers.list(DASHBOARD_MEMORY_SCOPE, {
+      search: normalizedSearch,
+      status: normalizedStatus,
+    }),
+    queryFn: () => getCustomerListRows(normalizedSearch, normalizedStatus),
+    staleTime: 20 * 1000,
+    refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
+  });
+
+  const visibleCustomers = customers.filter((c) => !deletedIds.includes(c.id));
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,12 +105,52 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {visibleCustomers.length === 0 ? (
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={`customer-skeleton-${i}`} className="animate-pulse">
+                  <td className="px-6 py-4">
+                    <div className="h-4 w-32 bg-zinc-200 dark:bg-zinc-800 rounded mb-1.5" />
+                    <div className="h-3 w-16 bg-zinc-100 dark:bg-zinc-800/60 rounded" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="h-4 w-28 bg-zinc-200 dark:bg-zinc-800 rounded mb-1.5" />
+                    <div className="h-3 w-36 bg-zinc-100 dark:bg-zinc-800/60 rounded" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="h-5 w-16 bg-zinc-200 dark:bg-zinc-800 rounded-full" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="h-4 w-24 bg-zinc-200 dark:bg-zinc-800 rounded" />
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="h-4 w-12 bg-zinc-200 dark:bg-zinc-800 rounded ml-auto" />
+                  </td>
+                </tr>
+              ))
+            ) : isError ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center text-zinc-500">
+                  <div className="flex flex-col items-center justify-center space-y-2">
+                    <AlertCircle className="h-6 w-6 text-red-500" />
+                    <p className="font-medium text-zinc-900 dark:text-zinc-300">Unable to load customer list</p>
+                    <p className="text-xs text-zinc-500">Please check your connection and try again.</p>
+                    <button
+                      type="button"
+                      onClick={() => refetch()}
+                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 hover:bg-violet-100 transition-colors"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      <span>Retry</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ) : visibleCustomers.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center text-zinc-500">
                   <div className="flex flex-col items-center justify-center space-y-2">
                     <p className="font-medium text-zinc-900 dark:text-zinc-300">No customers found</p>
-                    <p className="text-xs">Try adjusting your search or filter to find what you're looking for.</p>
+                    <p className="text-xs">Try adjusting your search or filter to find what you&apos;re looking for.</p>
                   </div>
                 </td>
               </tr>
@@ -137,7 +203,41 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
 
       {/* Mobile Card List View */}
       <div className="md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
-        {visibleCustomers.length === 0 ? (
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={`customer-card-skeleton-${i}`} className="p-4 flex flex-col gap-3 animate-pulse">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="h-4 w-36 bg-zinc-200 dark:bg-zinc-800 rounded mb-1" />
+                  <div className="h-3 w-20 bg-zinc-100 dark:bg-zinc-800/60 rounded" />
+                </div>
+                <div className="h-5 w-16 bg-zinc-200 dark:bg-zinc-800 rounded-full" />
+              </div>
+              <div className="grid grid-cols-1 gap-1">
+                <div className="h-3.5 w-28 bg-zinc-100 dark:bg-zinc-800/60 rounded" />
+                <div className="h-3 w-24 bg-zinc-100 dark:bg-zinc-800/60 rounded" />
+              </div>
+              <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-end gap-2">
+                <div className="h-8 w-16 bg-zinc-100 dark:bg-zinc-800 rounded-lg" />
+                <div className="h-8 w-16 bg-zinc-100 dark:bg-zinc-800 rounded-lg" />
+              </div>
+            </div>
+          ))
+        ) : isError ? (
+          <div className="p-8 text-center text-zinc-500 flex flex-col items-center justify-center space-y-2">
+            <AlertCircle className="h-6 w-6 text-red-500" />
+            <p className="font-medium text-zinc-900 dark:text-zinc-300">Unable to load customer list</p>
+            <p className="text-xs text-zinc-500">Please check your connection and try again.</p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 hover:bg-violet-100 transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              <span>Retry</span>
+            </button>
+          </div>
+        ) : visibleCustomers.length === 0 ? (
           <div className="p-8 text-center text-zinc-500">
             <p className="font-medium text-zinc-900 dark:text-zinc-300">No customers found</p>
             <p className="text-xs mt-1">Try adjusting your search or filter to find what you&apos;re looking for.</p>
