@@ -5,22 +5,55 @@ import { revalidatePath } from "next/cache";
 import { PaymentMethod } from "@/types/billing";
 import { BillingEngine } from "@/lib/billing/BillingEngine";
 
+export interface PaymentListItem {
+  id: string;
+  payment_number: string;
+  payment_date: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  reference_number: string | null;
+  status: string;
+  created_at: string;
+  customer: {
+    id: string;
+    first_name: string;
+    middle_name: string | null;
+    last_name: string;
+    customer_code: string | null;
+  } | null;
+  allocations: Array<{
+    id: string;
+    amount: number;
+    invoice: {
+      id: string;
+      invoice_number: string;
+    } | null;
+  }>;
+}
+
 export async function getPayments(
   searchQuery?: string,
   statusFilter?: string,
   methodFilter?: string
-) {
+): Promise<PaymentListItem[]> {
   const supabase = await createClient();
 
   let query = supabase
     .from("payments")
     .select(`
-      *,
+      id,
+      payment_number,
+      payment_date,
+      amount,
+      payment_method,
+      reference_number,
+      status,
+      created_at,
       customer:customers(id, first_name, middle_name, last_name, customer_code),
       allocations:payment_allocations(
         id,
         amount,
-        invoice:invoices(id, invoice_number, total_amount, due_amount, status)
+        invoice:invoices(id, invoice_number)
       )
     `)
     .order("created_at", { ascending: false });
@@ -39,10 +72,10 @@ export async function getPayments(
     throw new Error(error.message);
   }
 
-  let filtered = data || [];
+  let filtered = (data as unknown as PaymentListItem[]) || [];
   if (searchQuery && searchQuery.trim()) {
     const q = searchQuery.toLowerCase().trim();
-    filtered = filtered.filter((pay: any) => {
+    filtered = filtered.filter((pay: PaymentListItem) => {
       const payNum = pay.payment_number?.toLowerCase() || "";
       const refNum = pay.reference_number?.toLowerCase() || "";
       const cust = pay.customer;
@@ -280,21 +313,23 @@ export async function getDashboardBillingSummary() {
     const today = new Date().toISOString().split("T")[0];
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
 
-    // Fetch invoices for receivables calculation
-    const { data: invoices, error: invError } = await supabase
-      .from("invoices")
-      .select("id, status, due_date, due_amount, total_amount, paid_amount");
+    // Concurrently fetch invoices for receivables calculation and recorded payments for current month revenue
+    const [invResult, payResult] = await Promise.all([
+      supabase
+        .from("invoices")
+        .select("id, status, due_date, due_amount, total_amount, paid_amount"),
+      supabase
+        .from("payments")
+        .select("amount, payment_date, status")
+        .gte("payment_date", startOfMonth)
+        .eq("status", "recorded"),
+    ]);
 
-    if (invError) throw invError;
+    if (invResult.error) throw invResult.error;
+    if (payResult.error) throw payResult.error;
 
-    // Fetch recorded payments for current month revenue
-    const { data: payments, error: payError } = await supabase
-      .from("payments")
-      .select("amount, payment_date, status")
-      .gte("payment_date", startOfMonth)
-      .eq("status", "recorded");
-
-    if (payError) throw payError;
+    const invoices = invResult.data;
+    const payments = payResult.data;
 
     const activeInvoices = (invoices || []).filter((inv) => inv.status !== "cancelled");
     const draftExcludedInvoices = activeInvoices.filter((inv) => inv.status !== "draft");
@@ -330,7 +365,7 @@ export async function getDashboardBillingSummary() {
         openInvoicesCount,
       },
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Error fetching dashboard billing summary:", err);
     return {
       success: false,
@@ -342,4 +377,55 @@ export async function getDashboardBillingSummary() {
       },
     };
   }
+}
+
+export interface PaymentFormCustomerOption {
+  id: string;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+  customer_code: string | null;
+}
+
+export interface PaymentFormInvoiceOption {
+  id: string;
+  invoice_number: string;
+  due_amount: number;
+  customer_id: string;
+}
+
+export async function getPaymentFormOptions(): Promise<{
+  customers: PaymentFormCustomerOption[];
+  openInvoices: PaymentFormInvoiceOption[];
+}> {
+  const supabase = await createClient();
+
+  const [custRes, invRes] = await Promise.all([
+    supabase
+      .from("customers")
+      .select("id, first_name, middle_name, last_name, customer_code")
+      .is("deleted_at", null)
+      .order("first_name", { ascending: true }),
+    supabase
+      .from("invoices")
+      .select("id, invoice_number, due_amount, customer_id")
+      .gt("due_amount", 0)
+      .not("status", "in", '("draft","cancelled")')
+      .order("created_at", { ascending: false }),
+  ]);
+
+  if (custRes.error) {
+    console.error("Error fetching payment form customers:", custRes.error);
+    throw new Error(custRes.error.message);
+  }
+
+  if (invRes.error) {
+    console.error("Error fetching payment form open invoices:", invRes.error);
+    throw new Error(invRes.error.message);
+  }
+
+  return {
+    customers: custRes.data || [],
+    openInvoices: invRes.data || [],
+  };
 }

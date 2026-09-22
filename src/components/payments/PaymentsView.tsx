@@ -11,13 +11,13 @@ import {
   X
 } from "lucide-react";
 import { RecordPaymentModal } from "./RecordPaymentModal";
-import { voidPayment, refundPayment } from "@/app/(dashboard)/payments/actions";
+import { voidPayment, refundPayment, getPaymentFormOptions, PaymentListItem, PaymentFormCustomerOption, PaymentFormInvoiceOption } from "@/app/(dashboard)/payments/actions";
 import { toast } from "sonner";
 
 interface PaymentsViewProps {
-  payments: any[];
-  customers: any[];
-  openInvoices: any[];
+  payments: PaymentListItem[];
+  customers?: PaymentFormCustomerOption[];
+  openInvoices?: PaymentFormInvoiceOption[];
   initialSearch?: string;
   initialStatus?: string;
   initialMethod?: string;
@@ -32,20 +32,50 @@ function formatCurrency(amount: number) {
 
 export function PaymentsView({
   payments,
-  customers,
-  openInvoices,
+  customers = [],
+  openInvoices = [],
   initialSearch = "",
   initialStatus = "all",
   initialMethod = "all",
 }: PaymentsViewProps) {
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [isActionPending, setIsActionPending] = useState(false);
+  const [isFetchingOptions, setIsFetchingOptions] = useState(false);
+  const [loadedCustomerOptions, setLoadedCustomerOptions] = useState<Array<{ id: string; name: string; code?: string }>>([]);
+  const [loadedInvoiceOptions, setLoadedInvoiceOptions] = useState<Array<{ id: string; invoice_number: string; due_amount: number }>>([]);
   const [confirmModal, setConfirmModal] = useState<{
     type: 'void_payment' | 'refund_payment';
     id: string;
     title: string;
     description: string;
   } | null>(null);
+
+  const handleOpenRecordModal = async () => {
+    setIsFetchingOptions(true);
+    try {
+      const { customers: custs, openInvoices: invs } = await getPaymentFormOptions();
+      setLoadedCustomerOptions(
+        custs.map((c) => ({
+          id: c.id,
+          name: `${c.first_name} ${c.middle_name ? c.middle_name + " " : ""}${c.last_name}`,
+          code: c.customer_code || undefined,
+        }))
+      );
+      setLoadedInvoiceOptions(
+        invs.map((i) => ({
+          id: i.id,
+          invoice_number: i.invoice_number,
+          due_amount: Number(i.due_amount),
+        }))
+      );
+      setIsRecordModalOpen(true);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load payment options.";
+      toast.error(message);
+    } finally {
+      setIsFetchingOptions(false);
+    }
+  };
 
   const executeConfirmedAction = async () => {
     if (!confirmModal) return;
@@ -67,8 +97,9 @@ export function PaymentsView({
         }
         toast.success("Payment refunded successfully!");
       }
-    } catch (err: any) {
-      toast.error(err.message || "Action failed.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Action failed.";
+      toast.error(msg);
     } finally {
       setIsActionPending(false);
       setConfirmModal(null);
@@ -78,7 +109,7 @@ export function PaymentsView({
   const customerOptions = customers.map((c) => ({
     id: c.id,
     name: `${c.first_name} ${c.middle_name ? c.middle_name + " " : ""}${c.last_name}`,
-    code: c.customer_code,
+    code: c.customer_code || undefined,
   }));
 
   const invoiceOptions = openInvoices.map((i) => ({
@@ -101,11 +132,12 @@ export function PaymentsView({
           </p>
         </div>
         <button
-          onClick={() => setIsRecordModalOpen(true)}
-          className="inline-flex items-center justify-center px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition-all"
+          onClick={handleOpenRecordModal}
+          disabled={isFetchingOptions}
+          className="inline-flex items-center justify-center px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition-all"
         >
           <Plus className="mr-2 h-4 w-4" />
-          Record Payment
+          {isFetchingOptions ? "Loading..." : "Record Payment"}
         </button>
       </div>
 
@@ -168,10 +200,11 @@ export function PaymentsView({
             <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">No payments found</h3>
             <p className="text-sm text-zinc-500 mt-1">Record a payment or change search filters.</p>
             <button
-              onClick={() => setIsRecordModalOpen(true)}
-              className="mt-4 inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-colors"
+              onClick={handleOpenRecordModal}
+              disabled={isFetchingOptions}
+              className="mt-4 inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-lg text-sm font-semibold transition-colors"
             >
-              <Plus className="mr-1.5 h-4 w-4" /> Record Payment
+              <Plus className="mr-1.5 h-4 w-4" /> {isFetchingOptions ? "Loading..." : "Record Payment"}
             </button>
           </div>
         ) : (
@@ -191,7 +224,7 @@ export function PaymentsView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {payments.map((pay: any) => {
+                {payments.map((pay: PaymentListItem) => {
                   const customerName = pay.customer
                     ? `${pay.customer.first_name} ${pay.customer.middle_name ? pay.customer.middle_name + " " : ""}${pay.customer.last_name}`
                     : "Unknown Customer";
@@ -244,7 +277,7 @@ export function PaymentsView({
                       <td className="py-4 px-4 text-xs">
                         {pay.allocations && pay.allocations.length > 0 ? (
                           <div className="space-y-1">
-                            {pay.allocations.map((alloc: any) => (
+                            {pay.allocations.map((alloc) => (
                               <div key={alloc.id} className="flex items-center space-x-1 font-mono">
                                 <Link
                                   href={`/invoices/${alloc.invoice?.id}`}
@@ -305,8 +338,8 @@ export function PaymentsView({
       <RecordPaymentModal
         isOpen={isRecordModalOpen}
         onClose={() => setIsRecordModalOpen(false)}
-        customersList={customerOptions}
-        openInvoicesList={invoiceOptions}
+        customersList={loadedCustomerOptions.length > 0 ? loadedCustomerOptions : customerOptions}
+        openInvoicesList={loadedInvoiceOptions.length > 0 ? loadedInvoiceOptions : invoiceOptions}
       />
 
       {/* Custom Confirmation Modal */}

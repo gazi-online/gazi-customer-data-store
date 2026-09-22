@@ -1,5 +1,6 @@
+import { Suspense } from "react";
 import Link from "next/link";
-import { getInvoices } from "./actions";
+import { getInvoices, InvoiceListItem } from "./actions";
 import { Receipt, Plus, Search, Filter, AlertTriangle, Eye, CheckCircle2, Clock, XCircle, Printer } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -64,14 +65,176 @@ function getStatusBadge(status: string, isOverdue: boolean) {
   }
 }
 
+function InvoicesTableSkeleton() {
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden animate-pulse">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm border-collapse">
+          <thead>
+            <tr className="bg-zinc-50/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              <th className="py-3.5 px-4">Invoice #</th>
+              <th className="py-3.5 px-4">Customer</th>
+              <th className="py-3.5 px-4">Invoice Date</th>
+              <th className="py-3.5 px-4">Due Date</th>
+              <th className="py-3.5 px-4 text-right">Total</th>
+              <th className="py-3.5 px-4 text-right">Paid</th>
+              <th className="py-3.5 px-4 text-right">Due</th>
+              <th className="py-3.5 px-4 text-center">Status</th>
+              <th className="py-3.5 px-4 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <tr key={i} className="h-16">
+                <td className="py-4 px-4"><div className="h-4 w-24 bg-zinc-200 dark:bg-zinc-800 rounded" /></td>
+                <td className="py-4 px-4"><div className="h-4 w-32 bg-zinc-200 dark:bg-zinc-800 rounded" /></td>
+                <td className="py-4 px-4"><div className="h-4 w-20 bg-zinc-200 dark:bg-zinc-800 rounded" /></td>
+                <td className="py-4 px-4"><div className="h-4 w-20 bg-zinc-200 dark:bg-zinc-800 rounded" /></td>
+                <td className="py-4 px-4 text-right"><div className="h-4 w-16 bg-zinc-200 dark:bg-zinc-800 rounded ml-auto" /></td>
+                <td className="py-4 px-4 text-right"><div className="h-4 w-16 bg-zinc-200 dark:bg-zinc-800 rounded ml-auto" /></td>
+                <td className="py-4 px-4 text-right"><div className="h-4 w-16 bg-zinc-200 dark:bg-zinc-800 rounded ml-auto" /></td>
+                <td className="py-4 px-4 text-center"><div className="h-6 w-16 bg-zinc-200 dark:bg-zinc-800 rounded-full mx-auto" /></td>
+                <td className="py-4 px-4 text-right"><div className="h-8 w-24 bg-zinc-200 dark:bg-zinc-800 rounded ml-auto" /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+async function InvoicesTableContent({
+  search,
+  status,
+}: {
+  search?: string;
+  status?: string;
+}) {
+  const invoices = await getInvoices(search, status);
+  const today = new Date().toISOString().split("T")[0];
+
+  return (
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden">
+      {invoices.length === 0 ? (
+        <div className="p-12 text-center">
+          <Receipt className="h-12 w-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
+          <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">No invoices found</h3>
+          <p className="text-sm text-zinc-500 mt-1">Try clearing filters or create a new invoice.</p>
+          <Link
+            href="/invoices/new"
+            className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="mr-1.5 h-4 w-4" /> Create Invoice
+          </Link>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr className="bg-zinc-50/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <th className="py-3.5 px-4">Invoice #</th>
+                <th className="py-3.5 px-4">Customer</th>
+                <th className="py-3.5 px-4">Invoice Date</th>
+                <th className="py-3.5 px-4">Due Date</th>
+                <th className="py-3.5 px-4 text-right">Total</th>
+                <th className="py-3.5 px-4 text-right">Paid</th>
+                <th className="py-3.5 px-4 text-right">Due</th>
+                <th className="py-3.5 px-4 text-center">Status</th>
+                <th className="py-3.5 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {invoices.map((inv: InvoiceListItem) => {
+                const isOverdue = Boolean(
+                  inv.due_date &&
+                  inv.due_date < today &&
+                  Number(inv.due_amount) > 0 &&
+                  inv.status !== "draft" &&
+                  inv.status !== "cancelled"
+                );
+
+                const customerName = inv.customer
+                  ? `${inv.customer.first_name} ${inv.customer.middle_name ? inv.customer.middle_name + " " : ""}${inv.customer.last_name}`
+                  : "Unknown Customer";
+
+                return (
+                  <tr
+                    key={inv.id}
+                    className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors group"
+                  >
+                    <td className="py-4 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">
+                      <Link href={`/invoices/${inv.id}`} className="hover:underline">
+                        #{inv.invoice_number}
+                      </Link>
+                    </td>
+                    <td className="py-4 px-4 font-medium text-zinc-900 dark:text-zinc-100">
+                      {inv.customer ? (
+                        <Link
+                          href={`/customers/${inv.customer.id}`}
+                          className="hover:text-blue-600 transition-colors"
+                        >
+                          {customerName}
+                        </Link>
+                      ) : (
+                        customerName
+                      )}
+                    </td>
+                    <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400 text-xs">
+                      {new Date(inv.invoice_date).toLocaleDateString()}
+                    </td>
+                    <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400 text-xs">
+                      {inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "-"}
+                    </td>
+                    <td className="py-4 px-4 text-right font-mono font-semibold text-zinc-900 dark:text-zinc-100">
+                      {formatCurrency(inv.total_amount)}
+                    </td>
+                    <td className="py-4 px-4 text-right font-mono text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(inv.paid_amount)}
+                    </td>
+                    <td className="py-4 px-4 text-right font-mono font-bold text-amber-600 dark:text-amber-400">
+                      {formatCurrency(inv.due_amount)}
+                    </td>
+                    <td className="py-4 px-4 text-center">
+                      {getStatusBadge(inv.status, isOverdue)}
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/invoices/${inv.id}`}
+                          className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 rounded-lg text-xs font-semibold transition-colors"
+                          aria-label={`View invoice #${inv.invoice_number}`}
+                        >
+                          <Eye className="h-3.5 w-3.5 mr-1" /> View
+                        </Link>
+                        <Link
+                          href={`/invoices/${inv.id}/print`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400 rounded-lg text-xs font-semibold transition-colors"
+                          aria-label={`Print invoice #${inv.invoice_number}`}
+                        >
+                          <Printer className="h-3.5 w-3.5 mr-1" /> Print
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default async function InvoicesPage({
   searchParams,
 }: {
   searchParams: Promise<{ search?: string; status?: string }>;
 }) {
   const { search, status } = await searchParams;
-  const invoices = await getInvoices(search, status);
-  const today = new Date().toISOString().split("T")[0];
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-150">
@@ -134,117 +297,10 @@ export default async function InvoicesPage({
         </form>
       </div>
 
-      {/* Invoices Table */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden">
-        {invoices.length === 0 ? (
-          <div className="p-12 text-center">
-            <Receipt className="h-12 w-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">No invoices found</h3>
-            <p className="text-sm text-zinc-500 mt-1">Try clearing filters or create a new invoice.</p>
-            <Link
-              href="/invoices/new"
-              className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="mr-1.5 h-4 w-4" /> Create Invoice
-            </Link>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
-              <thead>
-                <tr className="bg-zinc-50/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  <th className="py-3.5 px-4">Invoice #</th>
-                  <th className="py-3.5 px-4">Customer</th>
-                  <th className="py-3.5 px-4">Invoice Date</th>
-                  <th className="py-3.5 px-4">Due Date</th>
-                  <th className="py-3.5 px-4 text-right">Total</th>
-                  <th className="py-3.5 px-4 text-right">Paid</th>
-                  <th className="py-3.5 px-4 text-right">Due</th>
-                  <th className="py-3.5 px-4 text-center">Status</th>
-                  <th className="py-3.5 px-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {invoices.map((inv: any) => {
-                  const isOverdue =
-                    inv.due_date &&
-                    inv.due_date < today &&
-                    Number(inv.due_amount) > 0 &&
-                    inv.status !== "draft" &&
-                    inv.status !== "cancelled";
-
-                  const customerName = inv.customer
-                    ? `${inv.customer.first_name} ${inv.customer.middle_name ? inv.customer.middle_name + " " : ""}${inv.customer.last_name}`
-                    : "Unknown Customer";
-
-                  return (
-                    <tr
-                      key={inv.id}
-                      className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors group"
-                    >
-                      <td className="py-4 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">
-                        <Link href={`/invoices/${inv.id}`} className="hover:underline">
-                          #{inv.invoice_number}
-                        </Link>
-                      </td>
-                      <td className="py-4 px-4 font-medium text-zinc-900 dark:text-zinc-100">
-                        {inv.customer ? (
-                          <Link
-                            href={`/customers/${inv.customer.id}`}
-                            className="hover:text-blue-600 transition-colors"
-                          >
-                            {customerName}
-                          </Link>
-                        ) : (
-                          customerName
-                        )}
-                      </td>
-                      <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400 text-xs">
-                        {new Date(inv.invoice_date).toLocaleDateString()}
-                      </td>
-                      <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400 text-xs">
-                        {inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "-"}
-                      </td>
-                      <td className="py-4 px-4 text-right font-mono font-semibold text-zinc-900 dark:text-zinc-100">
-                        {formatCurrency(inv.total_amount)}
-                      </td>
-                      <td className="py-4 px-4 text-right font-mono text-emerald-600 dark:text-emerald-400">
-                        {formatCurrency(inv.paid_amount)}
-                      </td>
-                      <td className="py-4 px-4 text-right font-mono font-bold text-amber-600 dark:text-amber-400">
-                        {formatCurrency(inv.due_amount)}
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        {getStatusBadge(inv.status, isOverdue)}
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Link
-                            href={`/invoices/${inv.id}`}
-                            className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 rounded-lg text-xs font-semibold transition-colors"
-                            aria-label={`View invoice #${inv.invoice_number}`}
-                          >
-                            <Eye className="h-3.5 w-3.5 mr-1" /> View
-                          </Link>
-                          <Link
-                            href={`/invoices/${inv.id}/print`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400 rounded-lg text-xs font-semibold transition-colors"
-                            aria-label={`Print invoice #${inv.invoice_number}`}
-                          >
-                            <Printer className="h-3.5 w-3.5 mr-1" /> Print
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {/* Invoices Table Streamed via Suspense Boundary */}
+      <Suspense key={`${search || ""}-${status || ""}`} fallback={<InvoicesTableSkeleton />}>
+        <InvoicesTableContent search={search} status={status} />
+      </Suspense>
     </div>
   );
 }

@@ -4,13 +4,40 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { BillingEngine } from "@/lib/billing/BillingEngine";
 
-export async function getInvoices(searchQuery?: string, statusFilter?: string) {
+export interface InvoiceListItem {
+  id: string;
+  invoice_number: string;
+  invoice_date: string;
+  due_date: string | null;
+  total_amount: number;
+  paid_amount: number;
+  due_amount: number;
+  status: string;
+  created_at: string;
+  customer: {
+    id: string;
+    first_name: string;
+    middle_name: string | null;
+    last_name: string;
+    customer_code: string | null;
+  } | null;
+}
+
+export async function getInvoices(searchQuery?: string, statusFilter?: string): Promise<InvoiceListItem[]> {
   const supabase = await createClient();
 
   let query = supabase
     .from("invoices")
     .select(`
-      *,
+      id,
+      invoice_number,
+      invoice_date,
+      due_date,
+      total_amount,
+      paid_amount,
+      due_amount,
+      status,
+      created_at,
       customer:customers(id, first_name, middle_name, last_name, customer_code)
     `)
     .order("created_at", { ascending: false });
@@ -33,10 +60,10 @@ export async function getInvoices(searchQuery?: string, statusFilter?: string) {
     throw new Error(error.message);
   }
 
-  let filtered = data || [];
+  let filtered = (data as unknown as InvoiceListItem[]) || [];
   if (searchQuery && searchQuery.trim()) {
     const q = searchQuery.toLowerCase().trim();
-    filtered = filtered.filter((inv: any) => {
+    filtered = filtered.filter((inv: InvoiceListItem) => {
       const invNum = inv.invoice_number?.toLowerCase() || "";
       const cust = inv.customer;
       const custName = cust

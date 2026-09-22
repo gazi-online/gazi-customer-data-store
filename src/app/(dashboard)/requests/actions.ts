@@ -91,65 +91,87 @@ export async function getServiceRequestDrawerData(requestId: string): Promise<Re
   }
 
   try {
-    // 1. Fetch narrow request details with joined customer, service, documents, and status history
-    const { data: row, error: fetchError } = await supabase
-      .from("customer_services")
-      .select(`
-        id,
-        request_number,
-        status,
-        priority,
-        application_reference,
-        portal_name,
-        notes,
-        rejection_reason,
-        amount,
-        payment_status,
-        service_date,
-        due_date,
-        created_at,
-        completed_at,
-        delivered_at,
-        archived_at,
-        customer:customers(
+    // 1. Fetch request details and linked invoices concurrently
+    const [requestRes, invItemRes] = await Promise.all([
+      supabase
+        .from("customer_services")
+        .select(`
           id,
-          customer_code,
-          first_name,
-          middle_name,
-          last_name,
-          phone
-        ),
-        service:services(
-          id,
-          service_code,
-          service_name,
-          category
-        ),
-        documents:service_request_documents(
-          id,
-          requirement_tag,
-          is_verified,
+          request_number,
+          status,
+          priority,
+          application_reference,
+          portal_name,
+          notes,
+          rejection_reason,
+          amount,
+          payment_status,
+          service_date,
+          due_date,
           created_at,
-          document:customer_documents(
+          completed_at,
+          delivered_at,
+          archived_at,
+          customer:customers(
             id,
-            document_type,
-            document_name,
-            source_filename,
-            status,
-            file_size,
-            uploaded_at
+            customer_code,
+            first_name,
+            middle_name,
+            last_name,
+            phone
+          ),
+          service:services(
+            id,
+            service_code,
+            service_name,
+            category
+          ),
+          documents:service_request_documents(
+            id,
+            requirement_tag,
+            is_verified,
+            created_at,
+            document:customer_documents(
+              id,
+              document_type,
+              document_name,
+              source_filename,
+              status,
+              file_size,
+              uploaded_at
+            )
+          ),
+          status_history:service_request_status_history(
+            id,
+            from_status,
+            to_status,
+            changed_by,
+            created_at
           )
-        ),
-        status_history:service_request_status_history(
+        `)
+        .eq("id", requestId)
+        .single(),
+
+      supabase
+        .from("invoice_items")
+        .select(`
           id,
-          from_status,
-          to_status,
-          changed_by,
-          created_at
-        )
-      `)
-      .eq("id", requestId)
-      .single();
+          invoice_id,
+          invoice:invoices(
+            id,
+            invoice_number,
+            status,
+            total_amount,
+            paid_amount,
+            due_amount,
+            invoice_date
+          )
+        `)
+        .eq("customer_service_id", requestId),
+    ]);
+
+    const { data: row, error: fetchError } = requestRes;
+    const { data: invItemRows, error: invError } = invItemRes;
 
     if (fetchError) {
       // Safe operational query failure without leaking Postgres internals
@@ -159,24 +181,6 @@ export async function getServiceRequestDrawerData(requestId: string): Promise<Re
     if (!row) {
       return { data: null, error: "Service request not found or access denied.", errorCode: "not_found" };
     }
-
-    // 2. Fetch linked invoices through invoice_items (supports 0, 1, or multiple linked invoices)
-    const { data: invItemRows, error: invError } = await supabase
-      .from("invoice_items")
-      .select(`
-        id,
-        invoice_id,
-        invoice:invoices(
-          id,
-          invoice_number,
-          status,
-          total_amount,
-          paid_amount,
-          due_amount,
-          invoice_date
-        )
-      `)
-      .eq("customer_service_id", requestId);
 
     if (invError) {
       // Non-fatal secondary query error; log technical code only without leaking PII
