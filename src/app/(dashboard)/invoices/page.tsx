@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { getInvoices, InvoiceListItem } from "./actions";
 import { Receipt, Plus, Search, Filter, AlertTriangle, Eye, CheckCircle2, Clock, XCircle, Printer } from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -117,17 +119,19 @@ async function InvoicesTableContent({
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden">
       {invoices.length === 0 ? (
-        <div className="p-12 text-center">
-          <Receipt className="h-12 w-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">No invoices found</h3>
-          <p className="text-sm text-zinc-500 mt-1">Try clearing filters or create a new invoice.</p>
-          <Link
-            href="/invoices/new"
-            className="mt-4 inline-flex items-center px-4 py-2 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors shadow-xs"
-          >
-            <Plus className="mr-1.5 h-4 w-4" /> Create Invoice
-          </Link>
-        </div>
+        <EmptyState
+          icon={Receipt}
+          title="No invoices found"
+          description="Try clearing filters or create a new invoice."
+          action={
+            <Link
+              href="/invoices/new"
+              className="inline-flex items-center px-4 py-2.5 min-h-[44px] bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors shadow-xs"
+            >
+              <Plus className="mr-1.5 h-4 w-4" /> Create Invoice
+            </Link>
+          }
+        />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm border-collapse">
@@ -239,24 +243,21 @@ export default async function InvoicesPage({
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-150">
       {/* Page Title & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-zinc-50 flex items-center">
-            <Receipt className="mr-3 h-8 w-8 text-violet-600" />
-            Invoices Management
-          </h1>
-          <p className="text-slate-500 dark:text-zinc-400 text-sm mt-1">
-            Authoritative billing records, status tracking & payment reconciliations.
-          </p>
-        </div>
-        <Link
-          href="/invoices/new"
-          className="inline-flex items-center justify-center px-5 py-2.5 bg-violet-600 hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-white font-bold text-sm rounded-xl shadow-xs hover:shadow-sm transition-all"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Create Invoice
-        </Link>
-      </div>
+      <PageHeader
+        title="Invoices Management"
+        description="Authoritative billing records, status tracking & payment reconciliations."
+        icon={Receipt}
+        iconVariant="plain"
+        actions={
+          <Link
+            href="/invoices/new"
+            className="inline-flex items-center justify-center px-5 py-2.5 min-h-[44px] bg-violet-600 hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-white font-bold text-sm rounded-xl shadow-xs hover:shadow-sm transition-all"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Create Invoice
+          </Link>
+        }
+      />
 
       {/* Filter and Search Toolbar */}
       <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">

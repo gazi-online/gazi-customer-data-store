@@ -22,6 +22,7 @@ export function ServiceForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { register, handleSubmit, formState: { errors } } = useForm<any>({
     resolver: zodResolver(serviceSchema),
     defaultValues: service || {
@@ -71,7 +72,12 @@ export function ServiceForm({
           <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
             {service?.id ? "Edit Service" : "Add New Service"}
           </h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors p-1">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close modal"
+            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -163,7 +169,7 @@ export function ServiceForm({
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50"
+            className="px-4 py-2 min-h-[44px] sm:min-h-0 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
           >
             Cancel
           </button>
@@ -171,7 +177,7 @@ export function ServiceForm({
             type="submit"
             form="service-form"
             disabled={isSubmitting}
-            className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium text-sm disabled:opacity-70"
+            className="inline-flex items-center justify-center px-4 py-2 min-h-[44px] sm:min-h-0 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium text-sm disabled:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             {isSubmitting ? (
               <span className="flex items-center">

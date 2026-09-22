@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, Filter, Edit, Eye, AlertCircle, RefreshCw } from "lucide-react";
+import { Search, Filter, Edit, Eye } from "lucide-react";
 import { CustomerListRow } from "@/types/customer";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -9,6 +9,9 @@ import { CustomerDeleteButton } from "@/components/customers/CustomerDeleteButto
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 import { getCustomerListRows } from "@/app/(dashboard)/customers/actions";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { InlineErrorState } from "@/components/ui/InlineErrorState";
+import { Users } from "lucide-react";
 
 interface CustomerTableProps {
   initialCustomers?: CustomerListRow[];
@@ -129,29 +132,24 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
               ))
             ) : isError ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-zinc-500">
-                  <div className="flex flex-col items-center justify-center space-y-2">
-                    <AlertCircle className="h-6 w-6 text-red-500" />
-                    <p className="font-medium text-zinc-900 dark:text-zinc-300">Unable to load customer list</p>
-                    <p className="text-xs text-zinc-500">Please check your connection and try again.</p>
-                    <button
-                      type="button"
-                      onClick={() => refetch()}
-                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 hover:bg-violet-100 transition-colors"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      <span>Retry</span>
-                    </button>
-                  </div>
+                <td colSpan={5} className="px-6 py-12">
+                  <InlineErrorState
+                    title="Unable to load customer list"
+                    message="Please check your connection and try again."
+                    onRetry={() => refetch()}
+                    bordered={false}
+                  />
                 </td>
               </tr>
             ) : visibleCustomers.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-zinc-500">
-                  <div className="flex flex-col items-center justify-center space-y-2">
-                    <p className="font-medium text-zinc-900 dark:text-zinc-300">No customers found</p>
-                    <p className="text-xs">Try adjusting your search or filter to find what you&apos;re looking for.</p>
-                  </div>
+                <td colSpan={5} className="px-6 py-12">
+                  <EmptyState
+                    icon={Users}
+                    title="No customers found"
+                    description="Try adjusting your search or filter to find what you're looking for."
+                    bordered={false}
+                  />
                 </td>
               </tr>
             ) : (
@@ -180,10 +178,20 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end space-x-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                      <Link href={`/customers/${customer.id}`} className="p-1 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors" title="View Profile">
+                      <Link
+                        href={`/customers/${customer.id}`}
+                        className="p-1.5 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                        title="View Profile"
+                        aria-label={`View profile for ${customer.first_name} ${customer.last_name}`}
+                      >
                         <Eye className="h-4 w-4" />
                       </Link>
-                      <Link href={`/customers/${customer.id}/edit`} className="p-1 text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors" title="Edit Customer">
+                      <Link
+                        href={`/customers/${customer.id}/edit`}
+                        className="p-1.5 text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                        title="Edit Customer"
+                        aria-label={`Edit customer ${customer.first_name} ${customer.last_name}`}
+                      >
                         <Edit className="h-4 w-4" />
                       </Link>
                       <CustomerDeleteButton
@@ -225,23 +233,22 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
             </div>
           ))
         ) : isError ? (
-          <div className="p-8 text-center text-zinc-500 flex flex-col items-center justify-center space-y-2">
-            <AlertCircle className="h-6 w-6 text-red-500" />
-            <p className="font-medium text-zinc-900 dark:text-zinc-300">Unable to load customer list</p>
-            <p className="text-xs text-zinc-500">Please check your connection and try again.</p>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 hover:bg-violet-100 transition-colors"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              <span>Retry</span>
-            </button>
+          <div className="p-4">
+            <InlineErrorState
+              title="Unable to load customer list"
+              message="Please check your connection and try again."
+              onRetry={() => refetch()}
+              bordered={false}
+            />
           </div>
         ) : visibleCustomers.length === 0 ? (
-          <div className="p-8 text-center text-zinc-500">
-            <p className="font-medium text-zinc-900 dark:text-zinc-300">No customers found</p>
-            <p className="text-xs mt-1">Try adjusting your search or filter to find what you&apos;re looking for.</p>
+          <div className="p-4">
+            <EmptyState
+              icon={Users}
+              title="No customers found"
+              description="Try adjusting your search or filter to find what you're looking for."
+              bordered={false}
+            />
           </div>
         ) : (
           visibleCustomers.map((customer) => (
@@ -289,14 +296,16 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
               <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-end gap-2">
                 <Link 
                   href={`/customers/${customer.id}`} 
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[38px] text-xs font-semibold rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[44px] sm:min-h-0 text-xs font-semibold rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                  aria-label={`View profile for ${customer.first_name} ${customer.last_name}`}
                 >
                   <Eye className="h-3.5 w-3.5" />
                   <span>View</span>
                 </Link>
                 <Link 
                   href={`/customers/${customer.id}/edit`} 
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[38px] text-xs font-semibold rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[44px] sm:min-h-0 text-xs font-semibold rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                  aria-label={`Edit customer ${customer.first_name} ${customer.last_name}`}
                 >
                   <Edit className="h-3.5 w-3.5" />
                   <span>Edit</span>

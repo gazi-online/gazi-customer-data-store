@@ -17,8 +17,7 @@ import {
   Loader2, 
   User, 
   X,
-  RefreshCw,
-  AlertCircle
+  RefreshCw
 } from "lucide-react";
 import { getDocumentVaultRows, deleteCustomerDocument, getDocumentSignedUrl } from "./actions";
 import { getCustomerLookupRows } from "../customers/actions";
@@ -30,6 +29,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { InlineErrorState } from "@/components/ui/InlineErrorState";
 
 const DOCUMENT_TYPES = [
   "All Types",
@@ -193,38 +195,31 @@ function DocumentsContent() {
   return (
     <div className="space-y-5 sm:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-150 pb-12 w-full max-w-full overflow-x-hidden">
       {/* Page Header & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-violet-50 dark:bg-violet-950/50 border border-violet-100 dark:border-violet-900/40 flex items-center justify-center text-violet-600 dark:text-violet-400 shrink-0 shadow-xs">
-            <FileText className="h-5 w-5 sm:h-5.5 sm:w-5.5" />
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              Documents Vault
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-              Manage, view, and store private KYC and customer documents securely.
-            </p>
-          </div>
-        </div>
+      <PageHeader
+        title="Documents Vault"
+        description="Manage, view, and store private KYC and customer documents securely."
+        icon={FileText}
+        iconVariant="badge"
+        actions={
+          <>
+            <button
+              onClick={() => refetch()}
+              className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700/50 rounded-xl text-sm font-medium transition-colors shadow-xs"
+              title="Refresh documents list"
+              aria-label="Refresh documents list"
+            >
+              <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+            </button>
 
-        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-          <button
-            onClick={() => refetch()}
-            className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700/50 rounded-xl text-sm font-medium transition-colors shadow-xs"
-            title="Refresh documents list"
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-          </button>
-
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="flex-1 sm:flex-initial px-4 py-2.5 min-h-[44px] bg-violet-600 hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center shadow-xs"
-          >
-            <Plus className="h-4 w-4 mr-1.5 shrink-0" /> Upload Document
-          </button>
-        </div>
-      </div>
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="flex-1 sm:flex-initial px-4 py-2.5 min-h-[44px] bg-violet-600 hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center shadow-xs"
+            >
+              <Plus className="h-4 w-4 mr-1.5 shrink-0" /> Upload Document
+            </button>
+          </>
+        }
+      />
 
       {/* Metrics Banner */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -403,36 +398,31 @@ function DocumentsContent() {
           <p className="text-sm text-zinc-500">Loading secure documents...</p>
         </div>
       ) : isError ? (
-        <div className="py-16 text-center border border-red-200 dark:border-red-900/40 rounded-2xl bg-white dark:bg-zinc-900">
-          <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-2" />
-          <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Unable to load document vault</h3>
-          <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
-            Please check your connection and try again.
-          </p>
-          <button
-            onClick={() => refetch()}
-            className="mt-4 px-4 py-2 bg-violet-600 hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-white rounded-xl text-xs font-semibold transition-colors inline-flex items-center gap-1.5 shadow-xs"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            <span>Retry</span>
-          </button>
-        </div>
+        <InlineErrorState
+          title="Unable to load document vault"
+          message="Please check your connection and try again."
+          onRetry={() => refetch()}
+          bordered
+        />
       ) : documents.length === 0 ? (
-        <div className="py-16 text-center border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-900">
-          <FileText className="h-12 w-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
-          <h3 className="text-base font-semibold text-zinc-800 dark:text-zinc-200">No documents found</h3>
-          <p className="text-xs text-zinc-400 mt-1 max-w-sm mx-auto">
-            {searchQuery || selectedDocType !== "All Types" || statusFilter !== "active"
+        <EmptyState
+          icon={FileText}
+          title="No documents found"
+          description={
+            searchQuery || selectedDocType !== "All Types" || statusFilter !== "active"
               ? "No customer documents match your filter criteria. Try adjusting your search."
-              : "Start by uploading Aadhaar, PAN, Voter ID, or other customer documents securely."}
-          </p>
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="mt-4 px-4 py-2 bg-violet-600 hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-white rounded-xl text-sm font-medium transition-colors inline-flex items-center shadow-xs"
-          >
-            <Plus className="h-4 w-4 mr-1.5" /> Upload Document
-          </button>
-        </div>
+              : "Start by uploading Aadhaar, PAN, Voter ID, or other customer documents securely."
+          }
+          action={
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="px-4 py-2.5 min-h-[44px] bg-violet-600 hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-white rounded-xl text-sm font-medium transition-colors inline-flex items-center shadow-xs"
+            >
+              <Plus className="h-4 w-4 mr-1.5" /> Upload Document
+            </button>
+          }
+          bordered
+        />
       ) : viewMode === "grid" ? (
         <DocumentGrid
           documents={documents}

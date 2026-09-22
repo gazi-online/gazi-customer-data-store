@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 interface CommunicationCenterViewProps {
   initialQueue?: ContactQueueItem[];
@@ -221,26 +222,21 @@ export function CommunicationCenterView({
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
-            <MessageSquare className="h-6 w-6 text-violet-600" />
-            Communication & Reminder Center
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Actionable daily outreach queue for follow-ups, document renewals, and service collections.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Communication & Reminder Center"
+        description="Actionable daily outreach queue for follow-ups, document renewals, and service collections."
+        icon={MessageSquare}
+        iconVariant="badge"
+        actions={
           <button
             onClick={() => refetchQueue()}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold rounded-xl shadow-xs transition-colors"
+            className="inline-flex items-center gap-2 px-3.5 py-2 min-h-[44px] bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold rounded-xl shadow-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isQueueFetching ? "animate-spin" : ""}`} />
             Refresh Queue
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">

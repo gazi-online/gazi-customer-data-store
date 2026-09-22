@@ -6,6 +6,8 @@ import {
 import { RequestsDeskView } from "@/components/requests/RequestsDeskView";
 import { ClipboardList } from "lucide-react";
 
+import { PageHeader } from "@/components/ui/PageHeader";
+
 export const dynamic = "force-dynamic";
 
 interface RequestsPageProps {
@@ -24,19 +26,12 @@ export default async function RequestsPage({ searchParams }: RequestsPageProps) 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-150">
       {/* Page Title & Operational Subtitle */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-zinc-50 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-xs">
-              <ClipboardList className="h-5 w-5" />
-            </div>
-            Central Requests Desk
-          </h1>
-          <p className="text-slate-500 dark:text-zinc-400 text-sm mt-1">
-            Centralized operational command center to search, track, and manage customer service requests.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Central Requests Desk"
+        description="Centralized operational command center to search, track, and manage customer service requests."
+        icon={ClipboardList}
+        iconVariant="gradient"
+      />
 
       {/* Main Interactive Desk View */}
       <RequestsDeskView

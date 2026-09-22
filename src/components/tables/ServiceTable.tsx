@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Edit, Plus, Briefcase, AlertCircle, RefreshCw } from "lucide-react";
+import { Search, Edit, Plus, Briefcase } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ServiceFormData } from "@/app/(dashboard)/services/schema";
 import { Service } from "@/types/service";
@@ -9,6 +9,8 @@ import { ServiceForm } from "@/components/forms/ServiceForm";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 import { getServices } from "@/app/(dashboard)/services/actions";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { InlineErrorState } from "@/components/ui/InlineErrorState";
 
 interface ServiceTableProps {
   initialServices?: Service[];
@@ -174,42 +176,34 @@ export function ServiceTable({ initialServices }: ServiceTableProps = {}) {
               ))
             ) : isError ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                  <div className="flex flex-col items-center justify-center space-y-2 max-w-sm mx-auto">
-                    <AlertCircle className="h-8 w-8 text-red-500" />
-                    <p className="font-semibold text-slate-900 text-base">Unable to load service catalog</p>
-                    <p className="text-xs text-slate-400">
-                      Please check your connection and try again.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => refetch()}
-                      className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      <span>Retry</span>
-                    </button>
-                  </div>
+                <td colSpan={6} className="px-6 py-12">
+                  <InlineErrorState
+                    title="Unable to load service catalog"
+                    message="Please check your connection and try again."
+                    onRetry={() => refetch()}
+                    bordered={false}
+                  />
                 </td>
               </tr>
             ) : services.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                  <div className="flex flex-col items-center justify-center space-y-2 max-w-sm mx-auto">
-                    <Briefcase className="h-8 w-8 text-slate-300" />
-                    <p className="font-semibold text-slate-900 text-base">No services found</p>
-                    <p className="text-xs text-slate-400">
-                      Try adjusting your search or add a new service to the catalog.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={openAddForm}
-                      className="mt-2 inline-flex items-center justify-center px-3.5 py-2 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors"
-                    >
-                      <Plus className="mr-1.5 h-3.5 w-3.5 shrink-0" />
-                      Add New Service
-                    </button>
-                  </div>
+                <td colSpan={6} className="px-6 py-12">
+                  <EmptyState
+                    icon={Briefcase}
+                    title="No services found"
+                    description="Try adjusting your search or add a new service to the catalog."
+                    bordered={false}
+                    action={
+                      <button
+                        type="button"
+                        onClick={openAddForm}
+                        className="inline-flex items-center justify-center px-4 py-2 min-h-[44px] sm:min-h-0 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                      >
+                        <Plus className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                        <span>Add New Service</span>
+                      </button>
+                    }
+                  />
                 </td>
               </tr>
             ) : (
@@ -258,7 +252,7 @@ export function ServiceTable({ initialServices }: ServiceTableProps = {}) {
                     <button
                       type="button"
                       onClick={() => openEditForm(service)}
-                      className="p-2 min-h-[38px] min-w-[38px] inline-flex items-center justify-center text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 group-hover:text-slate-600"
+                      className="p-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 group-hover:text-slate-600"
                       title="Edit Service"
                       aria-label={`Edit ${service.service_name}`}
                     >
@@ -297,36 +291,32 @@ export function ServiceTable({ initialServices }: ServiceTableProps = {}) {
             </div>
           ))
         ) : isError ? (
-          <div className="p-8 text-center text-slate-500 flex flex-col items-center justify-center space-y-2">
-            <AlertCircle className="h-8 w-8 text-red-500" />
-            <p className="font-semibold text-slate-900 text-sm">Unable to load service catalog</p>
-            <p className="text-xs text-slate-400">
-              Please check your connection and try again.
-            </p>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              <span>Retry</span>
-            </button>
+          <div className="p-4">
+            <InlineErrorState
+              title="Unable to load service catalog"
+              message="Please check your connection and try again."
+              onRetry={() => refetch()}
+              bordered={false}
+            />
           </div>
         ) : services.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 flex flex-col items-center justify-center space-y-2">
-            <Briefcase className="h-8 w-8 text-slate-300" />
-            <p className="font-semibold text-slate-900 text-sm">No services found</p>
-            <p className="text-xs text-slate-400">
-              Try adjusting your search or add a new service to the catalog.
-            </p>
-            <button
-              type="button"
-              onClick={openAddForm}
-              className="mt-2 inline-flex items-center justify-center px-4 py-2.5 min-h-[44px] text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors"
-            >
-              <Plus className="mr-1.5 h-4 w-4 shrink-0" />
-              Add New Service
-            </button>
+          <div className="p-4">
+            <EmptyState
+              icon={Briefcase}
+              title="No services found"
+              description="Try adjusting your search or add a new service to the catalog."
+              bordered={false}
+              action={
+                <button
+                  type="button"
+                  onClick={openAddForm}
+                  className="inline-flex items-center justify-center px-4 py-2.5 min-h-[44px] text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                  <span>Add New Service</span>
+                </button>
+              }
+            />
           </div>
         ) : (
           services.map((service) => (

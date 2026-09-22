@@ -13,6 +13,8 @@ import {
 import { RecordPaymentModal } from "./RecordPaymentModal";
 import { voidPayment, refundPayment, getPaymentFormOptions, PaymentListItem, PaymentFormCustomerOption, PaymentFormInvoiceOption } from "@/app/(dashboard)/payments/actions";
 import { toast } from "sonner";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface PaymentsViewProps {
   payments: PaymentListItem[];
@@ -121,25 +123,21 @@ export function PaymentsView({
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-150">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-zinc-50 flex items-center">
-            <CreditCard className="mr-3 h-8 w-8 text-emerald-600" />
-            Payments & Collections
-          </h1>
-          <p className="text-slate-500 dark:text-zinc-400 text-sm mt-1">
-            Payment audit trail, atomic allocation logs & void/refund management.
-          </p>
-        </div>
-        <button
-          onClick={handleOpenRecordModal}
-          disabled={isFetchingOptions}
-          className="inline-flex items-center justify-center px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 text-white font-bold text-sm rounded-xl shadow-xs hover:shadow-sm transition-all"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          {isFetchingOptions ? "Loading..." : "Record Payment"}
-        </button>
-      </div>
+      <PageHeader
+        title="Payments & Collections"
+        description="Payment audit trail, atomic allocation logs & void/refund management."
+        icon={<CreditCard className="mr-3 h-8 w-8 text-emerald-600 shrink-0" />}
+        actions={
+          <button
+            onClick={handleOpenRecordModal}
+            disabled={isFetchingOptions}
+            className="inline-flex items-center justify-center px-5 py-2.5 min-h-[44px] bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 text-white font-bold text-sm rounded-xl shadow-xs hover:shadow-sm transition-all"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {isFetchingOptions ? "Loading..." : "Record Payment"}
+          </button>
+        }
+      />
 
       {/* Filter and Search Bar */}
       <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col md:flex-row gap-4 justify-between items-center">
@@ -195,18 +193,20 @@ export function PaymentsView({
       {/* Payments Table */}
       <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
         {payments.length === 0 ? (
-          <div className="p-12 text-center">
-            <CreditCard className="h-12 w-12 text-slate-300 dark:text-zinc-700 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-slate-900 dark:text-zinc-100">No payments found</h3>
-            <p className="text-sm text-slate-500 mt-1">Record a payment or change search filters.</p>
-            <button
-              onClick={handleOpenRecordModal}
-              disabled={isFetchingOptions}
-              className="mt-4 inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 text-white rounded-xl text-sm font-semibold transition-colors shadow-xs"
-            >
-              <Plus className="mr-1.5 h-4 w-4" /> {isFetchingOptions ? "Loading..." : "Record Payment"}
-            </button>
-          </div>
+          <EmptyState
+            icon={CreditCard}
+            title="No payments found"
+            description="Record a payment or change search filters."
+            action={
+              <button
+                onClick={handleOpenRecordModal}
+                disabled={isFetchingOptions}
+                className="inline-flex items-center px-4 py-2.5 min-h-[44px] bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 text-white rounded-xl text-sm font-semibold transition-colors shadow-xs"
+              >
+                <Plus className="mr-1.5 h-4 w-4" /> {isFetchingOptions ? "Loading..." : "Record Payment"}
+              </button>
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm border-collapse">

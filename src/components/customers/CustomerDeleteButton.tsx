@@ -97,7 +97,7 @@ export function CustomerDeleteButton({
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="p-1 text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded"
+          className="p-1.5 min-h-[36px] min-w-[36px] sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
           title="Delete Customer"
           aria-label="Delete Customer"
         >
@@ -107,7 +107,7 @@ export function CustomerDeleteButton({
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="inline-flex items-center px-3.5 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 rounded-lg text-sm font-medium transition-colors shadow-sm"
+          className="inline-flex items-center px-3.5 py-2 min-h-[44px] sm:min-h-0 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 rounded-lg text-sm font-medium transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
         >
           <Trash2 className="mr-2 h-4 w-4" />
           Delete Customer
@@ -127,7 +127,8 @@ export function CustomerDeleteButton({
                 type="button"
                 onClick={() => !isDeleting && setIsOpen(false)}
                 disabled={isDeleting}
-                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded disabled:opacity-50"
+                aria-label="Close dialog"
+                className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -142,7 +143,7 @@ export function CustomerDeleteButton({
                 type="button"
                 onClick={() => setIsOpen(false)}
                 disabled={isDeleting}
-                className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                className="px-4 py-2 min-h-[44px] sm:min-h-0 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
               >
                 Cancel
               </button>
@@ -150,7 +151,7 @@ export function CustomerDeleteButton({
                 type="button"
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm disabled:opacity-50"
+                className="inline-flex items-center justify-center px-4 py-2 min-h-[44px] sm:min-h-0 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
               >
                 {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Delete Customer

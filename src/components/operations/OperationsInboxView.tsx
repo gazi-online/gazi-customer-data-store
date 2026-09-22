@@ -22,6 +22,7 @@ import type {
 import { getOperationsInboxAlerts } from "@/app/(dashboard)/operations/actions";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 interface OperationsInboxViewProps {
   initialSummary?: OperationsInboxSummary;
@@ -88,33 +89,30 @@ export function OperationsInboxView({ initialSummary }: OperationsInboxViewProps
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
-            <Bell className="h-6 w-6 text-violet-600" />
-            Operations Inbox & Action Center
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Real-time shop operational alerts derived across follow-ups, document expiries, blocked requests, and overdue invoices.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/communications"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
-          >
-            <MessageSquare className="h-3.5 w-3.5" />
-            Outreach Queue
-          </Link>
-          <button
-            onClick={() => refetch()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold rounded-xl shadow-xs transition-colors"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Operations Inbox & Action Center"
+        description="Real-time shop operational alerts derived across follow-ups, document expiries, blocked requests, and overdue invoices."
+        icon={Bell}
+        iconVariant="badge"
+        actions={
+          <>
+            <Link
+              href="/communications"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[44px] bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              Outreach Queue
+            </Link>
+            <button
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[44px] bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold rounded-xl shadow-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+          </>
+        }
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
