@@ -98,7 +98,7 @@ export default async function CustomerProfilePage({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
         <Link 
           href="/customers" 
-          className="inline-flex items-center text-xs sm:text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors min-h-[40px] sm:min-h-0"
+          className="inline-flex items-center text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition-colors min-h-[40px] sm:min-h-0"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Customers
@@ -106,7 +106,7 @@ export default async function CustomerProfilePage({
         <div className="flex items-center gap-2.5 flex-wrap">
           <Link 
             href={`/customers/${id}/edit`} 
-            className="inline-flex items-center justify-center px-4 py-2 min-h-[44px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs sm:text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-xs"
+            className="inline-flex items-center justify-center px-4 py-2 min-h-[44px] bg-white dark:bg-zinc-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors shadow-xs"
           >
             <Edit className="mr-1.5 h-4 w-4" />
             Edit Profile
@@ -123,26 +123,26 @@ export default async function CustomerProfilePage({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
         {/* Left Column - Main Profile Card */}
         <div className="lg:col-span-1 space-y-5 sm:space-y-6">
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col items-center text-center relative overflow-hidden">
+          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col items-center text-center relative overflow-hidden">
             {/* Background accent */}
-            <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-blue-50 to-white dark:from-blue-900/20 dark:to-zinc-900 z-0"></div>
+            <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-violet-50/80 to-white dark:from-violet-950/20 dark:to-zinc-900 z-0"></div>
             
             <div className="relative z-10">
               {displayPhotoUrl ? (
                 <img src={displayPhotoUrl} alt="Profile" className="h-28 w-28 sm:h-32 sm:w-32 rounded-full object-cover border-4 border-white dark:border-zinc-800 shadow-sm" />
               ) : (
-                <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 text-3xl sm:text-4xl font-bold border-4 border-white dark:border-zinc-800 shadow-sm">
+                <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center text-violet-700 dark:text-violet-300 text-3xl sm:text-4xl font-bold border-4 border-white dark:border-zinc-800 shadow-sm">
                   {customer.first_name[0]}{customer.last_name[0]}
                 </div>
               )}
             </div>
             
-            <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-50 mt-3 sm:mt-4 relative z-10 break-words max-w-full">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 mt-3 sm:mt-4 relative z-10 break-words max-w-full">
               {customer.first_name} {customer.middle_name ? `${customer.middle_name} ` : ""}{customer.last_name}
             </h1>
             
             {customer.customer_code && (
-              <p className="text-zinc-500 dark:text-zinc-400 font-mono text-xs sm:text-sm mt-1 flex items-center justify-center relative z-10 break-all">
+              <p className="text-slate-500 dark:text-slate-400 font-mono text-xs sm:text-sm mt-1 flex items-center justify-center relative z-10 break-all">
                 <Hash className="h-3 w-3 mr-1 shrink-0" />
                 {customer.customer_code}
               </p>

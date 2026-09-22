@@ -177,7 +177,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="mt-2 w-full h-12 rounded-[13px] bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 active:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 flex items-center justify-center gap-2 transition-all duration-150 shadow-sm hover:shadow-md hover:shadow-blue-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2"
+            className="mt-2 w-full h-12 rounded-[13px] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 active:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 flex items-center justify-center gap-2 transition-all duration-150 shadow-sm hover:shadow-md hover:shadow-violet-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
           >
             {isLoading ? (
               <>

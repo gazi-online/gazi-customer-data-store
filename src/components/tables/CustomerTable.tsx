@@ -63,26 +63,26 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
   };
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-150">
+    <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs animate-in fade-in slide-in-from-bottom-4 duration-150">
       {/* Toolbar */}
-      <div className="p-3.5 sm:p-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-50/50 dark:bg-zinc-900/50">
+      <div className="p-3.5 sm:p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-900/50">
         <form onSubmit={handleSearch} className="relative w-full sm:max-w-md">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
             placeholder="Search customers..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 transition-shadow"
+            className="w-full pl-10 pr-4 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 transition-shadow"
           />
         </form>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Filter className="h-4 w-4 text-zinc-500 shrink-0" />
+          <Filter className="h-4 w-4 text-slate-500 shrink-0" />
           <select
             onChange={handleStatusChange}
             defaultValue={searchParams.get("status") || "all"}
-            className="w-full sm:w-auto py-2.5 sm:py-2 pl-3 pr-8 min-h-[44px] sm:min-h-0 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer"
+            className="w-full sm:w-auto py-2.5 sm:py-2 pl-3 pr-8 min-h-[44px] sm:min-h-0 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer"
           >
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
@@ -95,7 +95,7 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
       {/* Desktop Table View */}
       <div className="overflow-x-auto hidden md:block">
         <table className="w-full text-sm text-left">
-          <thead className="bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400">
+          <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400">
             <tr>
               <th className="px-6 py-3 font-medium">Name</th>
               <th className="px-6 py-3 font-medium">Contact</th>
@@ -104,7 +104,7 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
               <th className="px-6 py-3 font-medium text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={`customer-skeleton-${i}`} className="animate-pulse">
@@ -156,15 +156,15 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
               </tr>
             ) : (
               visibleCustomers.map((customer) => (
-                <tr key={customer.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
+                <tr key={customer.id} className="hover:bg-slate-50/70 dark:hover:bg-zinc-800/50 transition-colors group">
                   <td className="px-6 py-4">
-                    <Link href={`/customers/${customer.id}`} className="font-medium text-zinc-900 dark:text-zinc-50 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                    <Link href={`/customers/${customer.id}`} className="font-medium text-slate-900 dark:text-zinc-50 hover:text-violet-600 dark:hover:text-violet-400 transition-colors">
                       {customer.first_name} {customer.middle_name ? `${customer.middle_name} ` : ""}{customer.last_name}
                     </Link>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-zinc-600 dark:text-zinc-300">{customer.phone}</div>
-                    {customer.email && <div className="text-xs text-zinc-400">{customer.email}</div>}
+                    <div className="text-slate-600 dark:text-zinc-300">{customer.phone}</div>
+                    {customer.email && <div className="text-xs text-slate-400">{customer.email}</div>}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -175,12 +175,12 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
                       {customer.status.charAt(0).toUpperCase() + customer.status.slice(1)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">
+                  <td className="px-6 py-4 text-slate-500 dark:text-zinc-400">
                     {new Date(customer.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end space-x-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                      <Link href={`/customers/${customer.id}`} className="p-1 text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="View Profile">
+                      <Link href={`/customers/${customer.id}`} className="p-1 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors" title="View Profile">
                         <Eye className="h-4 w-4" />
                       </Link>
                       <Link href={`/customers/${customer.id}/edit`} className="p-1 text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors" title="Edit Customer">

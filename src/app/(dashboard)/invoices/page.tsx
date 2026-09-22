@@ -123,7 +123,7 @@ async function InvoicesTableContent({
           <p className="text-sm text-zinc-500 mt-1">Try clearing filters or create a new invoice.</p>
           <Link
             href="/invoices/new"
-            className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
+            className="mt-4 inline-flex items-center px-4 py-2 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors shadow-xs"
           >
             <Plus className="mr-1.5 h-4 w-4" /> Create Invoice
           </Link>
@@ -163,7 +163,7 @@ async function InvoicesTableContent({
                     key={inv.id}
                     className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors group"
                   >
-                    <td className="py-4 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">
+                    <td className="py-4 px-4 font-mono font-bold text-violet-600 dark:text-violet-400">
                       <Link href={`/invoices/${inv.id}`} className="hover:underline">
                         #{inv.invoice_number}
                       </Link>
@@ -172,7 +172,7 @@ async function InvoicesTableContent({
                       {inv.customer ? (
                         <Link
                           href={`/customers/${inv.customer.id}`}
-                          className="hover:text-blue-600 transition-colors"
+                          className="hover:text-violet-600 transition-colors"
                         >
                           {customerName}
                         </Link>
@@ -202,7 +202,7 @@ async function InvoicesTableContent({
                       <div className="flex items-center justify-end gap-2">
                         <Link
                           href={`/invoices/${inv.id}`}
-                          className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 rounded-lg text-xs font-semibold transition-colors"
+                          className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-900/30 dark:hover:text-violet-400 rounded-lg text-xs font-semibold transition-colors"
                           aria-label={`View invoice #${inv.invoice_number}`}
                         >
                           <Eye className="h-3.5 w-3.5 mr-1" /> View
@@ -241,17 +241,17 @@ export default async function InvoicesPage({
       {/* Page Title & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 flex items-center">
-            <Receipt className="mr-3 h-8 w-8 text-blue-600" />
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-zinc-50 flex items-center">
+            <Receipt className="mr-3 h-8 w-8 text-violet-600" />
             Invoices Management
           </h1>
-          <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">
+          <p className="text-slate-500 dark:text-zinc-400 text-sm mt-1">
             Authoritative billing records, status tracking & payment reconciliations.
           </p>
         </div>
         <Link
           href="/invoices/new"
-          className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition-all"
+          className="inline-flex items-center justify-center px-5 py-2.5 bg-violet-600 hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-white font-bold text-sm rounded-xl shadow-xs hover:shadow-sm transition-all"
         >
           <Plus className="mr-2 h-4 w-4" />
           Create Invoice
@@ -268,7 +268,7 @@ export default async function InvoicesPage({
               name="search"
               defaultValue={search || ""}
               placeholder="Search by invoice # or customer name..."
-              className="w-full pl-10 pr-4 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-zinc-900 dark:text-zinc-100"
+              className="w-full pl-10 pr-4 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 text-zinc-900 dark:text-zinc-100"
             />
           </div>
 
@@ -277,7 +277,7 @@ export default async function InvoicesPage({
             <select
               name="status"
               defaultValue={status || "all"}
-              className="px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-zinc-900 dark:text-zinc-100"
+              className="px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 text-zinc-900 dark:text-zinc-100"
             >
               <option value="all">All Statuses</option>
               <option value="draft">Draft</option>

@@ -195,14 +195,14 @@ function DocumentsContent() {
       {/* Page Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 shadow-xs">
+          <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-violet-50 dark:bg-violet-950/50 border border-violet-100 dark:border-violet-900/40 flex items-center justify-center text-violet-600 dark:text-violet-400 shrink-0 shadow-xs">
             <FileText className="h-5 w-5 sm:h-5.5 sm:w-5.5" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
               Documents Vault
             </h1>
-            <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
               Manage, view, and store private KYC and customer documents securely.
             </p>
           </div>
@@ -219,7 +219,7 @@ function DocumentsContent() {
 
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            className="flex-1 sm:flex-initial px-4 py-2.5 min-h-[44px] bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center shadow-xs"
+            className="flex-1 sm:flex-initial px-4 py-2.5 min-h-[44px] bg-violet-600 hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center shadow-xs"
           >
             <Plus className="h-4 w-4 mr-1.5 shrink-0" /> Upload Document
           </button>
@@ -231,7 +231,7 @@ function DocumentsContent() {
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3.5 sm:p-4 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] sm:text-xs font-semibold text-zinc-500 uppercase tracking-wider">Total Documents</span>
-            <FileText className="h-4 w-4 text-blue-600" />
+            <FileText className="h-4 w-4 text-violet-600" />
           </div>
           <p className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1.5 sm:mt-2">{stats.total}</p>
           <span className="text-[10px] sm:text-xs text-zinc-400">Across all customers</span>
@@ -399,7 +399,7 @@ function DocumentsContent() {
       {/* Main Content Area */}
       {isLoading ? (
         <div className="py-24 text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
+          <Loader2 className="h-8 w-8 animate-spin text-violet-600 mx-auto mb-2" />
           <p className="text-sm text-zinc-500">Loading secure documents...</p>
         </div>
       ) : isError ? (
@@ -411,7 +411,7 @@ function DocumentsContent() {
           </p>
           <button
             onClick={() => refetch()}
-            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-colors inline-flex items-center gap-1.5 shadow-sm"
+            className="mt-4 px-4 py-2 bg-violet-600 hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-white rounded-xl text-xs font-semibold transition-colors inline-flex items-center gap-1.5 shadow-xs"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             <span>Retry</span>
@@ -428,7 +428,7 @@ function DocumentsContent() {
           </p>
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors inline-flex items-center shadow-sm"
+            className="mt-4 px-4 py-2 bg-violet-600 hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-white rounded-xl text-sm font-medium transition-colors inline-flex items-center shadow-xs"
           >
             <Plus className="h-4 w-4 mr-1.5" /> Upload Document
           </button>

@@ -123,18 +123,18 @@ export function PaymentsView({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 flex items-center">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-zinc-50 flex items-center">
             <CreditCard className="mr-3 h-8 w-8 text-emerald-600" />
             Payments & Collections
           </h1>
-          <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">
+          <p className="text-slate-500 dark:text-zinc-400 text-sm mt-1">
             Payment audit trail, atomic allocation logs & void/refund management.
           </p>
         </div>
         <button
           onClick={handleOpenRecordModal}
           disabled={isFetchingOptions}
-          className="inline-flex items-center justify-center px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition-all"
+          className="inline-flex items-center justify-center px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 text-white font-bold text-sm rounded-xl shadow-xs hover:shadow-sm transition-all"
         >
           <Plus className="mr-2 h-4 w-4" />
           {isFetchingOptions ? "Loading..." : "Record Payment"}
@@ -142,7 +142,7 @@ export function PaymentsView({
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
+      <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col md:flex-row gap-4 justify-between items-center">
         <form method="GET" className="w-full flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
@@ -193,16 +193,16 @@ export function PaymentsView({
       </div>
 
       {/* Payments Table */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
         {payments.length === 0 ? (
           <div className="p-12 text-center">
-            <CreditCard className="h-12 w-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">No payments found</h3>
-            <p className="text-sm text-zinc-500 mt-1">Record a payment or change search filters.</p>
+            <CreditCard className="h-12 w-12 text-slate-300 dark:text-zinc-700 mx-auto mb-3" />
+            <h3 className="text-base font-bold text-slate-900 dark:text-zinc-100">No payments found</h3>
+            <p className="text-sm text-slate-500 mt-1">Record a payment or change search filters.</p>
             <button
               onClick={handleOpenRecordModal}
               disabled={isFetchingOptions}
-              className="mt-4 inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-lg text-sm font-semibold transition-colors"
+              className="mt-4 inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-60 text-white rounded-xl text-sm font-semibold transition-colors shadow-xs"
             >
               <Plus className="mr-1.5 h-4 w-4" /> {isFetchingOptions ? "Loading..." : "Record Payment"}
             </button>
@@ -211,7 +211,7 @@ export function PaymentsView({
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm border-collapse">
               <thead>
-                <tr className="bg-zinc-50/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <tr className="bg-slate-50/80 dark:bg-zinc-900/80 border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
                   <th className="py-3.5 px-4">Payment #</th>
                   <th className="py-3.5 px-4">Customer</th>
                   <th className="py-3.5 px-4">Date</th>
@@ -223,7 +223,7 @@ export function PaymentsView({
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
                 {payments.map((pay: PaymentListItem) => {
                   const customerName = pay.customer
                     ? `${pay.customer.first_name} ${pay.customer.middle_name ? pay.customer.middle_name + " " : ""}${pay.customer.last_name}`
@@ -234,16 +234,16 @@ export function PaymentsView({
                   return (
                     <tr
                       key={pay.id}
-                      className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors group"
+                      className="hover:bg-slate-50/70 dark:hover:bg-zinc-800/40 transition-colors group"
                     >
                       <td className="py-4 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
                         #{pay.payment_number}
                       </td>
-                      <td className="py-4 px-4 font-medium text-zinc-900 dark:text-zinc-100">
+                      <td className="py-4 px-4 font-medium text-slate-900 dark:text-zinc-100">
                         {pay.customer ? (
                           <Link
                             href={`/customers/${pay.customer.id}`}
-                            className="hover:text-blue-600 transition-colors"
+                            className="hover:text-violet-600 transition-colors"
                           >
                             {customerName}
                           </Link>
