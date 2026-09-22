@@ -69,7 +69,7 @@ All tests executed with `npx tsx` and zero mock failures:
 
 | Viewport | Test Screen | Verified Items | Status |
 | :--- | :--- | :--- | :--- |
-| **Desktop (1366 x 768)** | `/login` | Centered official branding logo (`gazi-online-logo.png`), accessible inputs, password toggle, gradient button, no visual clipping. | **PASS** |
+| **Desktop (1366 x 768)** | `/login` | Centered official branding logo (`gazi-online-logo.jpg`), accessible inputs, password toggle, gradient button, no visual clipping. | **PASS** |
 | **Tablet (768 x 1024)** | `/login` | Fluid responsive card margins, proportional vertical spacing, crisp typography. | **PASS** |
 | **Mobile (390 x 844)** | `/login` | Card fits within 390px, **zero horizontal scroll**, touch targets ≥ 48px height (`h-12`), clear input fields. | **PASS** |
 | **Console & Hydration** | Multi-viewport | 0 console errors, 0 hydration warnings, 0 unhandled exceptions. | **PASS** |
@@ -101,25 +101,34 @@ NEXT_PUBLIC_APP_URL
 
 If production issues or unforeseen operational anomalies occur post-merge:
 
-### Immediate Branch Rollback (Preview / Release Branch)
-To revert the preview branch to the exact base commit SHA:
+### Main Branch Rollback (Shared Production History)
+For shared production history on `main`, always prefer `git revert` or Vercel Instant Rollback to preserve history integrity.
+
+Because Phase 4C will be fast-forward merged, do not use merge-parent syntax (`-m 1`). Revert the individual commit directly:
+
+```bash
+# Option A: Non-destructive git revert (recommended for shared production history)
+git checkout main
+git pull --ff-only origin main
+git revert <PHASE_4C_COMMIT_SHA>
+git push origin main
+```
+*Note: `<PHASE_4C_COMMIT_SHA>` is the Phase 4C commit that was merged into `main`.*
+
+```bash
+# Option B: Vercel Instant Rollback
+# Navigate to Vercel Project Dashboard > Deployments > Select previous stable deployment > Click "Instant Rollback"
+```
+
+### Preview Branch Rollback (Isolated Preview Branch Only)
+> [!WARNING]
+> `git reset --hard` and `--force-with-lease` are strictly for the isolated preview branch (`release/phase4c-hardening-preview`) and MUST NEVER be used on `main` or shared production history.
+
+To reset the preview branch back to the base commit SHA before merge:
 ```bash
 git checkout release/phase4c-hardening-preview
 git reset --hard 88a1de3b2f4a091ff83b2a6a02751d52bd8a03e1
 git push origin release/phase4c-hardening-preview --force-with-lease
-```
-
-### Main Branch Rollback (If Merged)
-If this release has been merged to `main` and needs to be reverted:
-```bash
-# Option A: Non-destructive revert commit (recommended for shared production history)
-git checkout main
-git pull origin main
-git revert -m 1 <MERGE_COMMIT_SHA> -m "Revert Phase 4C release hardening"
-git push origin main
-
-# Option B: Vercel Instant Rollback
-# Navigate to Vercel Project Dashboard > Deployments > Select previous stable deployment > Click "Instant Rollback"
 ```
 
 ---
