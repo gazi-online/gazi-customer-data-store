@@ -104,17 +104,22 @@ If production issues or unforeseen operational anomalies occur post-merge:
 ### Main Branch Rollback (Shared Production History)
 For shared production history on `main`, always prefer `git revert` or Vercel Instant Rollback to preserve history integrity. **Never use `reset --hard` or force push on `main`.**
 
-Because Phase 4C consists of two fast-forwarded commits (`47537bc3ce57d4603dca02bc1ab0a675d7c6bd35` and `5daa6f31e5f5fd31aae4873ede65542cb79411ed`), a complete Git-level rollback requires reverting both commits in reverse chronological order:
+Because Phase 4C commits are fast-forward merged onto `main`, the entire phase can be safely rolled back in a single operation using commit-range revert:
 
 ```bash
-# Option A: Non-destructive git revert (recommended for shared production history)
+# Option A: Non-destructive range-based git revert (recommended for shared production history)
 git checkout main
 git pull --ff-only origin main
-git revert 5daa6f31e5f5fd31aae4873ede65542cb79411ed
-git revert 47537bc3ce57d4603dca02bc1ab0a675d7c6bd35
+git revert --no-commit 88a1de3b2f4a091ff83b2a6a02751d52bd8a03e1..<PHASE_4C_FINAL_SHA>
+git commit -m "revert: roll back Phase 4C release hardening"
 git push origin main
 ```
-*Note: Phase 4C is two fast-forwarded commits. To fully roll back Phase 4C using Git history, revert both commits in reverse chronological order as shown above.*
+
+*Notes on range rollback:*
+- `88a1de3b2f4a091ff83b2a6a02751d52bd8a03e1` is the Phase 4B production base before Phase 4C.
+- `<PHASE_4C_FINAL_SHA>` represents the final Phase 4C commit that was merged to `main`.
+- The range `88a1de3b2f4a091ff83b2a6a02751d52bd8a03e1..<PHASE_4C_FINAL_SHA>` selects all Phase 4C commits after the base.
+- `git revert` preserves shared production history without rewriting commits.
 
 ```bash
 # Option B: Vercel Instant Rollback (fastest deployment rollback option)
