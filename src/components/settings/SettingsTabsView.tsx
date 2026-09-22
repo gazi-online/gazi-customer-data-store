@@ -14,8 +14,18 @@ import {
   Database,
   Receipt,
   FileText,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
-import { BusinessSettingsData, TeamMemberItem, updateBusinessSettings } from "@/app/(dashboard)/settings/actions";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
+import {
+  BusinessSettingsData,
+  TeamMemberItem,
+  getBusinessSettings,
+  getTeamMembers,
+  updateBusinessSettings,
+} from "@/app/(dashboard)/settings/actions";
 import {
   exportCustomersCsv,
   exportRequestsCsv,
@@ -26,48 +36,94 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 interface SettingsTabsViewProps {
-  initialSettings: BusinessSettingsData | null;
-  teamMembers: TeamMemberItem[];
+  initialSettings?: BusinessSettingsData | null;
+  teamMembers?: TeamMemberItem[];
 }
 
-export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsViewProps) {
+const defaultFormData: Partial<BusinessSettingsData> = {
+  business_name: "Gazi Online",
+  legal_name: "Gazi Online",
+  phone: "",
+  email: "",
+  address_line1: "",
+  city: "",
+  district: "",
+  state: "West Bengal",
+  pincode: "",
+  upi_id: "",
+  bank_name: "",
+  bank_account_name: "",
+  bank_account_number: "",
+  bank_ifsc: "",
+  invoice_prefix: "INV",
+  invoice_footer: "Gazi Online",
+};
+
+export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMembers }: SettingsTabsViewProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"profile" | "billing" | "team" | "exports">("profile");
   const [isSaving, startSaveTransition] = useTransition();
   const [isExporting, setIsExporting] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<Partial<BusinessSettingsData>>(
-    initialSettings || {
-      business_name: "Gazi Online",
-      legal_name: "Gazi Online",
-      phone: "",
-      email: "",
-      address_line1: "",
-      city: "",
-      district: "",
-      state: "West Bengal",
-      pincode: "",
-      upi_id: "",
-      bank_name: "",
-      bank_account_name: "",
-      bank_account_number: "",
-      bank_ifsc: "",
-      invoice_prefix: "INV",
-      invoice_footer: "Gazi Online",
-    }
-  );
+  // TanStack Query for Business Settings (staleTime: 5 min, memory-only)
+  const {
+    data: businessSettings,
+    isLoading: isBusinessLoading,
+    isError: isBusinessError,
+    refetch: refetchBusiness,
+  } = useQuery({
+    queryKey: queryKeys.settings.business(DASHBOARD_MEMORY_SCOPE),
+    queryFn: () => getBusinessSettings(),
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    ...(initialSettings ? { initialData: initialSettings } : {}),
+  });
+
+  // TanStack Query for Team Members (staleTime: 1 min, memory-only display state)
+  const {
+    data: teamMembers = initialTeamMembers || [],
+    isLoading: isTeamLoading,
+    isError: isTeamError,
+    refetch: refetchTeam,
+  } = useQuery({
+    queryKey: queryKeys.settings.team(DASHBOARD_MEMORY_SCOPE),
+    queryFn: () => getTeamMembers(),
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: true,
+    ...(initialTeamMembers ? { initialData: initialTeamMembers } : {}),
+  });
+
+  // Draft state architecture: user edits stored separately to prevent background refetches from clobbering unsaved edits
+  const [draft, setDraft] = useState<Partial<BusinessSettingsData>>({});
+
+  const effectiveFormData: Partial<BusinessSettingsData> = {
+    ...defaultFormData,
+    ...(businessSettings ?? {}),
+    ...draft,
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setDraft((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     startSaveTransition(async () => {
       try {
-        await updateBusinessSettings(formData);
+        await updateBusinessSettings(effectiveFormData);
         toast.success("Business settings saved successfully!");
+        // Invalidate settings.business query cache
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.settings.business(DASHBOARD_MEMORY_SCOPE),
+        });
+        // Invalidate communications.shopName query cache (Communications caches shop name for templates)
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.communications.shopName(DASHBOARD_MEMORY_SCOPE),
+        });
+        // Clear draft after successful save
+        setDraft({});
         router.refresh();
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to save settings";
@@ -169,7 +225,7 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
             }`}
           >
             <Users className="h-4 w-4 shrink-0" />
-            <span>Team & Staff Roles ({teamMembers.length})</span>
+            <span>Team & Staff Roles {isTeamLoading && teamMembers.length === 0 ? "" : `(${teamMembers.length})`}</span>
           </button>
 
           <button
@@ -189,323 +245,431 @@ export function SettingsTabsView({ initialSettings, teamMembers }: SettingsTabsV
 
       {/* TAB 1: SHOP PROFILE & ADDRESS */}
       {activeTab === "profile" && (
-        <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-5 sm:space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-            <div>
-              <h2 className="text-sm sm:text-base font-bold text-slate-900">Shop Identity & Location</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Displayed on printed invoices, customer receipts, and communications.</p>
+        isBusinessLoading && !businessSettings ? (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-6 animate-pulse">
+            <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+              <div className="space-y-2">
+                <div className="h-5 w-48 bg-slate-200 rounded-md" />
+                <div className="h-3 w-72 bg-slate-100 rounded-md" />
+              </div>
+              <div className="h-10 w-28 bg-slate-200 rounded-xl" />
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <div className="h-3 w-24 bg-slate-200 rounded" />
+                  <div className="h-10 bg-slate-100 rounded-xl" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : isBusinessError && !businessSettings ? (
+          <div className="bg-white rounded-2xl border border-red-200 p-6 shadow-xs text-center space-y-3">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50 text-red-600 mb-1">
+              <AlertCircle className="h-5 w-5" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-900">Failed to load business settings</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              An unexpected error occurred while loading settings. Please try again.
+            </p>
             <button
-              type="submit"
-              disabled={isSaving}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] sm:min-h-[38px] bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors shrink-0"
+              type="button"
+              onClick={() => refetchBusiness()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors"
             >
-              <Save className="h-3.5 w-3.5" />
-              {isSaving ? "Saving..." : "Save Changes"}
+              <RefreshCw className="h-3.5 w-3.5" />
+              Retry
             </button>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Business / Shop Name *</label>
-              <input
-                type="text"
-                name="business_name"
-                value={formData.business_name || ""}
-                onChange={handleChange}
-                required
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 focus:ring-2 focus:ring-violet-500/20"
-              />
+        ) : (
+          <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-5 sm:space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-sm sm:text-base font-bold text-slate-900">Shop Identity & Location</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Displayed on printed invoices, customer receipts, and communications.</p>
+              </div>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] sm:min-h-[38px] bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors shrink-0"
+              >
+                <Save className="h-3.5 w-3.5" />
+                {isSaving ? "Saving..." : "Save Changes"}
+              </button>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Legal Name</label>
-              <input
-                type="text"
-                name="legal_name"
-                value={formData.legal_name || ""}
-                onChange={handleChange}
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Shop Phone / Mobile</label>
-              <input
-                type="text"
-                name="phone"
-                value={formData.phone || ""}
-                onChange={handleChange}
-                placeholder="6295051584"
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Email Address</label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email || ""}
-                onChange={handleChange}
-                placeholder="shop@example.com"
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">GSTIN (if applicable)</label>
-              <input
-                type="text"
-                name="gstin"
-                value={formData.gstin || ""}
-                onChange={handleChange}
-                placeholder="19XXXXX0000X1Z5"
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Operational Timezone</label>
-              <input
-                type="text"
-                value="Asia/Kolkata (IST = UTC+05:30)"
-                disabled
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-500 cursor-not-allowed"
-              />
-            </div>
-          </div>
-
-          <div className="border-t border-slate-100 pt-4 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Shop Address</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2 space-y-1">
-                <label className="text-xs font-bold text-slate-700">Address Line 1</label>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Business / Shop Name *</label>
                 <input
                   type="text"
-                  name="address_line1"
-                  value={formData.address_line1 || ""}
+                  name="business_name"
+                  value={effectiveFormData.business_name || ""}
                   onChange={handleChange}
-                  placeholder="Street / Village / Post Office"
-                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                  required
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 focus:ring-2 focus:ring-violet-500/20"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">City / Block</label>
+                <label className="text-xs font-bold text-slate-700">Legal Name</label>
                 <input
                   type="text"
-                  name="city"
-                  value={formData.city || ""}
-                  onChange={handleChange}
-                  placeholder="Basirhat - I"
-                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">District</label>
-                <input
-                  type="text"
-                  name="district"
-                  value={formData.district || ""}
-                  onChange={handleChange}
-                  placeholder="North 24 Parganas"
-                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">State</label>
-                <input
-                  type="text"
-                  name="state"
-                  value={formData.state || "West Bengal"}
+                  name="legal_name"
+                  value={effectiveFormData.legal_name || ""}
                   onChange={handleChange}
                   className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Pincode</label>
+                <label className="text-xs font-bold text-slate-700">Shop Phone / Mobile</label>
                 <input
                   type="text"
-                  name="pincode"
-                  value={formData.pincode || ""}
+                  name="phone"
+                  value={effectiveFormData.phone || ""}
                   onChange={handleChange}
-                  placeholder="743422"
+                  placeholder="6295051584"
                   className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Email Address</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={effectiveFormData.email || ""}
+                  onChange={handleChange}
+                  placeholder="shop@example.com"
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">GSTIN (if applicable)</label>
+                <input
+                  type="text"
+                  name="gstin"
+                  value={effectiveFormData.gstin || ""}
+                  onChange={handleChange}
+                  placeholder="19XXXXX0000X1Z5"
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Operational Timezone</label>
+                <input
+                  type="text"
+                  value="Asia/Kolkata (IST = UTC+05:30)"
+                  disabled
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-500 cursor-not-allowed"
                 />
               </div>
             </div>
-          </div>
-        </form>
+
+            <div className="border-t border-slate-100 pt-4 space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Shop Address</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Address Line 1</label>
+                  <input
+                    type="text"
+                    name="address_line1"
+                    value={effectiveFormData.address_line1 || ""}
+                    onChange={handleChange}
+                    placeholder="Street / Village / Post Office"
+                    className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">City / Block</label>
+                  <input
+                    type="text"
+                    name="city"
+                    value={effectiveFormData.city || ""}
+                    onChange={handleChange}
+                    placeholder="Basirhat - I"
+                    className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">District</label>
+                  <input
+                    type="text"
+                    name="district"
+                    value={effectiveFormData.district || ""}
+                    onChange={handleChange}
+                    placeholder="North 24 Parganas"
+                    className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">State</label>
+                  <input
+                    type="text"
+                    name="state"
+                    value={effectiveFormData.state || "West Bengal"}
+                    onChange={handleChange}
+                    className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Pincode</label>
+                  <input
+                    type="text"
+                    name="pincode"
+                    value={effectiveFormData.pincode || ""}
+                    onChange={handleChange}
+                    placeholder="743422"
+                    className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                  />
+                </div>
+              </div>
+            </div>
+          </form>
+        )
       )}
 
       {/* TAB 2: BILLING & UPI */}
       {activeTab === "billing" && (
-        <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-5 sm:space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-            <div>
-              <h2 className="text-sm sm:text-base font-bold text-slate-900">Billing & Payment Configuration</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Controls UPI QR details and default invoice terms.</p>
+        isBusinessLoading && !businessSettings ? (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-6 animate-pulse">
+            <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+              <div className="space-y-2">
+                <div className="h-5 w-48 bg-slate-200 rounded-md" />
+                <div className="h-3 w-72 bg-slate-100 rounded-md" />
+              </div>
+              <div className="h-10 w-28 bg-slate-200 rounded-xl" />
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <div className="h-3 w-24 bg-slate-200 rounded" />
+                  <div className="h-10 bg-slate-100 rounded-xl" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : isBusinessError && !businessSettings ? (
+          <div className="bg-white rounded-2xl border border-red-200 p-6 shadow-xs text-center space-y-3">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50 text-red-600 mb-1">
+              <AlertCircle className="h-5 w-5" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-900">Failed to load billing configuration</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              An unexpected error occurred while loading billing settings. Please try again.
+            </p>
             <button
-              type="submit"
-              disabled={isSaving}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] sm:min-h-[38px] bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors shrink-0"
+              type="button"
+              onClick={() => refetchBusiness()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors"
             >
-              <Save className="h-3.5 w-3.5" />
-              {isSaving ? "Saving..." : "Save Changes"}
+              <RefreshCw className="h-3.5 w-3.5" />
+              Retry
             </button>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">UPI ID for Invoices (VPA)</label>
-              <input
-                type="text"
-                name="upi_id"
-                value={formData.upi_id || ""}
-                onChange={handleChange}
-                placeholder="example@upi"
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 focus:ring-2 focus:ring-violet-500/20"
-              />
-              <p className="text-[11px] text-slate-400">Printed on invoice for instant QR scanning by customers.</p>
+        ) : (
+          <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-5 sm:space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-sm sm:text-base font-bold text-slate-900">Billing & Payment Configuration</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Controls UPI QR details and default invoice terms.</p>
+              </div>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 min-h-[44px] sm:min-h-[38px] bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors shrink-0"
+              >
+                <Save className="h-3.5 w-3.5" />
+                {isSaving ? "Saving..." : "Save Changes"}
+              </button>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Invoice Number Prefix</label>
-              <input
-                type="text"
-                name="invoice_prefix"
-                value={formData.invoice_prefix || "INV"}
-                onChange={handleChange}
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
-              />
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">UPI ID for Invoices (VPA)</label>
+                <input
+                  type="text"
+                  name="upi_id"
+                  value={effectiveFormData.upi_id || ""}
+                  onChange={handleChange}
+                  placeholder="example@upi"
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900 focus:ring-2 focus:ring-violet-500/20"
+                />
+                <p className="text-[11px] text-slate-400">Printed on invoice for instant QR scanning by customers.</p>
+              </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Bank Name</label>
-              <input
-                type="text"
-                name="bank_name"
-                value={formData.bank_name || ""}
-                onChange={handleChange}
-                placeholder="State Bank of India"
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
-              />
-            </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Invoice Number Prefix</label>
+                <input
+                  type="text"
+                  name="invoice_prefix"
+                  value={effectiveFormData.invoice_prefix || "INV"}
+                  onChange={handleChange}
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                />
+              </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Account Holder Name</label>
-              <input
-                type="text"
-                name="bank_account_name"
-                value={formData.bank_account_name || ""}
-                onChange={handleChange}
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
-              />
-            </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Bank Name</label>
+                <input
+                  type="text"
+                  name="bank_name"
+                  value={effectiveFormData.bank_name || ""}
+                  onChange={handleChange}
+                  placeholder="State Bank of India"
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                />
+              </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">Account Number</label>
-              <input
-                type="text"
-                name="bank_account_number"
-                value={formData.bank_account_number || ""}
-                onChange={handleChange}
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
-              />
-            </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Account Holder Name</label>
+                <input
+                  type="text"
+                  name="bank_account_name"
+                  value={effectiveFormData.bank_account_name || ""}
+                  onChange={handleChange}
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                />
+              </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">IFSC Code</label>
-              <input
-                type="text"
-                name="bank_ifsc"
-                value={formData.bank_ifsc || ""}
-                onChange={handleChange}
-                placeholder="SBIN000XXXX"
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
-              />
-            </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Account Number</label>
+                <input
+                  type="text"
+                  name="bank_account_number"
+                  value={effectiveFormData.bank_account_number || ""}
+                  onChange={handleChange}
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                />
+              </div>
 
-            <div className="md:col-span-2 space-y-1">
-              <label className="text-xs font-bold text-slate-700">Invoice Footer Note</label>
-              <input
-                type="text"
-                name="invoice_footer"
-                value={formData.invoice_footer || ""}
-                onChange={handleChange}
-                placeholder="Thank you for your business!"
-                className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
-              />
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">IFSC Code</label>
+                <input
+                  type="text"
+                  name="bank_ifsc"
+                  value={effectiveFormData.bank_ifsc || ""}
+                  onChange={handleChange}
+                  placeholder="SBIN000XXXX"
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                />
+              </div>
+
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-xs font-bold text-slate-700">Invoice Footer Note</label>
+                <input
+                  type="text"
+                  name="invoice_footer"
+                  value={effectiveFormData.invoice_footer || ""}
+                  onChange={handleChange}
+                  placeholder="Thank you for your business!"
+                  className="w-full min-h-[42px] text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-900"
+                />
+              </div>
             </div>
-          </div>
-        </form>
+          </form>
+        )
       )}
 
       {/* TAB 3: TEAM MEMBERS & ROLES */}
       {activeTab === "team" && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-5 sm:space-y-6">
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-sm sm:text-base font-bold text-slate-900">Shop Staff & Role Privileges</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Active operators and administrators authorized to access this tenant database.</p>
-          </div>
-
-          <div className="-mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-auto">
-            <table className="w-full min-w-[480px] text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
-                <tr>
-                  <th className="py-3 px-4">User</th>
-                  <th className="py-3 px-4">Role</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Joined Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {teamMembers.map((m) => (
-                  <tr key={m.userId} className="hover:bg-slate-50/80">
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-slate-900">{m.email || "Staff Member"}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">UID: {m.userId}</div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        m.role === "owner"
-                          ? "bg-purple-100 text-purple-700"
-                          : m.role === "admin"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-slate-100 text-slate-700"
-                      }`}>
-                        {m.role}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        {m.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-500">
-                      {new Date(m.createdAt).toLocaleDateString("en-IN")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-600 border border-slate-200 space-y-1">
-            <div className="font-bold text-slate-800 flex items-center gap-1.5">
-              <ShieldCheck className="h-4 w-4 text-emerald-600" />
-              Role Privilege Policies
+        isTeamLoading && teamMembers.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-5 animate-pulse">
+            <div className="space-y-2 pb-4 border-b border-slate-100">
+              <div className="h-5 w-48 bg-slate-200 rounded-md" />
+              <div className="h-3 w-72 bg-slate-100 rounded-md" />
             </div>
-            <p>• <strong>Owner</strong>: Full administrative privileges, financial adjustments, invoice voids, and membership configuration.</p>
-            <p>• <strong>Admin / Operator</strong>: Creates and processes customer services, invoices, payments, and communications. Cannot alter tenant ownership.</p>
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-12 bg-slate-100 rounded-xl" />
+              ))}
+            </div>
           </div>
-        </div>
+        ) : isTeamError && teamMembers.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-red-200 p-6 shadow-xs text-center space-y-3">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50 text-red-600 mb-1">
+              <AlertCircle className="h-5 w-5" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-900">Failed to load team members</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              An unexpected error occurred while loading team members. Please try again.
+            </p>
+            <button
+              type="button"
+              onClick={() => refetchTeam()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Retry
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-5 sm:space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900">Shop Staff & Role Privileges</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Active operators and administrators authorized to access this tenant database.</p>
+            </div>
+
+            <div className="-mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-auto">
+              <table className="w-full min-w-[480px] text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">User</th>
+                    <th className="py-3 px-4">Role</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Joined Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {teamMembers.map((m) => (
+                    <tr key={m.userId} className="hover:bg-slate-50/80">
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-slate-900">{m.email || "Staff Member"}</div>
+                        <div className="text-[11px] text-slate-400 font-mono">UID: {m.userId}</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          m.role === "owner"
+                            ? "bg-purple-100 text-purple-700"
+                            : m.role === "admin"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-slate-100 text-slate-700"
+                        }`}>
+                          {m.role}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          {m.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        {new Date(m.createdAt).toLocaleDateString("en-IN")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-600 border border-slate-200 space-y-1">
+              <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                Role Privilege Policies
+              </div>
+              <p>• <strong>Owner</strong>: Full administrative privileges, financial adjustments, invoice voids, and membership configuration.</p>
+              <p>• <strong>Admin / Operator</strong>: Creates and processes customer services, invoices, payments, and communications. Cannot alter tenant ownership.</p>
+            </div>
+          </div>
+        )
       )}
 
       {/* TAB 4: DATA EXPORTS & BACKUP READINESS */}

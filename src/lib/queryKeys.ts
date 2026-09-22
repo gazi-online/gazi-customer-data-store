@@ -23,6 +23,10 @@
  * - Customer lookup keys provide minimal name/code/phone for dropdowns only.
  * - OPERATIONS ALERT CACHE IS DISPLAY-ONLY DERIVED STATE and MUST NEVER be used for
  *   financial, invoice, billing, or request FSM authority.
+ * - SETTINGS CACHE = display/edit convenience only.
+ * - SERVER AUTHORIZATION = always fresh, never determined by client cache.
+ * - Customer full profile, KYC, Aadhaar, PAN, billing summary, payments, invoices,
+ *   active transactional services, and signed URLs are STRICTLY NEVER CACHED in TanStack Query.
  */
 
 export const DASHBOARD_MEMORY_SCOPE = "dashboard-memory-v1";
@@ -51,9 +55,6 @@ export const queryKeys = {
     lists: (cacheScope: string) => ["gcds", cacheScope, "customers", "list"] as const,
     list: (cacheScope: string, filters?: CustomerListFilters) =>
       ["gcds", cacheScope, "customers", "list", filters ?? {}] as const,
-    details: (cacheScope: string) => ["gcds", cacheScope, "customers", "detail"] as const,
-    detail: (cacheScope: string, customerId: string) =>
-      ["gcds", cacheScope, "customers", "detail", customerId] as const,
     lookup: (cacheScope: string) => ["gcds", cacheScope, "customers", "lookup"] as const,
   },
   documents: {

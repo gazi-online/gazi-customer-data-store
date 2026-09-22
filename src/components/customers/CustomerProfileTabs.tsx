@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CustomerDocument, AiImportHistoryRecord } from "@/types/document";
-import { FileText, Cpu, Clock, RefreshCw, Archive, Replace, CheckCircle2, XCircle, AlertCircle, FileCode, Layers, User, Briefcase, Activity, Receipt, Download, Loader2, MessageSquare } from "lucide-react";
+import { FileText, Cpu, RefreshCw, Archive, Replace, CheckCircle2, XCircle, Layers, User, Briefcase, Activity, Receipt, Download, Loader2, MessageSquare } from "lucide-react";
 import { rerunExtraction, archiveDocument, getDocumentSignedUrl } from "@/app/(dashboard)/documents/actions";
 import { toast } from "sonner";
 import { ReviewPanel } from "@/components/AiSmartImportEngine/components/ReviewPanel";
@@ -15,6 +15,9 @@ import { CustomerBillingTab } from "./CustomerBillingTab";
 import { CustomerCommunicationsTimeline } from "./CustomerCommunicationsTimeline";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
+import { getActiveServices } from "@/app/(dashboard)/services/actions";
+import { getCustomerBillingSummary } from "@/app/(dashboard)/invoices/actions";
+import { useRouter } from "next/navigation";
 
 interface CustomerProfileTabsProps {
   customerId: string;
@@ -23,16 +26,6 @@ interface CustomerProfileTabsProps {
   allDocuments: CustomerDocument[]; // Includes active, superseded, archived
   aiImports: AiImportHistoryRecord[];
   customerServices?: CustomerServiceWithDetails[];
-  availableServices?: Service[];
-  billingSummary?: {
-    totalBilled: number;
-    totalPaid: number;
-    outstanding: number;
-    overdue: number;
-    invoices: any[];
-    payments: any[];
-  };
-  billingError?: string | null;
 }
 
 export function CustomerProfileTabs({
@@ -42,12 +35,9 @@ export function CustomerProfileTabs({
   allDocuments,
   aiImports,
   customerServices = [],
-  availableServices = [],
-  billingSummary = { totalBilled: 0, totalPaid: 0, outstanding: 0, overdue: 0, invoices: [], payments: [] },
-  billingError = null,
 }: CustomerProfileTabsProps) {
+  const router = useRouter();
   const queryClient = useQueryClient();
-  console.log(`[TRACE] CustomerProfileTabs activeServices: ${availableServices?.length || 0}`);
   
   const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'ai-imports' | 'services' | 'billing' | 'communications' | 'activity'>('documents');
   const [filterDocStatus, setFilterDocStatus] = useState<'active' | 'all' | 'archived'>('active');
@@ -55,8 +45,60 @@ export function CustomerProfileTabs({
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [rerunReviewResult, setRerunReviewResult] = useState<MergedResult | null>(null);
   
+  // Transactional on-demand active services (never cached in TanStack Query)
+  const [availableServices, setAvailableServices] = useState<Service[]>([]);
+  const [isLoadingServices, setIsLoadingServices] = useState(false);
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
   const [editingCustomerService, setEditingCustomerService] = useState<CustomerServiceFormData | undefined>(undefined);
+
+  // Authoritative on-demand billing summary (never cached in TanStack Query)
+  const [billingSummary, setBillingSummary] = useState<{
+    totalBilled: number;
+    totalPaid: number;
+    outstanding: number;
+    overdue: number;
+    invoices: any[];
+    payments: any[];
+  } | null>(null);
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
+
+  const fetchBillingSummary = async () => {
+    setBillingLoading(true);
+    setBillingError(null);
+    try {
+      const res = await getCustomerBillingSummary(customerId);
+      if (res.success && res.data) {
+        setBillingSummary(res.data);
+      } else {
+        setBillingError(res.error || "Failed to load customer billing history.");
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load billing history.";
+      setBillingError(message);
+    } finally {
+      setBillingLoading(false);
+    }
+  };
+
+  const handleOpenAssignService = async (serviceData?: CustomerServiceFormData) => {
+    setIsLoadingServices(true);
+    try {
+      const services = await getActiveServices();
+      if (!services || services.length === 0) {
+        toast.error("No active services currently available in catalog");
+        return;
+      }
+      setAvailableServices(services);
+      setEditingCustomerService(serviceData);
+      setIsServiceFormOpen(true);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load active services";
+      toast.error(message);
+    } finally {
+      setIsLoadingServices(false);
+    }
+  };
 
   const displayedDocs = allDocuments.filter(doc => {
     if (filterDocStatus === 'active') return doc.status === 'active' || !doc.status;
@@ -159,7 +201,7 @@ export function CustomerProfileTabs({
             { id: 'ai-imports', label: 'AI Imports Audit', icon: Cpu, count: aiImports.length },
             { id: 'overview', label: 'Overview', icon: User },
             { id: 'services', label: 'Services', icon: Briefcase, count: customerServices.length },
-            { id: 'billing', label: 'Billing & History', icon: Receipt, count: billingSummary?.invoices?.length || 0 },
+            { id: 'billing', label: 'Billing & History', icon: Receipt, count: billingSummary?.invoices?.length },
             { id: 'communications', label: 'Communications', icon: MessageSquare },
             { id: 'activity', label: 'Activity Log', icon: Activity },
           ].map(tab => {
@@ -168,7 +210,12 @@ export function CustomerProfileTabs({
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                  if (tab.id === 'billing') {
+                    fetchBillingSummary();
+                  }
+                }}
                 className={`py-3 sm:py-4 px-2 sm:px-1 inline-flex items-center text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap shrink-0 min-h-[44px] ${
                   isActive
                     ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
@@ -200,7 +247,7 @@ export function CustomerProfileTabs({
           onClose={() => setIsServiceFormOpen(false)}
           onSuccess={() => {
             setIsServiceFormOpen(false);
-            // Form actions revalidate path, so UI will update
+            router.refresh();
           }}
         />
       )}
@@ -470,13 +517,18 @@ export function CustomerProfileTabs({
               <p className="text-sm text-zinc-500">Manage services and subscriptions assigned to this customer.</p>
             </div>
             <button
-              onClick={() => {
-                setEditingCustomerService(undefined);
-                setIsServiceFormOpen(true);
-              }}
-              className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium text-sm"
+              onClick={() => handleOpenAssignService(undefined)}
+              disabled={isLoadingServices}
+              className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium text-sm disabled:opacity-50"
             >
-              Assign Service
+              {isLoadingServices ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                  Loading Catalog...
+                </>
+              ) : (
+                "Assign Service"
+              )}
             </button>
           </div>
 
@@ -485,11 +537,9 @@ export function CustomerProfileTabs({
               <Briefcase className="h-10 w-10 text-zinc-400 mx-auto mb-2" />
               <p className="text-sm font-medium text-zinc-500">No services assigned to this customer yet.</p>
               <button
-                onClick={() => {
-                  setEditingCustomerService(undefined);
-                  setIsServiceFormOpen(true);
-                }}
-                className="mt-4 text-blue-600 hover:text-blue-700 font-medium text-sm"
+                onClick={() => handleOpenAssignService(undefined)}
+                disabled={isLoadingServices}
+                className="mt-4 text-blue-600 hover:text-blue-700 font-medium text-sm disabled:opacity-50"
               >
                 + Assign their first service
               </button>
@@ -567,7 +617,7 @@ export function CustomerProfileTabs({
                     <div className="shrink-0">
                       <button
                         onClick={() => {
-                          setEditingCustomerService({
+                          handleOpenAssignService({
                             id: cs.id,
                             customer_id: cs.customer_id,
                             service_id: cs.service_id,
@@ -584,9 +634,9 @@ export function CustomerProfileTabs({
                             rejection_reason: cs.rejection_reason || null,
                             delivered_at: cs.delivered_at || null,
                           });
-                          setIsServiceFormOpen(true);
                         }}
-                        className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                        disabled={isLoadingServices}
+                        className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50"
                         title="Update Service Details"
                       >
                         <Replace className="h-4 w-4" />
@@ -602,12 +652,31 @@ export function CustomerProfileTabs({
 
       {/* BILLING TAB */}
       {activeTab === 'billing' && (
-        <CustomerBillingTab
-          customerId={customerId}
-          customerName={customerName}
-          billingSummary={billingSummary}
-          error={billingError}
-        />
+        billingLoading ? (
+          <div className="p-8 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-4 animate-pulse">
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800">
+              <div className="h-5 w-48 bg-zinc-200 dark:bg-zinc-800 rounded" />
+              <div className="flex gap-2">
+                <div className="h-8 w-24 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
+                <div className="h-8 w-28 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-20 bg-zinc-100 dark:bg-zinc-800/60 rounded-xl" />
+              ))}
+            </div>
+            <div className="h-48 bg-zinc-100 dark:bg-zinc-800/40 rounded-xl" />
+          </div>
+        ) : (
+          <CustomerBillingTab
+            customerId={customerId}
+            customerName={customerName}
+            billingSummary={billingSummary || { totalBilled: 0, totalPaid: 0, outstanding: 0, overdue: 0, invoices: [], payments: [] }}
+            error={billingError}
+            onBillingChanged={fetchBillingSummary}
+          />
+        )
       )}
 
       {/* COMMUNICATIONS TAB */}

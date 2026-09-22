@@ -6,8 +6,7 @@ import { ArrowLeft, Edit, Calendar, Hash, ShieldCheck, Phone, MessageCircle, Mai
 import { DocumentUploadForm } from "@/components/forms/DocumentUploadForm";
 import { getProfilePhotoSignedUrl } from "@/app/(dashboard)/customers/ai-actions";
 import { CustomerProfileTabs } from "@/components/customers/CustomerProfileTabs";
-import { getCustomerServices, getActiveServices } from "@/app/(dashboard)/services/actions";
-import { getCustomerBillingSummary } from "@/app/(dashboard)/invoices/actions";
+import { getCustomerServices } from "@/app/(dashboard)/services/actions";
 import { CustomerDeleteButton } from "@/components/customers/CustomerDeleteButton";
 
 import { CustomerDocument } from "@/types/document";
@@ -38,12 +37,6 @@ export default async function CustomerProfilePage({
 }) {
   const { id } = await params;
   let customer;
-  let activeDocuments: CustomerDocument[] = [];
-  let allDocuments: CustomerDocument[] = [];
-  let aiImports: any[] = [];
-  let customerServices: any[] = [];
-  let availableServices: any[] = [];
-  let displayPhotoUrl: string | null = null;
 
   try {
     customer = await getCustomerById(id);
@@ -54,69 +47,50 @@ export default async function CustomerProfilePage({
     notFound();
   }
 
-  try {
+  // Concurrently run independent secondary profile reads
+  const photoPromise = (async () => {
     if (customer.photo_source) {
-      displayPhotoUrl = await getProfilePhotoSignedUrl(customer.photo_source);
+      return await getProfilePhotoSignedUrl(customer.photo_source);
     } else if (customer.photo_url) {
-      displayPhotoUrl = customer.photo_url;
+      return customer.photo_url;
     }
-  } catch (err) {
-    console.error("Failed to fetch customer photo:", err);
+    return null;
+  })();
+
+  // Single document query — activeDocuments derived client/render-side to avoid duplicate DB/signing work
+  const allDocumentsPromise = getCustomerDocuments(id, true);
+  const aiImportsPromise = getCustomerAiImports(id);
+  const customerServicesPromise = getCustomerServices(id);
+
+  const [photoRes, allDocsRes, aiImportsRes, customerServicesRes] = await Promise.allSettled([
+    photoPromise,
+    allDocumentsPromise,
+    aiImportsPromise,
+    customerServicesPromise,
+  ]);
+
+  const displayPhotoUrl = photoRes.status === "fulfilled" ? photoRes.value : null;
+  if (photoRes.status === "rejected") {
+    console.error("Failed to fetch customer photo:", photoRes.reason);
   }
 
-  // Fetch Active Documents
-  try {
-    activeDocuments = await getCustomerDocuments(id, false);
-  } catch (err: any) {
-    console.error("Failed to fetch active documents:", err?.message || err);
+  const allDocuments: CustomerDocument[] = allDocsRes.status === "fulfilled" ? allDocsRes.value : [];
+  if (allDocsRes.status === "rejected") {
+    console.error("Failed to fetch customer documents:", allDocsRes.reason);
   }
 
-  // Fetch All Documents
-  try {
-    allDocuments = await getCustomerDocuments(id, true);
-  } catch (err: any) {
-    console.error("Failed to fetch all documents:", err?.message || err);
+  const activeDocuments = allDocuments.filter(
+    (d) => d.status === "active" || !d.status
+  );
+
+  const aiImports = aiImportsRes.status === "fulfilled" ? aiImportsRes.value : [];
+  if (aiImportsRes.status === "rejected") {
+    console.error("Failed to fetch AI imports:", aiImportsRes.reason);
   }
 
-  // Fetch AI Imports
-  try {
-    aiImports = await getCustomerAiImports(id);
-  } catch (err: any) {
-    console.error("Failed to fetch AI imports:", err?.message || err);
-  }
-
-  // Fetch Customer Services
-  let csRes: any[] = [];
-  try {
-    csRes = await getCustomerServices(id);
-  } catch (err: any) {
-    console.error("Failed to fetch customer services:", err?.message || err);
-  }
-  customerServices = csRes;
-
-  // Fetch Active Services
-  let asRes: any[] = [];
-  try {
-    asRes = await getActiveServices();
-    console.log(`[TRACE] getActiveServices() returned: ${asRes?.length || 0} rows`);
-  } catch (err: any) {
-    console.error(`[TRACE] getActiveServices() Error: ${err.code || 'UNKNOWN_CODE'} - ${err.message || err}`);
-  }
-  availableServices = asRes;
-
-  // Fetch Customer Billing Summary safely
-  let billingSummaryData: { totalBilled: number; totalPaid: number; outstanding: number; overdue: number; invoices: any[]; payments: any[] } = { totalBilled: 0, totalPaid: 0, outstanding: 0, overdue: 0, invoices: [], payments: [] };
-  let billingError: string | null = null;
-  try {
-    const billingRes = await getCustomerBillingSummary(id);
-    if (billingRes.success) {
-      billingSummaryData = billingRes.data;
-    } else {
-      billingError = billingRes.error || "Failed to load customer billing history.";
-    }
-  } catch (err: any) {
-    console.error("Error loading customer billing summary:", err);
-    billingError = err.message || "Failed to load customer billing summary.";
+  const customerServices = customerServicesRes.status === "fulfilled" ? customerServicesRes.value : [];
+  if (customerServicesRes.status === "rejected") {
+    console.error("Failed to fetch customer services:", customerServicesRes.reason);
   }
 
   return (
@@ -348,9 +322,6 @@ export default async function CustomerProfilePage({
                allDocuments={allDocuments}
                aiImports={aiImports}
                customerServices={customerServices || []}
-               availableServices={availableServices || []}
-               billingSummary={billingSummaryData}
-               billingError={billingError}
              />
           </div>
         </div>

@@ -21,8 +21,6 @@ export function AssignServiceForm({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  console.log(`[TRACE] AssignServiceForm services: ${availableServices?.length || 0}`);
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
 

@@ -266,21 +266,24 @@ export async function getCustomerBillingSummary(customerId: string) {
   const supabase = await createClient();
 
   try {
-    const { data: invoices, error: invError } = await supabase
-      .from("invoices")
-      .select("*")
-      .eq("customer_id", customerId)
-      .order("created_at", { ascending: false });
+    const [invRes, payRes] = await Promise.all([
+      supabase
+        .from("invoices")
+        .select("*")
+        .eq("customer_id", customerId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("payments")
+        .select("*")
+        .eq("customer_id", customerId)
+        .order("created_at", { ascending: false }),
+    ]);
 
-    if (invError) throw invError;
+    if (invRes.error) throw invRes.error;
+    if (payRes.error) throw payRes.error;
 
-    const { data: payments, error: payError } = await supabase
-      .from("payments")
-      .select("*")
-      .eq("customer_id", customerId)
-      .order("created_at", { ascending: false });
-
-    if (payError) throw payError;
+    const invoices = invRes.data;
+    const payments = payRes.data;
 
     const today = new Date().toISOString().split("T")[0];
 
@@ -304,11 +307,11 @@ export async function getCustomerBillingSummary(customerId: string) {
         payments: payments || [],
       },
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Error fetching customer billing summary:", err);
     return {
       success: false,
-      error: err.message || "Failed to load customer billing history.",
+      error: err instanceof Error ? err.message : "Failed to load customer billing history.",
       data: {
         totalBilled: 0,
         totalPaid: 0,

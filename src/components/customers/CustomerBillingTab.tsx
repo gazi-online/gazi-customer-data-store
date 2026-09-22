@@ -6,12 +6,7 @@ import {
   Receipt, 
   CreditCard, 
   Plus, 
-  DollarSign, 
   AlertTriangle, 
-  CheckCircle2, 
-  Clock, 
-  Eye, 
-  FileText, 
   ArrowUpRight 
 } from "lucide-react";
 import { RecordPaymentModal } from "@/components/payments/RecordPaymentModal";
@@ -28,6 +23,7 @@ interface CustomerBillingTabProps {
     payments: any[];
   };
   error?: string | null;
+  onBillingChanged?: () => void;
 }
 
 function formatCurrency(amount: number) {
@@ -42,6 +38,7 @@ export function CustomerBillingTab({
   customerName,
   billingSummary,
   error,
+  onBillingChanged,
 }: CustomerBillingTabProps) {
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const today = new Date().toISOString().split("T")[0];
@@ -285,6 +282,7 @@ export function CustomerBillingTab({
       <RecordPaymentModal
         isOpen={isRecordPaymentOpen}
         onClose={() => setIsRecordPaymentOpen(false)}
+        onSuccess={onBillingChanged}
         preselectedCustomerId={customerId}
         preselectedCustomerName={customerName}
         openInvoicesList={openInvoices.map((i) => ({

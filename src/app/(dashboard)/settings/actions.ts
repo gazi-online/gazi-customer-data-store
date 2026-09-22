@@ -39,7 +39,28 @@ export async function getBusinessSettings(): Promise<BusinessSettingsData | null
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("business_settings")
-    .select("*")
+    .select(`
+      id,
+      business_name,
+      legal_name,
+      address_line1,
+      address_line2,
+      city,
+      district,
+      state,
+      pincode,
+      phone,
+      email,
+      gstin,
+      invoice_prefix,
+      default_invoice_terms,
+      invoice_footer,
+      upi_id,
+      bank_name,
+      bank_account_name,
+      bank_account_number,
+      bank_ifsc
+    `)
     .limit(1)
     .single();
 
