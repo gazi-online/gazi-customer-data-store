@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Clock,
   Archive,
+  CalendarClock,
 } from "lucide-react";
 import {
   CustomerTimelineResult,
@@ -35,7 +36,7 @@ export function CustomerActivityTimelineTab({
   const [timelineData, setTimelineData] = useState<CustomerTimelineResult | null>(initialData);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
-  const [selectedFilter, setSelectedFilter] = useState<"all" | CustomerTimelineEventType | "financial">("all");
+  const [selectedFilter, setSelectedFilter] = useState<"all" | CustomerTimelineEventType | "financial" | "followups">("all");
 
   useEffect(() => {
     let isCancelled = false;
@@ -73,6 +74,11 @@ export function CustomerActivityTimelineTab({
         (e) => e.eventType === "invoice_created" || e.eventType === "payment_received"
       );
     }
+    if (selectedFilter === "followups") {
+      return timelineData.events.filter(
+        (e) => e.eventType === "followup_scheduled" || e.eventType === "followup_completed"
+      );
+    }
     return timelineData.events.filter((e) => e.eventType === selectedFilter);
   }, [timelineData, selectedFilter]);
 
@@ -93,6 +99,9 @@ export function CustomerActivityTimelineTab({
         return <CreditCard className="h-4 w-4 text-emerald-600" />;
       case "communication_logged":
         return <MessageSquare className="h-4 w-4 text-teal-600" />;
+      case "followup_scheduled":
+      case "followup_completed":
+        return <CalendarClock className="h-4 w-4 text-amber-600" />;
       default:
         return <Clock className="h-4 w-4 text-slate-500" />;
     }
@@ -168,6 +177,7 @@ export function CustomerActivityTimelineTab({
     invoices: 0,
     payments: 0,
     communications: 0,
+    followups: 0,
   };
 
   return (
@@ -240,6 +250,17 @@ export function CustomerActivityTimelineTab({
             }`}
           >
             Outreach ({stats.communications})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedFilter("followups")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors min-h-[32px] ${
+              selectedFilter === "followups"
+                ? "bg-amber-600 text-white shadow-2xs"
+                : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-200"
+            }`}
+          >
+            Follow-ups ({stats.followups || 0})
           </button>
         </div>
       </div>

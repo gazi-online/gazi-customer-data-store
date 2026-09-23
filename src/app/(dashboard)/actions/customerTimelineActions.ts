@@ -10,7 +10,9 @@ export type CustomerTimelineEventType =
   | "service_request_status"
   | "invoice_created"
   | "payment_received"
-  | "communication_logged";
+  | "communication_logged"
+  | "followup_scheduled"
+  | "followup_completed";
 
 export interface CustomerTimelineEvent {
   id: string;
@@ -39,6 +41,7 @@ export interface CustomerTimelineResult {
     invoices: number;
     payments: number;
     communications: number;
+    followups: number;
   };
 }
 
@@ -67,7 +70,7 @@ export async function getCustomerUnifiedTimeline(
     return {
       events: [],
       totalCount: 0,
-      stats: { documents: 0, requests: 0, invoices: 0, payments: 0, communications: 0 },
+      stats: { documents: 0, requests: 0, invoices: 0, payments: 0, communications: 0, followups: 0 },
     };
   }
 
@@ -96,7 +99,7 @@ export async function getCustomerUnifiedTimeline(
       .eq("customer_id", customerId)
       .order("created_at", { ascending: false }),
 
-    // 3. Service Requests & status history
+    // 3. Service Requests & status history & follow-ups
     supabase
       .from("customer_services")
       .select(`
@@ -106,7 +109,8 @@ export async function getCustomerUnifiedTimeline(
         status,
         created_at,
         service:services(service_name),
-        status_history:service_request_status_history(id, from_status, to_status, created_at)
+        status_history:service_request_status_history(id, from_status, to_status, created_at),
+        followups:service_request_followups(id, follow_up_at, note, status, resolution_note, completed_at, created_at)
       `)
       .eq("customer_id", customerId)
       .order("created_at", { ascending: false }),
@@ -230,6 +234,56 @@ export async function getCustomerUnifiedTimeline(
         },
       });
     }
+
+    // Follow-ups on this service request
+    const followups = (srv.followups as Array<{
+      id: string;
+      follow_up_at: string;
+      note: string | null;
+      status: string;
+      resolution_note: string | null;
+      completed_at: string | null;
+      created_at: string;
+    }>) || [];
+
+    for (const f of followups) {
+      // 1. Follow-up scheduled event
+      events.push({
+        id: `fu-sched-${f.id}`,
+        eventType: "followup_scheduled",
+        timestamp: f.created_at,
+        title: `Follow-up Scheduled: ${srvName}`,
+        description: f.note || `Follow-up set for ${new Date(f.follow_up_at).toLocaleDateString("en-IN")}`,
+        badge: {
+          label: f.status === "open" ? "PENDING" : f.status.toUpperCase(),
+          variant: f.status === "completed" ? "success" : f.status === "open" ? "warning" : "default",
+        },
+        metadata: {
+          linkUrl: `/customers/${customerId}?tab=followups`,
+          reference: reqNum || undefined,
+          subtext: `Due: ${new Date(f.follow_up_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
+        },
+      });
+
+      // 2. Follow-up completed event (if completed)
+      if (f.status === "completed" && f.completed_at) {
+        events.push({
+          id: `fu-done-${f.id}`,
+          eventType: "followup_completed",
+          timestamp: f.completed_at,
+          title: `Follow-up Completed: ${srvName}`,
+          description: f.resolution_note || f.note || "Follow-up resolved successfully.",
+          badge: {
+            label: "COMPLETED",
+            variant: "success",
+          },
+          metadata: {
+            linkUrl: `/customers/${customerId}?tab=followups`,
+            reference: reqNum || undefined,
+          },
+        });
+      }
+    }
   }
 
   // 4. Invoices
@@ -308,6 +362,10 @@ export async function getCustomerUnifiedTimeline(
   // Deterministic chronological ordering: newest first
   events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
+  const followupsCount = events.filter(
+    (e) => e.eventType === "followup_scheduled" || e.eventType === "followup_completed"
+  ).length;
+
   return {
     events,
     totalCount: events.length,
@@ -317,6 +375,7 @@ export async function getCustomerUnifiedTimeline(
       invoices: invoices.length,
       payments: payments.length,
       communications: communications.length,
+      followups: followupsCount,
     },
   };
 }

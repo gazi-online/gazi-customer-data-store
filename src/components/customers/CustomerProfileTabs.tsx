@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { CustomerDocument, AiImportHistoryRecord } from "@/types/document";
-import { FileText, Cpu, RefreshCw, Archive, Replace, CheckCircle2, XCircle, Layers, User, Briefcase, Activity, Receipt, Download, Loader2, MessageSquare } from "lucide-react";
+import { FileText, Cpu, RefreshCw, Archive, Replace, CheckCircle2, XCircle, Layers, User, Briefcase, Activity, Receipt, Download, Loader2, MessageSquare, CalendarClock } from "lucide-react";
 import { rerunExtraction, archiveDocument, getDocumentSignedUrl } from "@/app/(dashboard)/documents/actions";
 import { toast } from "sonner";
 import { ReviewPanel } from "@/components/AiSmartImportEngine/components/ReviewPanel";
@@ -14,6 +14,7 @@ import { CustomerServiceFormData } from "@/app/(dashboard)/services/schema";
 import { CustomerBillingTab } from "./CustomerBillingTab";
 import { CustomerCommunicationsTimeline } from "./CustomerCommunicationsTimeline";
 import { CustomerActivityTimelineTab } from "./CustomerActivityTimelineTab";
+import { CustomerFollowupsTab } from "./CustomerFollowupsTab";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 import { getActiveServices } from "@/app/(dashboard)/services/actions";
@@ -29,7 +30,7 @@ interface CustomerProfileTabsProps {
   customerServices?: CustomerServiceWithDetails[];
 }
 
-type ProfileTab = 'overview' | 'documents' | 'ai-imports' | 'services' | 'billing' | 'communications' | 'activity';
+type ProfileTab = 'overview' | 'documents' | 'ai-imports' | 'services' | 'billing' | 'communications' | 'followups' | 'activity';
 
 export function CustomerProfileTabs({
   customerId,
@@ -44,7 +45,7 @@ export function CustomerProfileTabs({
   const queryClient = useQueryClient();
   
   const tabParam = searchParams.get("tab") as ProfileTab | null;
-  const validTabs: ProfileTab[] = ['overview', 'documents', 'ai-imports', 'services', 'billing', 'communications', 'activity'];
+  const validTabs: ProfileTab[] = ['overview', 'documents', 'ai-imports', 'services', 'billing', 'communications', 'followups', 'activity'];
   const initialTab: ProfileTab = tabParam && validTabs.includes(tabParam) ? tabParam : 'documents';
 
   const [activeTab, setActiveTabState] = useState<ProfileTab>(initialTab);
@@ -250,6 +251,7 @@ export function CustomerProfileTabs({
             { id: 'ai-imports', label: 'AI Imports Audit', icon: Cpu, count: aiImports.length },
             { id: 'overview', label: 'Overview', icon: User },
             { id: 'services', label: 'Services', icon: Briefcase, count: customerServices.length },
+            { id: 'followups', label: 'Follow-ups', icon: CalendarClock },
             { id: 'billing', label: 'Billing & History', icon: Receipt, count: billingSummary?.invoices?.length },
             { id: 'communications', label: 'Communications', icon: MessageSquare },
             { id: 'activity', label: 'Activity Log', icon: Activity },
@@ -731,6 +733,14 @@ export function CustomerProfileTabs({
       {/* COMMUNICATIONS TAB */}
       {activeTab === 'communications' && (
         <CustomerCommunicationsTimeline
+          customerId={customerId}
+          customerName={customerName}
+        />
+      )}
+
+      {/* FOLLOW-UPS & REMINDERS TAB */}
+      {activeTab === 'followups' && (
+        <CustomerFollowupsTab
           customerId={customerId}
           customerName={customerName}
         />

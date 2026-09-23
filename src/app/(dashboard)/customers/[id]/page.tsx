@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getCustomerById } from "../actions";
 import { getCustomerDocuments, getCustomerAiImports } from "@/app/(dashboard)/documents/actions";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Edit, Calendar, Hash, ShieldCheck, Phone, MessageCircle, Mail, Users, MapPin, Receipt, ClipboardList } from "lucide-react";
+import { ArrowLeft, Edit, Calendar, Hash, ShieldCheck, Phone, MessageCircle, Mail, Users, MapPin, Receipt, ClipboardList, CalendarClock } from "lucide-react";
 import { DocumentUploadForm } from "@/components/forms/DocumentUploadForm";
 import { getProfilePhotoSignedUrl } from "@/app/(dashboard)/customers/ai-actions";
 import { CustomerProfileTabs } from "@/components/customers/CustomerProfileTabs";
@@ -122,6 +122,16 @@ export default async function CustomerProfilePage({
           >
             <ClipboardList className="mr-1.5 h-4 w-4 text-indigo-500" />
             Requests
+          </Link>
+
+          {/* Contextual Action: View Follow-ups for this customer */}
+          <Link
+            href={`/customers/${id}?tab=followups`}
+            className="inline-flex items-center justify-center px-3.5 py-2 min-h-[44px] bg-white dark:bg-zinc-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors shadow-xs text-slate-700 dark:text-zinc-200"
+            title="Customer Follow-ups & Reminders"
+          >
+            <CalendarClock className="mr-1.5 h-4 w-4 text-amber-500" />
+            Follow-ups
           </Link>
 
           <Link 
