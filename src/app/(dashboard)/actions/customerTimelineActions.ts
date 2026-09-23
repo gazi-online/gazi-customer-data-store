@@ -132,7 +132,7 @@ export async function getCustomerUnifiedTimeline(
     // 6. Communications
     supabase
       .from("customer_communications")
-      .select("id, channel, direction, outcome, notes, communicated_at, created_at")
+      .select("id, customer_service_id, channel, direction, outcome, notes, communicated_at, created_at")
       .eq("customer_id", customerId)
       .order("communicated_at", { ascending: false }),
   ]);
@@ -355,6 +355,7 @@ export async function getCustomerUnifiedTimeline(
       },
       metadata: {
         subtext: comm.outcome || undefined,
+        linkUrl: comm.customer_service_id ? `/requests/${comm.customer_service_id}` : undefined,
       },
     });
   }

@@ -280,11 +280,14 @@ export async function recordCommunication(payload: RecordCommunicationPayload) {
     .single();
 
   if (error) {
-    throw new Error(`Failed to record communication: ${error.message}`);
+    console.error("[recordCommunication] DB error code:", error.code);
+    throw new Error("Failed to record communication.");
   }
 
   revalidatePath("/communications");
   revalidatePath(`/customers/${payload.customerId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/operations");
   if (payload.customerServiceId) {
     revalidatePath(`/requests/${payload.customerServiceId}`);
   }

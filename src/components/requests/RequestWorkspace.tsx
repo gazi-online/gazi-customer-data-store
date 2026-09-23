@@ -438,6 +438,7 @@ export function RequestWorkspace({ data, followupSummary }: RequestWorkspaceProp
             customerPhone={data.customer.phone}
             requestNumber={data.requestNumber}
             serviceName={data.service.serviceName}
+            activeFollowup={followupSummary?.activeFollowup || null}
           />
 
           {/* Card 2: Attached Documents Lifecycle Manager */}
