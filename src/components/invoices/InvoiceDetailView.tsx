@@ -14,7 +14,9 @@ import {
   RotateCcw,
   X,
   Check,
-  Printer
+  Printer,
+  ClipboardList,
+  ArrowRight
 } from "lucide-react";
 import { RecordPaymentModal } from "@/components/payments/RecordPaymentModal";
 import { issueInvoice, cancelInvoice } from "@/app/(dashboard)/invoices/actions";
@@ -24,6 +26,9 @@ import { toast } from "sonner";
 interface InvoiceDetailViewProps {
   invoice: any;
 }
+
+const isValidUuid = (id?: string | null): boolean =>
+  Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
 
 function formatCurrency(amount: number) {
   return "₹" + Number(amount || 0).toLocaleString("en-IN", {
@@ -261,7 +266,23 @@ export function InvoiceDetailView({ invoice }: InvoiceDetailViewProps) {
               {(invoice.items || []).map((item: any) => (
                 <tr key={item.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30">
                   <td className="py-3.5 px-4 font-medium text-zinc-900 dark:text-zinc-100">
-                    {item.description}
+                    <div>
+                      <span>{item.description}</span>
+                      {isValidUuid(item.customer_service_id) && (
+                        <div className="mt-1.5">
+                          <Link
+                            href={`/requests/${item.customer_service_id}`}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-[44px] text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-lg transition-colors border border-indigo-200/60 dark:border-indigo-800/60 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+                            aria-label={`Open request for ${item.description || "item"}`}
+                            title="Open Request Workspace"
+                          >
+                            <ClipboardList className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                            <span>Open Request</span>
+                            <ArrowRight className="h-3 w-3 opacity-60 shrink-0" />
+                          </Link>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3.5 px-4 text-right font-mono text-zinc-700 dark:text-zinc-300">
                     {item.quantity}
