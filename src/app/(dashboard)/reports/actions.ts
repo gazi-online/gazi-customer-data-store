@@ -88,17 +88,29 @@ export async function getReceivablesAgeingData(params: ReportFilterParams) {
 export async function getCustomerReceivableSummaryData(params: ReportFilterParams) {
   const supabase = await createClient();
 
-  const { data: customers, error: custErr } = await supabase
+  let custQuery = supabase
     .from("customers")
     .select("id, first_name, middle_name, last_name, customer_code")
     .order("first_name", { ascending: true });
 
+  if (params.customerId) {
+    custQuery = custQuery.eq("id", params.customerId);
+  }
+
+  const { data: customers, error: custErr } = await custQuery;
+
   if (custErr) throw new Error(custErr.message);
 
-  const { data: invoices, error: invErr } = await supabase
+  let invQuery = supabase
     .from("invoices")
     .select("*, customer:customers(id, first_name, middle_name, last_name, customer_code)")
     .not("status", "in", '("draft","cancelled")');
+
+  if (params.customerId) {
+    invQuery = invQuery.eq("customer_id", params.customerId);
+  }
+
+  const { data: invoices, error: invErr } = await invQuery;
 
   if (invErr) throw new Error(invErr.message);
 
@@ -217,4 +229,79 @@ export async function getCustomersForReportFilter() {
     .select("id, first_name, middle_name, last_name, customer_code")
     .order("first_name", { ascending: true });
   return customers || [];
+}
+
+export async function getServiceWorkloadData(params: ReportFilterParams) {
+  const supabase = await createClient();
+  const { dateFrom, dateTo } = ReportEngine.resolveFilterDates(params);
+
+  // Filter boundary conversion to compare with created_at and completed_at
+  const fromIso = `${dateFrom}T00:00:00.000Z`;
+  const nextDay = new Date(`${dateTo}T00:00:00.000Z`);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  const toIso = nextDay.toISOString();
+
+  // Bounded query on customer_services:
+  // Fetch records created in period, completed in period, or currently active
+  let query = supabase
+    .from("customer_services")
+    .select(`
+      id,
+      service_id,
+      status,
+      created_at,
+      completed_at,
+      delivered_at,
+      services:services(id, service_name, service_code)
+    `)
+    .or(`and(created_at.gte.${fromIso},created_at.lt.${toIso}),and(completed_at.gte.${fromIso},completed_at.lt.${toIso}),and(delivered_at.gte.${fromIso},delivered_at.lt.${toIso}),status.in.(pending,documents_pending,ready_to_submit,submitted,in_process,action_required)`);
+
+  if (params.customerId) {
+    query = query.eq("customer_id", params.customerId);
+  }
+
+  const { data: customerServices, error } = await query;
+
+  if (error) {
+    console.error("Error fetching service workload data:", error);
+    throw new Error("Failed to load service workload analytics.");
+  }
+
+  type RawWorkloadRow = {
+    id: string;
+    service_id: string;
+    status: string;
+    created_at: string;
+    completed_at?: string | null;
+    delivered_at?: string | null;
+    services?: {
+      id: string;
+      service_name?: string | null;
+      service_code?: string | null;
+    } | Array<{
+      id: string;
+      service_name?: string | null;
+      service_code?: string | null;
+    }> | null;
+  };
+
+  const normalizedRows = ((customerServices || []) as RawWorkloadRow[]).map((row) => ({
+    id: String(row.id),
+    service_id: String(row.service_id),
+    status: String(row.status),
+    created_at: String(row.created_at),
+    completed_at: row.completed_at || null,
+    delivered_at: row.delivered_at || null,
+    services: Array.isArray(row.services)
+      ? row.services[0] || null
+      : row.services || null,
+  }));
+
+  const workloadSummary = ReportEngine.computeServiceWorkloadAnalytics({
+    customerServices: normalizedRows,
+    dateFrom,
+    dateTo,
+  });
+
+  return workloadSummary;
 }

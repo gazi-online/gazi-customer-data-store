@@ -109,3 +109,41 @@ export interface CustomerStatementData {
   closingBalance: number;
   entries: LedgerEntry[];
 }
+
+export interface ServiceVolumeItem {
+  serviceId: string;
+  serviceName: string;
+  serviceCode?: string;
+  totalRequests: number;
+  completedRequests: number;
+  activeRequests: number;
+  sharePercentage: number;
+}
+
+export interface OperationalStatusDistributionItem {
+  status: string;
+  label: string;
+  count: number;
+  percentage: number;
+  isTerminal: boolean;
+}
+
+export interface TurnaroundAnalytics {
+  averageDays: number;
+  medianDays: number;
+  minDays: number;
+  maxDays: number;
+  sampleCount: number;
+}
+
+export interface ServiceWorkloadSummary {
+  dateFrom: string;
+  dateTo: string;
+  totalCreatedInPeriod: number;
+  totalCompletedInPeriod: number;
+  activePendingWork: number;
+  cohortCompletionRate: number; // percentage (0 - 100) of items created in period that completed
+  turnaround: TurnaroundAnalytics;
+  topServices: ServiceVolumeItem[];
+  statusDistribution: OperationalStatusDistributionItem[];
+}

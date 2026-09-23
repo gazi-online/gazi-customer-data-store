@@ -8,12 +8,14 @@ import { ReceivablesAgeingTab } from "./ReceivablesAgeingTab";
 import { CollectionsAnalyticsTab } from "./CollectionsAnalyticsTab";
 import { TaxReadinessTab } from "./TaxReadinessTab";
 import { CustomerStatementTab } from "./CustomerStatementTab";
+import { ServiceWorkloadTab } from "./ServiceWorkloadTab";
 import { 
   getReportsOverviewData, 
   getReceivablesAgeingData, 
   getCustomerReceivableSummaryData, 
   getCollectionsAnalyticsData, 
-  getTaxReadinessSummaryData 
+  getTaxReadinessSummaryData,
+  getServiceWorkloadData,
 } from "@/app/(dashboard)/reports/actions";
 import { 
   ReportFilterParams, 
@@ -22,13 +24,22 @@ import {
   AgeingItem, 
   CustomerReceivableSummary, 
   CollectionsAnalyticsData, 
-  TaxReadinessSummary 
+  TaxReadinessSummary,
+  ServiceWorkloadSummary,
 } from "@/lib/reports/report-types";
-import { BarChart3, Clock, CreditCard, FileText, TrendingUp, Loader2 } from "lucide-react";
+import { BarChart3, Clock, CreditCard, FileText, TrendingUp, Loader2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
+interface CustomerFilterItem {
+  id: string;
+  first_name: string;
+  middle_name?: string | null;
+  last_name: string;
+  customer_code?: string;
+}
+
 interface ReportsDashboardViewProps {
-  customersList: any[];
+  customersList: CustomerFilterItem[];
 }
 
 export function ReportsDashboardView({ customersList }: ReportsDashboardViewProps) {
@@ -48,16 +59,18 @@ export function ReportsDashboardView({ customersList }: ReportsDashboardViewProp
   const [customerSummaries, setCustomerSummaries] = useState<CustomerReceivableSummary[]>([]);
   const [collectionsData, setCollectionsData] = useState<CollectionsAnalyticsData | null>(null);
   const [taxData, setTaxData] = useState<TaxReadinessSummary | null>(null);
+  const [workloadData, setWorkloadData] = useState<ServiceWorkloadSummary | null>(null);
 
   const loadData = async (params: ReportFilterParams) => {
     try {
       setIsLoading(true);
-      const [ov, ag, custs, col, tx] = await Promise.all([
+      const [ov, ag, custs, col, tx, wl] = await Promise.all([
         getReportsOverviewData(params),
         getReceivablesAgeingData(params),
         getCustomerReceivableSummaryData(params),
         getCollectionsAnalyticsData(params),
         getTaxReadinessSummaryData(params),
+        getServiceWorkloadData(params),
       ]);
 
       setOverviewData(ov);
@@ -65,21 +78,61 @@ export function ReportsDashboardView({ customersList }: ReportsDashboardViewProp
       setCustomerSummaries(custs);
       setCollectionsData(col);
       setTaxData(tx);
-    } catch (err: any) {
+      setWorkloadData(wl);
+    } catch (err: unknown) {
       console.error("Error loading report analytics:", err);
-      toast.error(err.message || "Failed to load report analytics.");
+      const msg = err instanceof Error ? err.message : "Failed to load report analytics.";
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData(filterParams);
+    let isCancelled = false;
+    async function initReports() {
+      try {
+        setIsLoading(true);
+        const [ov, ag, custs, col, tx, wl] = await Promise.all([
+          getReportsOverviewData(filterParams),
+          getReceivablesAgeingData(filterParams),
+          getCustomerReceivableSummaryData(filterParams),
+          getCollectionsAnalyticsData(filterParams),
+          getTaxReadinessSummaryData(filterParams),
+          getServiceWorkloadData(filterParams),
+        ]);
+
+        if (!isCancelled) {
+          setOverviewData(ov);
+          setAgeingData(ag);
+          setCustomerSummaries(custs);
+          setCollectionsData(col);
+          setTaxData(tx);
+          setWorkloadData(wl);
+        }
+      } catch (err: unknown) {
+        if (!isCancelled) {
+          console.error("Error loading report analytics:", err);
+          const msg = err instanceof Error ? err.message : "Failed to load report analytics.";
+          toast.error(msg);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void initReports();
+    return () => {
+      isCancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFilterChange = (newParams: ReportFilterParams) => {
     setFilterParams(newParams);
-    loadData(newParams);
+    void loadData(newParams);
   };
 
   return (
@@ -109,6 +162,7 @@ export function ReportsDashboardView({ customersList }: ReportsDashboardViewProp
       <div className="flex items-center space-x-1 border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto text-xs font-semibold">
         {[
           { id: "overview", label: "Executive Overview", icon: TrendingUp },
+          { id: "workload", label: "Services & Workload", icon: Wrench },
           { id: "ageing", label: "Receivables Ageing", icon: Clock },
           { id: "collections", label: "Collections Analytics", icon: CreditCard },
           { id: "tax_summary", label: "Tax / GST Readiness Summary", icon: FileText },
@@ -137,7 +191,7 @@ export function ReportsDashboardView({ customersList }: ReportsDashboardViewProp
       {isLoading && !overviewData ? (
         <div className="p-16 text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
           <Loader2 className="h-8 w-8 text-blue-600 animate-spin mx-auto mb-2" />
-          <p className="text-xs text-zinc-500 font-semibold">Computing financial metrics and ageing aggregations...</p>
+          <p className="text-xs text-zinc-500 font-semibold">Computing operational and financial analytics aggregations...</p>
         </div>
       ) : (
         <div>
@@ -147,6 +201,10 @@ export function ReportsDashboardView({ customersList }: ReportsDashboardViewProp
               dateFrom={overviewData.dateFrom}
               dateTo={overviewData.dateTo}
             />
+          )}
+
+          {activeTab === "workload" && workloadData && (
+            <ServiceWorkloadTab data={workloadData} />
           )}
 
           {activeTab === "ageing" && ageingData && (
