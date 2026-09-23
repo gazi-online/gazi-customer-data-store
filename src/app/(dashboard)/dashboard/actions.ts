@@ -612,3 +612,71 @@ export async function getPaymentStatusData(): Promise<PaymentGaugeData> {
     },
   };
 }
+
+// ─── Daily Attention Section (Phase 6) ──────────────────────────────────
+
+export type DashboardAttentionItem = {
+  id: string;
+  category: "followup" | "document" | "request" | "billing";
+  priority: "urgent" | "today" | "upcoming" | "pending";
+  title: string;
+  reason: string;
+  customerName?: string;
+  customerId?: string;
+  formattedDueDate?: string | null;
+  targetUrl: string;
+  targetLabel: string;
+};
+
+export type DashboardAttentionSummary = {
+  urgentCount: number;
+  todayCount: number;
+  pendingCount: number;
+  totalAttentionCount: number;
+  items: DashboardAttentionItem[];
+};
+
+/**
+ * Loads compact operational items requiring immediate staff attention
+ * without creating waterfalls or computing authoritative balances.
+ */
+export async function getDashboardAttentionData(limit = 4): Promise<DashboardAttentionSummary> {
+  try {
+    const { getOperationsInboxAlerts } = await import("@/lib/operations/operationsInboxQuery");
+    const summary = await getOperationsInboxAlerts();
+
+    const actionable = summary.alerts.filter(
+      (a) => a.priority === "urgent" || a.priority === "today" || a.priority === "pending"
+    );
+
+    const items: DashboardAttentionItem[] = actionable.slice(0, limit).map((a) => ({
+      id: a.id,
+      category: a.category,
+      priority: a.priority as "urgent" | "today" | "upcoming" | "pending",
+      title: a.title,
+      reason: a.reason,
+      customerName: a.customerName,
+      customerId: a.customerId,
+      formattedDueDate: a.formattedDueDate,
+      targetUrl: a.targetUrl,
+      targetLabel: a.targetLabel,
+    }));
+
+    return {
+      urgentCount: summary.counts.urgent,
+      todayCount: summary.counts.today,
+      pendingCount: summary.counts.pending,
+      totalAttentionCount: summary.counts.urgent + summary.counts.today + summary.counts.pending,
+      items,
+    };
+  } catch (error) {
+    console.error("Failed to load dashboard attention data safely:", error);
+    return {
+      urgentCount: 0,
+      todayCount: 0,
+      pendingCount: 0,
+      totalAttentionCount: 0,
+      items: [],
+    };
+  }
+}

@@ -2,20 +2,23 @@ import {
   getDashboardMetrics,
   getCustomerGrowthData,
   getRecentActivity,
+  getDashboardAttentionData,
 } from "./actions";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { DashboardKpis } from "@/components/dashboard/DashboardKpis";
+import { DailyAttentionQueue } from "@/components/dashboard/DailyAttentionQueue";
 import { CustomerGrowthChart } from "@/components/dashboard/CustomerGrowthChart";
 import { RecentActivityTable } from "@/components/dashboard/RecentActivityTable";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  // Fetch real Supabase metrics, growth points, and recent activity concurrently
-  const [metrics, growthData, activities] = await Promise.all([
+  // Fetch real Supabase metrics, growth points, recent activity, and daily operational queue concurrently
+  const [metrics, growthData, activities, attentionData] = await Promise.all([
     getDashboardMetrics(),
     getCustomerGrowthData("30d"),
     getRecentActivity(6),
+    getDashboardAttentionData(4),
   ]);
 
   return (
@@ -36,10 +39,13 @@ export default async function DashboardPage() {
       {/* 2. Key Performance Indicators Row */}
       <DashboardKpis metrics={metrics} />
 
-      {/* 3. Customer Growth & Verification Trend Section */}
+      {/* 3. Daily Operations Attention Queue (Phase 6) */}
+      <DailyAttentionQueue attentionData={attentionData} />
+
+      {/* 4. Customer Growth & Verification Trend Section */}
       <CustomerGrowthChart initialData={growthData} initialPeriod="30d" />
 
-      {/* 4. Recent Activity High-Density Table */}
+      {/* 5. Recent Activity High-Density Table */}
       <RecentActivityTable activities={activities} />
     </div>
   );

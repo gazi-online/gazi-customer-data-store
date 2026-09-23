@@ -140,3 +140,71 @@ export function getKolkataFutureDateString(daysAhead: number, refDate: Date = ne
   const targetUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0) - IST_OFFSET_MS + (daysAhead * 24 * 60 * 60 * 1000);
   return getKolkataDateString(new Date(targetUtcMs));
 }
+
+export type OperationalPriority = 'urgent' | 'today' | 'upcoming' | 'pending' | 'completed';
+
+export interface ClassifyPriorityParams {
+  dueDate?: string | null;
+  status?: string | null;
+  isExpired?: boolean;
+  isOverdue?: boolean;
+  refDate?: Date;
+}
+
+/**
+ * Deterministically classifies an operational record into a priority bucket
+ * using canonical Asia/Kolkata business calendar boundaries.
+ */
+export function classifyOperationalPriority(params: ClassifyPriorityParams): OperationalPriority {
+  const { dueDate, status, isExpired, isOverdue, refDate = new Date() } = params;
+
+  // 1. Terminal / Completed check
+  if (
+    status === 'completed' ||
+    status === 'delivered' ||
+    status === 'cancelled' ||
+    status === 'archived' ||
+    status === 'superseded' ||
+    status === 'paid'
+  ) {
+    return 'completed';
+  }
+
+  // 2. Explicit urgent overrides (already expired or confirmed overdue)
+  if (isExpired || isOverdue) {
+    return 'urgent';
+  }
+
+  // 3. Date-based classification in Asia/Kolkata
+  if (dueDate) {
+    const range = getKolkataTodayHalfOpenRange(refDate);
+    const todayStr = range.todayDateStr;
+
+    // Distinguish between ISO timestamps (contains 'T') and YYYY-MM-DD calendar dates
+    if (dueDate.includes("T")) {
+      const dueEpoch = new Date(dueDate).getTime();
+      const todayStartEpoch = new Date(range.startOfTodayIST).getTime();
+      const tomorrowStartEpoch = new Date(range.startOfTomorrowIST).getTime();
+
+      if (dueEpoch < todayStartEpoch) {
+        return 'urgent';
+      }
+      if (dueEpoch >= todayStartEpoch && dueEpoch < tomorrowStartEpoch) {
+        return 'today';
+      }
+      return 'upcoming';
+    } else {
+      const dateOnly = dueDate.slice(0, 10);
+      if (dateOnly < todayStr) {
+        return 'urgent';
+      }
+      if (dateOnly === todayStr) {
+        return 'today';
+      }
+      return 'upcoming';
+    }
+  }
+
+  // 4. Actionable states without due date
+  return 'pending';
+}
