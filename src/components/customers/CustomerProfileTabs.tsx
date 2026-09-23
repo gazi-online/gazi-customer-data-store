@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CustomerDocument, AiImportHistoryRecord } from "@/types/document";
 import { FileText, Cpu, RefreshCw, Archive, Replace, CheckCircle2, XCircle, Layers, User, Briefcase, Activity, Receipt, Download, Loader2, MessageSquare } from "lucide-react";
 import { rerunExtraction, archiveDocument, getDocumentSignedUrl } from "@/app/(dashboard)/documents/actions";
@@ -17,7 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 import { getActiveServices } from "@/app/(dashboard)/services/actions";
 import { getCustomerBillingSummary } from "@/app/(dashboard)/invoices/actions";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface CustomerProfileTabsProps {
   customerId: string;
@@ -28,6 +28,8 @@ interface CustomerProfileTabsProps {
   customerServices?: CustomerServiceWithDetails[];
 }
 
+type ProfileTab = 'overview' | 'documents' | 'ai-imports' | 'services' | 'billing' | 'communications' | 'activity';
+
 export function CustomerProfileTabs({
   customerId,
   customerName = "Customer",
@@ -37,9 +39,23 @@ export function CustomerProfileTabs({
   customerServices = [],
 }: CustomerProfileTabsProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'ai-imports' | 'services' | 'billing' | 'communications' | 'activity'>('documents');
+  const tabParam = searchParams.get("tab") as ProfileTab | null;
+  const validTabs: ProfileTab[] = ['overview', 'documents', 'ai-imports', 'services', 'billing', 'communications', 'activity'];
+  const initialTab: ProfileTab = tabParam && validTabs.includes(tabParam) ? tabParam : 'documents';
+
+  const [activeTab, setActiveTabState] = useState<ProfileTab>(initialTab);
+
+  const setActiveTab = (tab: ProfileTab) => {
+    setActiveTabState(tab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tab);
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
   const [filterDocStatus, setFilterDocStatus] = useState<'active' | 'all' | 'archived'>('active');
   const [runningRerunId, setRunningRerunId] = useState<string | null>(null);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
@@ -80,6 +96,38 @@ export function CustomerProfileTabs({
       setBillingLoading(false);
     }
   };
+
+  useEffect(() => {
+    let isCancelled = false;
+    if (activeTab === 'billing' && !billingSummary) {
+      void (async () => {
+        await Promise.resolve();
+        if (isCancelled) return;
+        setBillingLoading(true);
+        try {
+          const res = await getCustomerBillingSummary(customerId);
+          if (!isCancelled) {
+            if (res.success && res.data) {
+              setBillingSummary(res.data);
+            } else {
+              setBillingError(res.error || "Failed to load customer billing history.");
+            }
+          }
+        } catch (err: unknown) {
+          if (!isCancelled) {
+            setBillingError(err instanceof Error ? err.message : "Failed to load billing history.");
+          }
+        } finally {
+          if (!isCancelled) {
+            setBillingLoading(false);
+          }
+        }
+      })();
+    }
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeTab, customerId, billingSummary]);
 
   const handleOpenAssignService = async (serviceData?: CustomerServiceFormData) => {
     setIsLoadingServices(true);

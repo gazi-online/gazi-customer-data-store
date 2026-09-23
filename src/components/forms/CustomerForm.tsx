@@ -495,7 +495,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">First Name <span className="text-red-500">*</span></label>
-              <input {...register("first_name")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Rahul" />
+              <input {...register("first_name")} autoFocus={!isEditing} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Rahul" />
               {errors.first_name && <p className="text-sm text-red-500">{errors.first_name.message}</p>}
             </div>
 
@@ -589,18 +589,18 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Phone Number <span className="text-red-500">*</span></label>
-              <input {...register("phone")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. +91 98765 43210" />
+              <input {...register("phone")} type="tel" inputMode="tel" autoComplete="tel" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow font-mono" placeholder="e.g. +91 98765 43210" />
               {errors.phone && <p className="text-sm text-red-500">{errors.phone.message}</p>}
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">WhatsApp</label>
-              <input {...register("whatsapp")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. +91 98765 43210" />
+              <input {...register("whatsapp")} type="tel" inputMode="tel" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow font-mono" placeholder="e.g. +91 98765 43210" />
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Email Address</label>
-              <input {...register("email")} type="email" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. rahul@example.com" />
+              <input {...register("email")} type="email" autoComplete="email" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. rahul@example.com" />
               {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
             </div>
           </div>
@@ -633,7 +633,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                 <span>Pincode</span>
                 {isPincodeLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />}
               </label>
-              <input {...register("pincode")} maxLength={6} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow font-mono" placeholder="e.g. 700001" />
+              <input {...register("pincode")} maxLength={6} inputMode="numeric" autoComplete="postal-code" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow font-mono" placeholder="e.g. 700001" />
               {pincodeError && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{pincodeError}</p>}
             </div>
 

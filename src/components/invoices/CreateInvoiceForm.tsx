@@ -243,13 +243,21 @@ export function CreateInvoiceForm({
       {/* Customer & Invoice Date Configuration */}
       <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
-          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider mb-2">
-            Customer <span className="text-red-500">*</span>
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
+              Customer <span className="text-red-500">*</span>
+            </label>
+            {preselectedCustomerId && customerId === preselectedCustomerId && (
+              <span className="text-[11px] font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-800">
+                Preselected
+              </span>
+            )}
+          </div>
           <select
             value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
             required
+            aria-label="Select Customer"
             className="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 text-zinc-900 dark:text-zinc-100"
           >
             <option value="">-- Select Customer --</option>

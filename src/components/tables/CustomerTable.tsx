@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, Filter, Edit, Eye } from "lucide-react";
+import { Search, Filter, Edit, Eye, Receipt, X } from "lucide-react";
 import { CustomerListRow } from "@/types/customer";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -73,11 +73,26 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search customers..."
+            placeholder="Search customers by name, phone, code..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 transition-shadow"
+            className="w-full pl-10 pr-9 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 transition-shadow"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                const params = new URLSearchParams(searchParams);
+                params.delete("search");
+                router.push(`/customers?${params.toString()}`);
+              }}
+              aria-label="Clear search"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-md"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </form>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -85,6 +100,7 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
           <select
             onChange={handleStatusChange}
             defaultValue={searchParams.get("status") || "all"}
+            aria-label="Filter customers by status"
             className="w-full sm:w-auto py-2.5 sm:py-2 pl-3 pr-8 min-h-[44px] sm:min-h-0 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer"
           >
             <option value="all">All Statuses</option>
@@ -94,6 +110,36 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
           </select>
         </div>
       </div>
+
+      {/* Active Filter Indicators */}
+      {(Boolean(normalizedSearch) || (Boolean(normalizedStatus) && normalizedStatus !== "all")) && (
+        <div className="px-3.5 sm:px-4 py-2 bg-violet-50/50 dark:bg-violet-950/20 border-b border-violet-100 dark:border-violet-900/40 flex items-center justify-between text-xs text-slate-600 dark:text-zinc-300">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-slate-700 dark:text-slate-300">Filters:</span>
+            {normalizedSearch && (
+              <span className="px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 text-[11px] font-mono">
+                &ldquo;{normalizedSearch}&rdquo;
+              </span>
+            )}
+            {normalizedStatus && normalizedStatus !== "all" && (
+              <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-zinc-700 text-slate-700 dark:text-zinc-200 text-[11px] capitalize">
+                {normalizedStatus}
+              </span>
+            )}
+            <span className="text-slate-400">({visibleCustomers.length} results)</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              router.push("/customers");
+            }}
+            className="text-xs text-violet-600 hover:text-violet-700 dark:text-violet-400 hover:underline font-semibold"
+          >
+            Reset all
+          </button>
+        </div>
+      )}
 
       {/* Desktop Table View */}
       <div className="overflow-x-auto hidden md:block">
@@ -177,7 +223,15 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
                     {new Date(customer.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end space-x-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end space-x-2.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                      <Link
+                        href={`/invoices/new?customer_id=${customer.id}`}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        title="Create Invoice"
+                        aria-label={`Create invoice for ${customer.first_name} ${customer.last_name}`}
+                      >
+                        <Receipt className="h-4 w-4" />
+                      </Link>
                       <Link
                         href={`/customers/${customer.id}`}
                         className="p-1.5 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
@@ -293,10 +347,18 @@ export function CustomerTable({ initialCustomers }: CustomerTableProps = {}) {
               </div>
 
               {/* Actions */}
-              <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-end gap-2">
+              <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-end gap-2 flex-wrap">
+                <Link
+                  href={`/invoices/new?customer_id=${customer.id}`}
+                  className="inline-flex items-center justify-center gap-1 px-3 py-2 min-h-[44px] text-xs font-semibold rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  aria-label={`Create invoice for ${customer.first_name} ${customer.last_name}`}
+                >
+                  <Receipt className="h-3.5 w-3.5" />
+                  <span>+ Invoice</span>
+                </Link>
                 <Link 
                   href={`/customers/${customer.id}`} 
-                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[44px] sm:min-h-0 text-xs font-semibold rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] text-xs font-semibold rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
                   aria-label={`View profile for ${customer.first_name} ${customer.last_name}`}
                 >
                   <Eye className="h-3.5 w-3.5" />

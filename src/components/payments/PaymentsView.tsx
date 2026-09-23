@@ -182,10 +182,20 @@ export function PaymentsView({
 
             <button
               type="submit"
-              className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-xl text-sm font-semibold transition-colors"
+              className="px-4 py-2 min-h-[44px] sm:min-h-0 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-xl text-sm font-semibold transition-colors"
             >
               Apply
             </button>
+
+            {(Boolean(initialSearch) || (Boolean(initialStatus) && initialStatus !== "all") || (Boolean(initialMethod) && initialMethod !== "all")) && (
+              <Link
+                href="/payments"
+                className="px-3 py-2 min-h-[44px] sm:min-h-0 text-xs font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1"
+              >
+                <X className="h-3.5 w-3.5" />
+                Reset
+              </Link>
+            )}
           </div>
         </form>
       </div>
@@ -208,129 +218,242 @@ export function PaymentsView({
             }
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm border-collapse">
-              <thead>
-                <tr className="bg-slate-50/80 dark:bg-zinc-900/80 border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                  <th className="py-3.5 px-4">Payment #</th>
-                  <th className="py-3.5 px-4">Customer</th>
-                  <th className="py-3.5 px-4">Date</th>
-                  <th className="py-3.5 px-4 text-right">Amount</th>
-                  <th className="py-3.5 px-4 text-center">Method</th>
-                  <th className="py-3.5 px-4">Reference</th>
-                  <th className="py-3.5 px-4 text-center">Status</th>
-                  <th className="py-3.5 px-4">Allocated Invoices</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
-                {payments.map((pay: PaymentListItem) => {
-                  const customerName = pay.customer
-                    ? `${pay.customer.first_name} ${pay.customer.middle_name ? pay.customer.middle_name + " " : ""}${pay.customer.last_name}`
-                    : "Unknown Customer";
+          <>
+            {/* Desktop Table View */}
+            <div className="overflow-x-auto hidden md:block">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 dark:bg-zinc-900/80 border-b border-slate-200 dark:border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                    <th className="py-3.5 px-4">Payment #</th>
+                    <th className="py-3.5 px-4">Customer</th>
+                    <th className="py-3.5 px-4">Date</th>
+                    <th className="py-3.5 px-4 text-right">Amount</th>
+                    <th className="py-3.5 px-4 text-center">Method</th>
+                    <th className="py-3.5 px-4">Reference</th>
+                    <th className="py-3.5 px-4 text-center">Status</th>
+                    <th className="py-3.5 px-4">Allocated Invoices</th>
+                    <th className="py-3.5 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
+                  {payments.map((pay: PaymentListItem) => {
+                    const customerName = pay.customer
+                      ? `${pay.customer.first_name} ${pay.customer.middle_name ? pay.customer.middle_name + " " : ""}${pay.customer.last_name}`
+                      : "Unknown Customer";
 
-                  const isRecorded = pay.status === "recorded";
+                    const isRecorded = pay.status === "recorded";
 
-                  return (
-                    <tr
-                      key={pay.id}
-                      className="hover:bg-slate-50/70 dark:hover:bg-zinc-800/40 transition-colors group"
-                    >
-                      <td className="py-4 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                        #{pay.payment_number}
-                      </td>
-                      <td className="py-4 px-4 font-medium text-slate-900 dark:text-zinc-100">
+                    return (
+                      <tr
+                        key={pay.id}
+                        className="hover:bg-slate-50/70 dark:hover:bg-zinc-800/40 transition-colors group"
+                      >
+                        <td className="py-4 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          #{pay.payment_number}
+                        </td>
+                        <td className="py-4 px-4 font-medium text-slate-900 dark:text-zinc-100">
+                          {pay.customer ? (
+                            <Link
+                              href={`/customers/${pay.customer.id}`}
+                              className="hover:text-violet-600 transition-colors"
+                            >
+                              {customerName}
+                            </Link>
+                          ) : (
+                            customerName
+                          )}
+                        </td>
+                        <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400 text-xs">
+                          {new Date(pay.payment_date).toLocaleDateString()}
+                        </td>
+                        <td className="py-4 px-4 text-right font-mono font-bold text-zinc-900 dark:text-zinc-100">
+                          {formatCurrency(pay.amount)}
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold uppercase bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                            {pay.payment_method}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 font-mono text-xs text-zinc-500">
+                          {pay.reference_number || "-"}
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            isRecorded ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" :
+                            pay.status === "voided" ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" :
+                            "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                          }`}>
+                            {pay.status}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-xs">
+                          {pay.allocations && pay.allocations.length > 0 ? (
+                            <div className="space-y-1">
+                              {pay.allocations.map((alloc) => (
+                                <div key={alloc.id} className="flex items-center space-x-1 font-mono">
+                                  <Link
+                                    href={`/invoices/${alloc.invoice?.id}`}
+                                    className="text-blue-600 dark:text-blue-400 hover:underline font-bold"
+                                  >
+                                    #{alloc.invoice?.invoice_number}
+                                  </Link>
+                                  <span className="text-zinc-400">({formatCurrency(alloc.amount)})</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-zinc-400 italic">Unallocated</span>
+                          )}
+                        </td>
+                        <td className="py-4 px-4 text-right">
+                          {isRecorded ? (
+                            <div className="flex items-center justify-end space-x-2">
+                              <button
+                                onClick={() => setConfirmModal({
+                                  type: 'void_payment',
+                                  id: pay.id,
+                                  title: `Void Payment #${pay.payment_number}`,
+                                  description: `Are you sure you want to VOID payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
+                                })}
+                                disabled={isActionPending}
+                                className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/30 dark:hover:bg-red-900/50 rounded-lg text-xs font-semibold transition-colors"
+                              >
+                                Void
+                              </button>
+                              <button
+                                onClick={() => setConfirmModal({
+                                  type: 'refund_payment',
+                                  id: pay.id,
+                                  title: `Refund Payment #${pay.payment_number}`,
+                                  description: `Are you sure you want to REFUND payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
+                                })}
+                                disabled={isActionPending}
+                                className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 rounded-lg text-xs font-semibold transition-colors"
+                              >
+                                Refund
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-zinc-400 italic">Locked</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card List View (< md) */}
+            <div className="md:hidden divide-y divide-slate-100 dark:divide-zinc-800">
+              {payments.map((pay: PaymentListItem) => {
+                const customerName = pay.customer
+                  ? `${pay.customer.first_name} ${pay.customer.middle_name ? pay.customer.middle_name + " " : ""}${pay.customer.last_name}`
+                  : "Unknown Customer";
+
+                const isRecorded = pay.status === "recorded";
+
+                return (
+                  <div key={pay.id} className="p-4 flex flex-col gap-3 hover:bg-slate-50/50 dark:hover:bg-zinc-800/30 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm block">
+                          #{pay.payment_number}
+                        </span>
                         {pay.customer ? (
                           <Link
                             href={`/customers/${pay.customer.id}`}
-                            className="hover:text-violet-600 transition-colors"
+                            className="text-xs font-semibold text-slate-900 dark:text-zinc-100 hover:text-violet-600 truncate block mt-0.5"
                           >
                             {customerName}
                           </Link>
                         ) : (
-                          customerName
+                          <span className="text-xs font-semibold text-slate-500 truncate block mt-0.5">
+                            {customerName}
+                          </span>
                         )}
-                      </td>
-                      <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400 text-xs">
-                        {new Date(pay.payment_date).toLocaleDateString()}
-                      </td>
-                      <td className="py-4 px-4 text-right font-mono font-bold text-zinc-900 dark:text-zinc-100">
-                        {formatCurrency(pay.amount)}
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold uppercase bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                      </div>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${
+                        isRecorded ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" :
+                        pay.status === "voided" ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" :
+                        "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                      }`}>
+                        {pay.status}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-slate-50 dark:bg-zinc-800/40 p-2.5 rounded-xl">
+                      <div>
+                        <span className="text-[10px] text-zinc-400 uppercase font-semibold block">Amount</span>
+                        <span className="text-sm font-mono font-bold text-zinc-900 dark:text-zinc-100">
+                          {formatCurrency(pay.amount)}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-zinc-400 uppercase font-semibold block">Method</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200">
                           {pay.payment_method}
                         </span>
-                      </td>
-                      <td className="py-4 px-4 font-mono text-xs text-zinc-500">
-                        {pay.reference_number || "-"}
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                          isRecorded ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" :
-                          pay.status === "voided" ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" :
-                          "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                        }`}>
-                          {pay.status}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-xs">
-                        {pay.allocations && pay.allocations.length > 0 ? (
-                          <div className="space-y-1">
-                            {pay.allocations.map((alloc) => (
-                              <div key={alloc.id} className="flex items-center space-x-1 font-mono">
-                                <Link
-                                  href={`/invoices/${alloc.invoice?.id}`}
-                                  className="text-blue-600 dark:text-blue-400 hover:underline font-bold"
-                                >
-                                  #{alloc.invoice?.invoice_number}
-                                </Link>
-                                <span className="text-zinc-400">({formatCurrency(alloc.amount)})</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-zinc-400 italic">Unallocated</span>
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-zinc-500 space-y-1">
+                      <div className="flex justify-between">
+                        <span>Date: {new Date(pay.payment_date).toLocaleDateString()}</span>
+                        {pay.reference_number && (
+                          <span className="font-mono">Ref: {pay.reference_number}</span>
                         )}
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        {isRecorded ? (
-                          <div className="flex items-center justify-end space-x-2">
-                            <button
-                              onClick={() => setConfirmModal({
-                                type: 'void_payment',
-                                id: pay.id,
-                                title: `Void Payment #${pay.payment_number}`,
-                                description: `Are you sure you want to VOID payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
-                              })}
-                              disabled={isActionPending}
-                              className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/30 dark:hover:bg-red-900/50 rounded-lg text-xs font-semibold transition-colors"
+                      </div>
+
+                      {pay.allocations && pay.allocations.length > 0 && (
+                        <div className="pt-1 flex items-center gap-1.5 flex-wrap">
+                          <span className="text-zinc-400 text-[11px]">Allocated:</span>
+                          {pay.allocations.map((alloc) => (
+                            <Link
+                              key={alloc.id}
+                              href={`/invoices/${alloc.invoice?.id}`}
+                              className="text-blue-600 dark:text-blue-400 font-mono text-[11px] hover:underline"
                             >
-                              Void
-                            </button>
-                            <button
-                              onClick={() => setConfirmModal({
-                                type: 'refund_payment',
-                                id: pay.id,
-                                title: `Refund Payment #${pay.payment_number}`,
-                                description: `Are you sure you want to REFUND payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
-                              })}
-                              disabled={isActionPending}
-                              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 rounded-lg text-xs font-semibold transition-colors"
-                            >
-                              Refund
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-zinc-400 italic">Locked</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                              #{alloc.invoice?.invoice_number}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {isRecorded && (
+                      <div className="pt-2 border-t border-slate-100 dark:border-zinc-800/60 flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setConfirmModal({
+                            type: 'void_payment',
+                            id: pay.id,
+                            title: `Void Payment #${pay.payment_number}`,
+                            description: `Are you sure you want to VOID payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
+                          })}
+                          disabled={isActionPending}
+                          className="px-3 py-2 min-h-[44px] bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/30 dark:hover:bg-red-900/50 rounded-lg text-xs font-semibold transition-colors"
+                        >
+                          Void
+                        </button>
+                        <button
+                          onClick={() => setConfirmModal({
+                            type: 'refund_payment',
+                            id: pay.id,
+                            title: `Refund Payment #${pay.payment_number}`,
+                            description: `Are you sure you want to REFUND payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
+                          })}
+                          disabled={isActionPending}
+                          className="px-3 py-2 min-h-[44px] bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 rounded-lg text-xs font-semibold transition-colors"
+                        >
+                          Refund
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 

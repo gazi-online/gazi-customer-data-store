@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { getInvoices, InvoiceListItem } from "./actions";
-import { Receipt, Plus, Search, Filter, AlertTriangle, Eye, CheckCircle2, Clock, XCircle, Printer } from "lucide-react";
+import { Receipt, Plus, Search, Filter, AlertTriangle, Eye, CheckCircle2, Clock, XCircle, Printer, X } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -133,101 +133,205 @@ async function InvoicesTableContent({
           }
         />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="bg-zinc-50/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                <th className="py-3.5 px-4">Invoice #</th>
-                <th className="py-3.5 px-4">Customer</th>
-                <th className="py-3.5 px-4">Invoice Date</th>
-                <th className="py-3.5 px-4">Due Date</th>
-                <th className="py-3.5 px-4 text-right">Total</th>
-                <th className="py-3.5 px-4 text-right">Paid</th>
-                <th className="py-3.5 px-4 text-right">Due</th>
-                <th className="py-3.5 px-4 text-center">Status</th>
-                <th className="py-3.5 px-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {invoices.map((inv: InvoiceListItem) => {
-                const isOverdue = Boolean(
-                  inv.due_date &&
-                  inv.due_date < today &&
-                  Number(inv.due_amount) > 0 &&
-                  inv.status !== "draft" &&
-                  inv.status !== "cancelled"
-                );
+        <>
+          {/* Desktop Table View */}
+          <div className="overflow-x-auto hidden md:block">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="bg-zinc-50/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  <th className="py-3.5 px-4">Invoice #</th>
+                  <th className="py-3.5 px-4">Customer</th>
+                  <th className="py-3.5 px-4">Invoice Date</th>
+                  <th className="py-3.5 px-4">Due Date</th>
+                  <th className="py-3.5 px-4 text-right">Total</th>
+                  <th className="py-3.5 px-4 text-right">Paid</th>
+                  <th className="py-3.5 px-4 text-right">Due</th>
+                  <th className="py-3.5 px-4 text-center">Status</th>
+                  <th className="py-3.5 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {invoices.map((inv: InvoiceListItem) => {
+                  const isOverdue = Boolean(
+                    inv.due_date &&
+                    inv.due_date < today &&
+                    Number(inv.due_amount) > 0 &&
+                    inv.status !== "draft" &&
+                    inv.status !== "cancelled"
+                  );
 
-                const customerName = inv.customer
-                  ? `${inv.customer.first_name} ${inv.customer.middle_name ? inv.customer.middle_name + " " : ""}${inv.customer.last_name}`
-                  : "Unknown Customer";
+                  const customerName = inv.customer
+                    ? `${inv.customer.first_name} ${inv.customer.middle_name ? inv.customer.middle_name + " " : ""}${inv.customer.last_name}`
+                    : "Unknown Customer";
 
-                return (
-                  <tr
-                    key={inv.id}
-                    className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors group"
-                  >
-                    <td className="py-4 px-4 font-mono font-bold text-violet-600 dark:text-violet-400">
-                      <Link href={`/invoices/${inv.id}`} className="hover:underline">
+                  return (
+                    <tr
+                      key={inv.id}
+                      className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors group"
+                    >
+                      <td className="py-4 px-4 font-mono font-bold text-violet-600 dark:text-violet-400">
+                        <Link href={`/invoices/${inv.id}`} className="hover:underline">
+                          #{inv.invoice_number}
+                        </Link>
+                      </td>
+                      <td className="py-4 px-4 font-medium text-zinc-900 dark:text-zinc-100">
+                        {inv.customer ? (
+                          <Link
+                            href={`/customers/${inv.customer.id}`}
+                            className="hover:text-violet-600 transition-colors"
+                          >
+                            {customerName}
+                          </Link>
+                        ) : (
+                          customerName
+                        )}
+                      </td>
+                      <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400 text-xs">
+                        {new Date(inv.invoice_date).toLocaleDateString()}
+                      </td>
+                      <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400 text-xs">
+                        {inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "-"}
+                      </td>
+                      <td className="py-4 px-4 text-right font-mono font-semibold text-zinc-900 dark:text-zinc-100">
+                        {formatCurrency(inv.total_amount)}
+                      </td>
+                      <td className="py-4 px-4 text-right font-mono text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(inv.paid_amount)}
+                      </td>
+                      <td className="py-4 px-4 text-right font-mono font-bold text-amber-600 dark:text-amber-400">
+                        {formatCurrency(inv.due_amount)}
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        {getStatusBadge(inv.status, isOverdue)}
+                      </td>
+                      <td className="py-4 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={`/invoices/${inv.id}`}
+                            className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-900/30 dark:hover:text-violet-400 rounded-lg text-xs font-semibold transition-colors"
+                            aria-label={`View invoice #${inv.invoice_number}`}
+                          >
+                            <Eye className="h-3.5 w-3.5 mr-1" /> View
+                          </Link>
+                          <Link
+                            href={`/invoices/${inv.id}/print`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400 rounded-lg text-xs font-semibold transition-colors"
+                            aria-label={`Print invoice #${inv.invoice_number}`}
+                          >
+                            <Printer className="h-3.5 w-3.5 mr-1" /> Print
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card List View (< md) */}
+          <div className="md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+            {invoices.map((inv: InvoiceListItem) => {
+              const isOverdue = Boolean(
+                inv.due_date &&
+                inv.due_date < today &&
+                Number(inv.due_amount) > 0 &&
+                inv.status !== "draft" &&
+                inv.status !== "cancelled"
+              );
+
+              const customerName = inv.customer
+                ? `${inv.customer.first_name} ${inv.customer.middle_name ? inv.customer.middle_name + " " : ""}${inv.customer.last_name}`
+                : "Unknown Customer";
+
+              return (
+                <div key={inv.id} className="p-4 flex flex-col gap-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors">
+                  {/* Header: Invoice Number + Status Badge */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/invoices/${inv.id}`}
+                        className="font-mono font-bold text-violet-600 dark:text-violet-400 text-sm hover:underline"
+                      >
                         #{inv.invoice_number}
                       </Link>
-                    </td>
-                    <td className="py-4 px-4 font-medium text-zinc-900 dark:text-zinc-100">
-                      {inv.customer ? (
-                        <Link
-                          href={`/customers/${inv.customer.id}`}
-                          className="hover:text-violet-600 transition-colors"
-                        >
-                          {customerName}
-                        </Link>
-                      ) : (
-                        customerName
-                      )}
-                    </td>
-                    <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400 text-xs">
-                      {new Date(inv.invoice_date).toLocaleDateString()}
-                    </td>
-                    <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400 text-xs">
-                      {inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "-"}
-                    </td>
-                    <td className="py-4 px-4 text-right font-mono font-semibold text-zinc-900 dark:text-zinc-100">
-                      {formatCurrency(inv.total_amount)}
-                    </td>
-                    <td className="py-4 px-4 text-right font-mono text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(inv.paid_amount)}
-                    </td>
-                    <td className="py-4 px-4 text-right font-mono font-bold text-amber-600 dark:text-amber-400">
-                      {formatCurrency(inv.due_amount)}
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      {getStatusBadge(inv.status, isOverdue)}
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/invoices/${inv.id}`}
-                          className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-900/30 dark:hover:text-violet-400 rounded-lg text-xs font-semibold transition-colors"
-                          aria-label={`View invoice #${inv.invoice_number}`}
-                        >
-                          <Eye className="h-3.5 w-3.5 mr-1" /> View
-                        </Link>
-                        <Link
-                          href={`/invoices/${inv.id}/print`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400 rounded-lg text-xs font-semibold transition-colors"
-                          aria-label={`Print invoice #${inv.invoice_number}`}
-                        >
-                          <Printer className="h-3.5 w-3.5 mr-1" /> Print
-                        </Link>
+                      <div className="mt-0.5">
+                        {inv.customer ? (
+                          <Link
+                            href={`/customers/${inv.customer.id}`}
+                            className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:text-violet-600 truncate block"
+                          >
+                            {customerName}
+                          </Link>
+                        ) : (
+                          <span className="text-xs font-semibold text-zinc-500 truncate block">
+                            {customerName}
+                          </span>
+                        )}
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                    <div className="shrink-0">
+                      {getStatusBadge(inv.status, isOverdue)}
+                    </div>
+                  </div>
+
+                  {/* Financial Metrics Strip */}
+                  <div className="grid grid-cols-3 gap-2 bg-zinc-50 dark:bg-zinc-800/40 p-2.5 rounded-xl text-center">
+                    <div>
+                      <span className="text-[10px] text-zinc-400 uppercase font-semibold block">Total</span>
+                      <span className="text-xs font-mono font-bold text-zinc-900 dark:text-zinc-100">
+                        {formatCurrency(inv.total_amount)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 uppercase font-semibold block">Paid</span>
+                      <span className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(inv.paid_amount)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 uppercase font-semibold block">Due</span>
+                      <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
+                        {formatCurrency(inv.due_amount)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Dates & Actions Row */}
+                  <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between gap-2">
+                    <div className="text-[11px] text-zinc-400">
+                      <span>Date: {new Date(inv.invoice_date).toLocaleDateString()}</span>
+                      {inv.due_date && (
+                        <span className="ml-2 font-medium">Due: {new Date(inv.due_date).toLocaleDateString()}</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Link
+                        href={`/invoices/${inv.id}`}
+                        className="inline-flex items-center justify-center px-3 py-2 min-h-[44px] text-xs font-semibold rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-colors"
+                        aria-label={`View invoice #${inv.invoice_number}`}
+                      >
+                        <Eye className="h-3.5 w-3.5 mr-1" /> View
+                      </Link>
+                      <Link
+                        href={`/invoices/${inv.id}/print`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center px-3 py-2 min-h-[44px] text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 transition-colors"
+                        aria-label={`Print invoice #${inv.invoice_number}`}
+                      >
+                        <Printer className="h-3.5 w-3.5 mr-1" /> Print
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
@@ -239,6 +343,7 @@ export default async function InvoicesPage({
   searchParams: Promise<{ search?: string; status?: string }>;
 }) {
   const { search, status } = await searchParams;
+  const isFiltered = Boolean(search || (status && status !== "all"));
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-150">
@@ -260,7 +365,7 @@ export default async function InvoicesPage({
       />
 
       {/* Filter and Search Toolbar */}
-      <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
+      <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col md:flex-row gap-3 justify-between items-center">
         <form method="GET" className="w-full md:w-auto flex-1 flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
@@ -269,7 +374,7 @@ export default async function InvoicesPage({
               name="search"
               defaultValue={search || ""}
               placeholder="Search by invoice # or customer name..."
-              className="w-full pl-10 pr-4 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 text-zinc-900 dark:text-zinc-100"
+              className="w-full pl-10 pr-4 py-2 min-h-[44px] sm:min-h-0 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 text-zinc-900 dark:text-zinc-100"
             />
           </div>
 
@@ -278,7 +383,8 @@ export default async function InvoicesPage({
             <select
               name="status"
               defaultValue={status || "all"}
-              className="px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 text-zinc-900 dark:text-zinc-100"
+              aria-label="Filter by invoice status"
+              className="px-3 py-2 min-h-[44px] sm:min-h-0 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 text-zinc-900 dark:text-zinc-100 cursor-pointer"
             >
               <option value="all">All Statuses</option>
               <option value="draft">Draft</option>
@@ -290,10 +396,19 @@ export default async function InvoicesPage({
             </select>
             <button
               type="submit"
-              className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-xl text-sm font-semibold transition-colors"
+              className="px-4 py-2 min-h-[44px] sm:min-h-0 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-xl text-sm font-semibold transition-colors"
             >
               Filter
             </button>
+            {isFiltered && (
+              <Link
+                href="/invoices"
+                className="px-3 py-2 min-h-[44px] sm:min-h-0 text-xs font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400 hover:underline flex items-center gap-1"
+              >
+                <X className="h-3.5 w-3.5" />
+                Reset
+              </Link>
+            )}
           </div>
         </form>
       </div>

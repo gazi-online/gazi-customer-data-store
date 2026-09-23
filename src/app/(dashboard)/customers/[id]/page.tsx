@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getCustomerById } from "../actions";
 import { getCustomerDocuments, getCustomerAiImports } from "@/app/(dashboard)/documents/actions";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Edit, Calendar, Hash, ShieldCheck, Phone, MessageCircle, Mail, Users, MapPin } from "lucide-react";
+import { ArrowLeft, Edit, Calendar, Hash, ShieldCheck, Phone, MessageCircle, Mail, Users, MapPin, Receipt, ClipboardList } from "lucide-react";
 import { DocumentUploadForm } from "@/components/forms/DocumentUploadForm";
 import { getProfilePhotoSignedUrl } from "@/app/(dashboard)/customers/ai-actions";
 import { CustomerProfileTabs } from "@/components/customers/CustomerProfileTabs";
@@ -103,10 +103,30 @@ export default async function CustomerProfilePage({
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Customers
         </Link>
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Contextual Action: Create Invoice with preselected customer */}
+          <Link
+            href={`/invoices/new?customer_id=${id}`}
+            className="inline-flex items-center justify-center px-3.5 py-2 min-h-[44px] bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition-colors shadow-xs"
+            title="Create Invoice for this customer"
+          >
+            <Receipt className="mr-1.5 h-4 w-4" />
+            + Create Invoice
+          </Link>
+
+          {/* Contextual Action: View Requests for this customer */}
+          <Link
+            href={`/requests?q=${encodeURIComponent(customer.phone || customer.first_name)}`}
+            className="inline-flex items-center justify-center px-3.5 py-2 min-h-[44px] bg-white dark:bg-zinc-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors shadow-xs text-slate-700 dark:text-zinc-200"
+            title="Search customer service requests"
+          >
+            <ClipboardList className="mr-1.5 h-4 w-4 text-indigo-500" />
+            Requests
+          </Link>
+
           <Link 
             href={`/customers/${id}/edit`} 
-            className="inline-flex items-center justify-center px-4 py-2 min-h-[44px] bg-white dark:bg-zinc-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors shadow-xs"
+            className="inline-flex items-center justify-center px-3.5 py-2 min-h-[44px] bg-white dark:bg-zinc-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors shadow-xs text-slate-700 dark:text-zinc-200"
           >
             <Edit className="mr-1.5 h-4 w-4" />
             Edit Profile
