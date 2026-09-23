@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarClock,
@@ -53,6 +53,20 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
 
   const active = summary.activeFollowup;
   const history = summary.history;
+
+  // Close modals on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (isScheduleOpen) setIsScheduleOpen(false);
+        if (isRescheduleOpen) setIsRescheduleOpen(false);
+        if (isCompleteOpen) setIsCompleteOpen(false);
+        if (isCancelOpen) setIsCancelOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isScheduleOpen, isRescheduleOpen, isCompleteOpen, isCancelOpen]);
 
   // Open reschedule modal with pre-populated values
   const handleOpenReschedule = () => {
@@ -195,12 +209,12 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
                 {formatKolkataDateTime(active.followUpAt)}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={handleOpenReschedule}
                 disabled={isPending}
-                className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
+                className="min-h-[44px] px-3.5 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors inline-flex items-center gap-1.5 disabled:opacity-50 touch-manipulation"
               >
                 <RotateCcw className="h-3.5 w-3.5 text-blue-600" />
                 <span>Reschedule</span>
@@ -213,7 +227,7 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
                   setIsCompleteOpen(true);
                 }}
                 disabled={isPending}
-                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white transition-colors inline-flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
+                className="min-h-[44px] px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white transition-colors inline-flex items-center gap-1.5 disabled:opacity-50 shadow-xs touch-manipulation"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 <span>Complete</span>
@@ -226,7 +240,7 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
                   setIsCancelOpen(true);
                 }}
                 disabled={isPending}
-                className="px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-xs font-semibold transition-colors inline-flex items-center gap-1 disabled:opacity-50"
+                className="min-h-[44px] px-3 py-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-xs font-semibold transition-colors inline-flex items-center gap-1 disabled:opacity-50 touch-manipulation"
                 title="Cancel Follow-up"
               >
                 <XCircle className="h-3.5 w-3.5" />
@@ -265,7 +279,7 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
               setIsScheduleOpen(true);
             }}
             disabled={isPending}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-colors shadow-xs"
+            className="inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-colors shadow-xs touch-manipulation disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
             <span>Schedule Follow-up</span>
@@ -333,17 +347,26 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
 
       {/* ─── MODAL 1: SCHEDULE FOLLOW-UP ──────────────────────────────────── */}
       {isScheduleOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="schedule-modal-title"
+        >
           <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-slate-200 dark:border-zinc-800 shadow-xl max-w-md w-full space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2">
+              <h3
+                id="schedule-modal-title"
+                className="text-base font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2"
+              >
                 <CalendarClock className="h-5 w-5 text-violet-600" />
                 <span>Schedule Follow-up</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsScheduleOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+                aria-label="Close schedule modal"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -359,7 +382,8 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
                   required
                   value={scheduleDateTime}
                   onChange={(e) => setScheduleDateTime(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+                  className="w-full min-h-[44px] px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+                  aria-required="true"
                 />
               </div>
 
@@ -381,14 +405,15 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
                   type="button"
                   onClick={() => setIsScheduleOpen(false)}
                   disabled={isPending}
-                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold touch-manipulation"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
+                  aria-busy={isPending}
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold inline-flex items-center gap-1.5 disabled:opacity-50 touch-manipulation"
                 >
                   {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   <span>Save Schedule</span>
@@ -401,17 +426,26 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
 
       {/* ─── MODAL 2: RESCHEDULE FOLLOW-UP ────────────────────────────────── */}
       {isRescheduleOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reschedule-modal-title"
+        >
           <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-slate-200 dark:border-zinc-800 shadow-xl max-w-md w-full space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2">
+              <h3
+                id="reschedule-modal-title"
+                className="text-base font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2"
+              >
                 <RotateCcw className="h-5 w-5 text-blue-600" />
                 <span>Reschedule Follow-up</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsRescheduleOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+                aria-label="Close reschedule modal"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -427,7 +461,8 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
                   required
                   value={rescheduleDateTime}
                   onChange={(e) => setRescheduleDateTime(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  className="w-full min-h-[44px] px-3 py-2 bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  aria-required="true"
                 />
               </div>
 
@@ -461,14 +496,15 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
                   type="button"
                   onClick={() => setIsRescheduleOpen(false)}
                   disabled={isPending}
-                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold touch-manipulation"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
+                  aria-busy={isPending}
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold inline-flex items-center gap-1.5 disabled:opacity-50 touch-manipulation"
                 >
                   {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   <span>Confirm Reschedule</span>
@@ -481,17 +517,26 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
 
       {/* ─── MODAL 3: COMPLETE FOLLOW-UP ──────────────────────────────────── */}
       {isCompleteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="complete-modal-title"
+        >
           <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-slate-200 dark:border-zinc-800 shadow-xl max-w-md w-full space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2">
+              <h3
+                id="complete-modal-title"
+                className="text-base font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2"
+              >
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                 <span>Mark Follow-up as Completed</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsCompleteOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+                aria-label="Close complete modal"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -524,14 +569,15 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
                   type="button"
                   onClick={() => setIsCompleteOpen(false)}
                   disabled={isPending}
-                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold touch-manipulation"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
+                  aria-busy={isPending}
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold inline-flex items-center gap-1.5 disabled:opacity-50 touch-manipulation"
                 >
                   {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   <span>Mark Completed</span>
@@ -544,17 +590,26 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
 
       {/* ─── MODAL 4: CANCEL FOLLOW-UP ────────────────────────────────────── */}
       {isCancelOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cancel-modal-title"
+        >
           <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-slate-200 dark:border-zinc-800 shadow-xl max-w-md w-full space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-rose-600 flex items-center gap-2">
+              <h3
+                id="cancel-modal-title"
+                className="text-base font-bold text-rose-600 flex items-center gap-2"
+              >
                 <XCircle className="h-5 w-5 text-rose-600" />
                 <span>Cancel Follow-up</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsCancelOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+                aria-label="Close cancel modal"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -583,14 +638,15 @@ export function FollowupSection({ requestId, summary }: FollowupSectionProps) {
                   type="button"
                   onClick={() => setIsCancelOpen(false)}
                   disabled={isPending}
-                  className="px-4 py-2 rounded-xl text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold"
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold touch-manipulation"
                 >
                   Back
                 </button>
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
+                  aria-busy={isPending}
+                  className="min-h-[44px] px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold inline-flex items-center gap-1.5 disabled:opacity-50 touch-manipulation"
                 >
                   {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   <span>Confirm Cancel</span>

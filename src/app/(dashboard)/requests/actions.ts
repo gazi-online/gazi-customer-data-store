@@ -912,6 +912,33 @@ export interface FollowupMutationResult {
 }
 
 /**
+ * Internal helper to revalidate request workspace and downstream operational queues
+ */
+async function revalidateRequestAndDownstream(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  requestId: string
+) {
+  revalidatePath("/requests");
+  revalidatePath(`/requests/${requestId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/operations");
+
+  try {
+    const { data: csRow } = await supabase
+      .from("customer_services")
+      .select("customer_id")
+      .eq("id", requestId)
+      .maybeSingle();
+
+    if (csRow?.customer_id) {
+      revalidatePath(`/customers/${csRow.customer_id}`);
+    }
+  } catch {
+    // Non-fatal if customer revalidation lookup fails
+  }
+}
+
+/**
  * Schedule a new follow-up for a service request.
  * Enforces single active open follow-up per request via DB partial unique index.
  */
@@ -959,12 +986,10 @@ export async function scheduleFollowup(params: {
         };
       }
       console.error("[scheduleFollowup] Insert error:", error.message);
-      return { success: false, error: error.message || "Failed to schedule follow-up.", errorCode: "query_failed" };
+      return { success: false, error: "Failed to schedule follow-up.", errorCode: "query_failed" };
     }
 
-    revalidatePath("/requests");
-    revalidatePath(`/requests/${requestId}`);
-    revalidatePath("/dashboard");
+    await revalidateRequestAndDownstream(supabase, requestId);
 
     return { success: true, followupId: data.id };
   } catch (err: unknown) {
@@ -1011,12 +1036,10 @@ export async function rescheduleFollowup(params: {
 
     if (error) {
       console.error("[rescheduleFollowup] RPC error:", error.message);
-      return { success: false, error: error.message || "Failed to reschedule follow-up.", errorCode: "rpc_failed" };
+      return { success: false, error: "Failed to reschedule follow-up.", errorCode: "rpc_failed" };
     }
 
-    revalidatePath("/requests");
-    revalidatePath(`/requests/${requestId}`);
-    revalidatePath("/dashboard");
+    await revalidateRequestAndDownstream(supabase, requestId);
 
     return { success: true, newFollowupId: newId };
   } catch (err: unknown) {
@@ -1058,12 +1081,10 @@ export async function completeFollowup(params: {
 
     if (error) {
       console.error("[completeFollowup] Update error:", error.message);
-      return { success: false, error: error.message || "Failed to complete follow-up.", errorCode: "query_failed" };
+      return { success: false, error: "Failed to complete follow-up.", errorCode: "query_failed" };
     }
 
-    revalidatePath("/requests");
-    revalidatePath(`/requests/${requestId}`);
-    revalidatePath("/dashboard");
+    await revalidateRequestAndDownstream(supabase, requestId);
 
     return { success: true, followupId };
   } catch (err: unknown) {
@@ -1104,12 +1125,10 @@ export async function cancelFollowup(params: {
 
     if (error) {
       console.error("[cancelFollowup] Update error:", error.message);
-      return { success: false, error: error.message || "Failed to cancel follow-up.", errorCode: "query_failed" };
+      return { success: false, error: "Failed to cancel follow-up.", errorCode: "query_failed" };
     }
 
-    revalidatePath("/requests");
-    revalidatePath(`/requests/${requestId}`);
-    revalidatePath("/dashboard");
+    await revalidateRequestAndDownstream(supabase, requestId);
 
     return { success: true, followupId };
   } catch (err: unknown) {

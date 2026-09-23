@@ -418,9 +418,17 @@ export function RequestWorkspace({ data, followupSummary }: RequestWorkspaceProp
           </section>
 
           {/* Follow-up & Operations Card */}
-          {followupSummary && (
-            <FollowupSection requestId={data.id} summary={followupSummary} />
-          )}
+          <FollowupSection
+            requestId={data.id}
+            summary={
+              followupSummary ?? {
+                activeFollowup: null,
+                state: "none",
+                history: [],
+                hasOpenFollowup: false,
+              }
+            }
+          />
 
           {/* Customer Outreach & Communications Card */}
           <RequestCommunicationsSection
