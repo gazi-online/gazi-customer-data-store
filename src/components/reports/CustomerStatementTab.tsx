@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { CustomerStatementData } from "@/lib/reports/report-types";
 import { getCustomerStatementData } from "@/app/(dashboard)/reports/actions";
-import { FileText, Download, User, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { FileText, Download, User, Loader2, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -36,29 +36,48 @@ export function CustomerStatementTab({
   const [statement, setStatement] = useState<CustomerStatementData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const loadStatement = async (cId: string, dFrom: string, dTo: string) => {
-    if (!cId) return;
-    try {
+  useEffect(() => {
+    let isCancelled = false;
+    if (!selectedCustomerId) return;
+
+    void (async () => {
+      await Promise.resolve();
+      if (isCancelled) return;
       setIsLoading(true);
-      const data = await getCustomerStatementData(cId, dFrom, dTo);
+      try {
+        const data = await getCustomerStatementData(selectedCustomerId, dateFrom, dateTo);
+        if (!isCancelled) {
+          setStatement(data);
+        }
+      } catch (err: unknown) {
+        if (!isCancelled) {
+          const msg = err instanceof Error ? err.message : "Failed to load customer statement.";
+          toast.error(msg);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedCustomerId, dateFrom, dateTo]);
+
+  const handleApplyFilter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCustomerId) return;
+    setIsLoading(true);
+    try {
+      const data = await getCustomerStatementData(selectedCustomerId, dateFrom, dateTo);
       setStatement(data);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to load customer statement.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to load customer statement.";
+      toast.error(msg);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedCustomerId) {
-      loadStatement(selectedCustomerId, dateFrom, dateTo);
-    }
-  }, [selectedCustomerId]);
-
-  const handleApplyFilter = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedCustomerId) {
-      loadStatement(selectedCustomerId, dateFrom, dateTo);
     }
   };
 
@@ -241,7 +260,20 @@ export function CustomerStatementTab({
                     {statement.entries.map((e) => (
                       <tr key={e.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40">
                         <td className="py-3 px-3 text-zinc-600 dark:text-zinc-400">{e.date}</td>
-                        <td className="py-3 px-3 font-bold text-blue-600 dark:text-blue-400">{e.reference}</td>
+                        <td className="py-3 px-3 font-bold text-blue-600 dark:text-blue-400">
+                          {e.type === "invoice" ? (
+                            <Link
+                              href={`/invoices/${e.id}`}
+                              className="text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-1 focus:outline-hidden focus:ring-2 focus:ring-violet-500 rounded"
+                              aria-label={`Open invoice ${e.reference}`}
+                            >
+                              <span>{e.reference}</span>
+                              <ExternalLink className="h-3 w-3 opacity-70" />
+                            </Link>
+                          ) : (
+                            <span className="text-zinc-700 dark:text-zinc-300">{e.reference}</span>
+                          )}
+                        </td>
                         <td className="py-3 px-3">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                             e.type === "invoice" ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300" :

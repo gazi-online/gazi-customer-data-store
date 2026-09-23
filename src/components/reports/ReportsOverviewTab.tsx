@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { ReportOverviewData } from "@/lib/reports/report-types";
-import { Receipt, CreditCard, Clock, AlertTriangle, TrendingUp, CheckCircle2 } from "lucide-react";
+import { Receipt, CreditCard, Clock, AlertTriangle, TrendingUp, ArrowRight } from "lucide-react";
 
 interface ReportsOverviewTabProps {
   data: ReportOverviewData;
@@ -58,27 +59,51 @@ export function ReportsOverviewTab({ data, dateFrom, dateTo }: ReportsOverviewTa
         </div>
 
         {/* Outstanding Receivables */}
-        <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-3 opacity-10">
-            <Clock className="h-12 w-12 text-amber-600" />
+        <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div>
+            <div className="absolute top-0 right-0 p-3 opacity-10 pointer-events-none">
+              <Clock className="h-12 w-12 text-amber-600" />
+            </div>
+            <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Outstanding Receivables</p>
+            <p className="text-2xl font-bold font-mono text-amber-600 dark:text-amber-400 mt-1">
+              {formatCurrency(data.outstandingReceivables)}
+            </p>
+            <p className="text-[11px] text-zinc-500 mt-2">Unpaid non-cancelled balance</p>
           </div>
-          <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Outstanding Receivables</p>
-          <p className="text-2xl font-bold font-mono text-amber-600 dark:text-amber-400 mt-1">
-            {formatCurrency(data.outstandingReceivables)}
-          </p>
-          <p className="text-[11px] text-zinc-500 mt-2">Unpaid non-cancelled balance</p>
+          <div className="pt-3 mt-3 border-t border-zinc-100 dark:border-zinc-800/80">
+            <Link
+              href="/reports?tab=receivables"
+              className="inline-flex items-center text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline min-h-[36px] focus:outline-hidden focus:ring-2 focus:ring-amber-500 rounded"
+              aria-label="View receivables ageing breakdown"
+            >
+              <span>View Ageing Breakdown</span>
+              <ArrowRight className="h-3.5 w-3.5 ml-1" />
+            </Link>
+          </div>
         </div>
 
         {/* Overdue Receivables */}
-        <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-3 opacity-10">
-            <AlertTriangle className="h-12 w-12 text-red-600" />
+        <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div>
+            <div className="absolute top-0 right-0 p-3 opacity-10 pointer-events-none">
+              <AlertTriangle className="h-12 w-12 text-red-600" />
+            </div>
+            <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Overdue Receivables</p>
+            <p className="text-2xl font-bold font-mono text-red-600 dark:text-red-400 mt-1">
+              {formatCurrency(data.overdueReceivables)}
+            </p>
+            <p className="text-[11px] text-zinc-500 mt-2">Past due_date balance</p>
           </div>
-          <p className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Overdue Receivables</p>
-          <p className="text-2xl font-bold font-mono text-red-600 dark:text-red-400 mt-1">
-            {formatCurrency(data.overdueReceivables)}
-          </p>
-          <p className="text-[11px] text-zinc-500 mt-2">Past due_date balance</p>
+          <div className="pt-3 mt-3 border-t border-zinc-100 dark:border-zinc-800/80">
+            <Link
+              href="/invoices?status=overdue"
+              className="inline-flex items-center text-xs font-semibold text-red-600 dark:text-red-400 hover:underline min-h-[36px] focus:outline-hidden focus:ring-2 focus:ring-red-500 rounded"
+              aria-label="View overdue invoices desk"
+            >
+              <span>View Overdue Invoices</span>
+              <ArrowRight className="h-3.5 w-3.5 ml-1" />
+            </Link>
+          </div>
         </div>
       </div>
 

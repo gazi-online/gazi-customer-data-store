@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { ServiceWorkloadSummary } from "@/lib/reports/report-types";
 import {
   Wrench,
@@ -10,6 +11,7 @@ import {
   BarChart3,
   Calendar,
   TrendingUp,
+  ChevronRight,
 } from "lucide-react";
 
 interface ServiceWorkloadTabProps {
@@ -134,53 +136,74 @@ export function ServiceWorkloadTab({ data }: ServiceWorkloadTabProps) {
                 <p className="text-xs text-zinc-400 py-6 text-center">No service requests created in this window.</p>
               ) : (
                 <div className="divide-y divide-zinc-100 dark:divide-zinc-800 mt-2">
-                  {data.topServices.map((srv, idx) => (
-                    <div key={srv.serviceId} className="py-3.5 flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="w-5 h-5 rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400 text-[11px] font-bold flex items-center justify-center shrink-0">
-                            {idx + 1}
-                          </span>
-                          <span className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                            {srv.serviceName}
-                          </span>
-                          {srv.serviceCode && (
-                            <span className="hidden sm:inline-block px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
-                              {srv.serviceCode}
+                  {data.topServices.map((srv, idx) => {
+                    const isKnownService = Boolean(srv.serviceId && srv.serviceId !== "unknown");
+                    const serviceRowContent = (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="w-5 h-5 rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400 text-[11px] font-bold flex items-center justify-center shrink-0">
+                              {idx + 1}
                             </span>
-                          )}
+                            <span className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors truncate">
+                              {srv.serviceName}
+                            </span>
+                            {srv.serviceCode && (
+                              <span className="hidden sm:inline-block px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                                {srv.serviceCode}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                            <span className="text-xs sm:text-sm font-bold font-mono text-zinc-900 dark:text-zinc-100">
+                              {srv.totalRequests} reqs
+                            </span>
+                            <span className="text-[11px] font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 px-2 py-0.5 rounded-full">
+                              {srv.sharePercentage}%
+                            </span>
+                            {isKnownService && (
+                              <ChevronRight className="h-4 w-4 text-zinc-400 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-transform group-hover:translate-x-0.5" />
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className="text-xs sm:text-sm font-bold font-mono text-zinc-900 dark:text-zinc-100">
-                            {srv.totalRequests} reqs
+
+                        {/* Visual proportional bar */}
+                        <div className="w-full h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-violet-600 to-indigo-600 rounded-full transition-all duration-300"
+                            style={{ width: `${Math.max(2, srv.sharePercentage)}%` }}
+                          />
+                        </div>
+
+                        {/* Sub-counts: completed vs active */}
+                        <div className="flex items-center gap-4 text-[11px] text-zinc-500">
+                          <span className="flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                            <span>{srv.completedRequests} completed</span>
                           </span>
-                          <span className="text-[11px] font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 px-2 py-0.5 rounded-full">
-                            {srv.sharePercentage}%
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-blue-500" />
+                            <span>{srv.activeRequests} active</span>
                           </span>
                         </div>
-                      </div>
+                      </>
+                    );
 
-                      {/* Visual proportional bar */}
-                      <div className="w-full h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-violet-600 to-indigo-600 rounded-full transition-all duration-300"
-                          style={{ width: `${Math.max(2, srv.sharePercentage)}%` }}
-                        />
+                    return isKnownService ? (
+                      <Link
+                        key={srv.serviceId}
+                        href={`/requests?serviceId=${encodeURIComponent(srv.serviceId)}`}
+                        className="py-3 px-2 -mx-2 rounded-xl flex flex-col gap-2 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors group focus:outline-hidden focus:ring-2 focus:ring-violet-500 min-h-[44px]"
+                        aria-label={`View ${srv.serviceName} requests on Central Requests Desk`}
+                      >
+                        {serviceRowContent}
+                      </Link>
+                    ) : (
+                      <div key={srv.serviceId} className="py-3 flex flex-col gap-2">
+                        {serviceRowContent}
                       </div>
-
-                      {/* Sub-counts: completed vs active */}
-                      <div className="flex items-center gap-4 text-[11px] text-zinc-500">
-                        <span className="flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                          <span>{srv.completedRequests} completed</span>
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3 text-blue-500" />
-                          <span>{srv.activeRequests} active</span>
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -200,30 +223,38 @@ export function ServiceWorkloadTab({ data }: ServiceWorkloadTabProps) {
               {data.statusDistribution.length === 0 ? (
                 <p className="text-xs text-zinc-400 py-4 text-center">No status data recorded.</p>
               ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-1 mt-1">
                   {data.statusDistribution.map((item) => (
-                    <div key={item.status} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-[160px]">
-                          {item.label}
-                        </span>
-                        <span className="font-mono text-zinc-900 dark:text-zinc-100 font-bold">
-                          {item.count} ({item.percentage}%)
-                        </span>
+                    <Link
+                      key={item.status}
+                      href={`/requests?status=${encodeURIComponent(item.status)}`}
+                      className="block p-2 -mx-2 rounded-xl hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors group focus:outline-hidden focus:ring-2 focus:ring-violet-500 min-h-[44px]"
+                      aria-label={`View ${item.label} service requests`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors truncate max-w-[160px]">
+                            {item.label}
+                          </span>
+                          <div className="flex items-center gap-1.5 font-mono text-zinc-900 dark:text-zinc-100 font-bold">
+                            <span>{item.count} ({item.percentage}%)</span>
+                            <ChevronRight className="h-3.5 w-3.5 text-zinc-400 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-transform group-hover:translate-x-0.5" />
+                          </div>
+                        </div>
+                        <div className="w-full h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              item.isTerminal
+                                ? "bg-emerald-500"
+                                : item.status === "action_required"
+                                ? "bg-amber-500"
+                                : "bg-blue-500"
+                            }`}
+                            style={{ width: `${Math.max(2, item.percentage)}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="w-full h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${
-                            item.isTerminal
-                              ? "bg-emerald-500"
-                              : item.status === "action_required"
-                              ? "bg-amber-500"
-                              : "bg-blue-500"
-                          }`}
-                          style={{ width: `${Math.max(2, item.percentage)}%` }}
-                        />
-                      </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               )}
