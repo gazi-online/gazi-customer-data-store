@@ -13,6 +13,7 @@ import { Service, CustomerServiceWithDetails } from "@/types/service";
 import { CustomerServiceFormData } from "@/app/(dashboard)/services/schema";
 import { CustomerBillingTab } from "./CustomerBillingTab";
 import { CustomerCommunicationsTimeline } from "./CustomerCommunicationsTimeline";
+import { CustomerActivityTimelineTab } from "./CustomerActivityTimelineTab";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 import { getActiveServices } from "@/app/(dashboard)/services/actions";
@@ -735,13 +736,12 @@ export function CustomerProfileTabs({
         />
       )}
 
-      {/* ACTIVITY PLACEHOLDER TAB */}
+      {/* ACTIVITY TIMELINE TAB */}
       {activeTab === 'activity' && (
-        <div className="p-8 text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-2">
-          <Activity className="h-8 w-8 text-zinc-400 mx-auto" />
-          <h4 className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Customer Activity Log</h4>
-          <p className="text-xs text-zinc-500">System audit trail & user actions log (Placeholder).</p>
-        </div>
+        <CustomerActivityTimelineTab
+          customerId={customerId}
+          customerName={customerName}
+        />
       )}
     </div>
   );
