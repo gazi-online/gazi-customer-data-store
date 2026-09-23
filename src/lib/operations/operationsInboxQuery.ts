@@ -36,6 +36,15 @@ export interface OperationAlert {
   dueDate?: string | null;
   formattedDueDate?: string | null;
   createdAt?: string;
+
+  // Phase 12 Direct Resolution Metadata (Minimal non-sensitive identifiers)
+  followupId?: string;
+  customerServiceId?: string;
+  requestId?: string;
+  requestNumber?: string;
+  associationId?: string;
+  requirementTag?: string;
+  followupNote?: string;
 }
 
 export interface OperationsInboxSummary {
@@ -188,6 +197,11 @@ export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary
       customerId: cust?.id,
       dueDate: f.followUpAt,
       formattedDueDate: formatKolkataDateTime(f.followUpAt),
+      followupId: f.id,
+      customerServiceId: f.customerServiceId,
+      requestId: f.customerServiceId,
+      requestNumber: reqNum,
+      followupNote: f.note || undefined,
     });
   }
 
@@ -214,6 +228,11 @@ export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary
       customerId: cust?.id,
       dueDate: f.followUpAt,
       formattedDueDate: formatKolkataDateTime(f.followUpAt),
+      followupId: f.id,
+      customerServiceId: f.customerServiceId,
+      requestId: f.customerServiceId,
+      requestNumber: reqNum,
+      followupNote: f.note || undefined,
     });
   }
 
@@ -240,6 +259,11 @@ export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary
       customerId: cust?.id,
       dueDate: f.followUpAt,
       formattedDueDate: formatKolkataDateTime(f.followUpAt),
+      followupId: f.id,
+      customerServiceId: f.customerServiceId,
+      requestId: f.customerServiceId,
+      requestNumber: reqNum,
+      followupNote: f.note || undefined,
     });
   }
 
@@ -403,6 +427,11 @@ export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary
         targetLabel: `Open Request Workspace`,
         customerName: custName,
         customerId: cust?.id,
+        associationId: doc.id,
+        customerServiceId: req.id,
+        requestId: req.id,
+        requestNumber: reqNum,
+        requirementTag: doc.requirement_tag || 'general',
       });
     }
   }

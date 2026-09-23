@@ -19,6 +19,8 @@ import {
   X,
   User,
   Layers,
+  ShieldCheck,
+  Loader2,
 } from "lucide-react";
 import type {
   OperationsInboxSummary,
@@ -27,21 +29,33 @@ import type {
 } from "@/lib/operations/operationsInboxQuery";
 import type { OperationalPriority } from "@/lib/operations/dateUtils";
 import { getOperationsInboxAlerts } from "@/app/(dashboard)/operations/actions";
-import { useQuery } from "@tanstack/react-query";
+import { toggleDocumentVerification } from "@/app/(dashboard)/requests/actions";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { InlineErrorState } from "@/components/ui/InlineErrorState";
+import { QuickFollowupResolveModal } from "./QuickFollowupResolveModal";
+import { toast } from "sonner";
 
 interface OperationsInboxViewProps {
   initialSummary?: OperationsInboxSummary;
 }
 
 export function OperationsInboxView({ initialSummary }: OperationsInboxViewProps = {}) {
+  const queryClient = useQueryClient();
   const [selectedPriority, setSelectedPriority] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+
+  // Direct Resolution State (Phase 12)
+  const [followupModalAlert, setFollowupModalAlert] = useState<OperationAlert | null>(null);
+  const [followupModalMode, setFollowupModalMode] = useState<"complete" | "reschedule">("complete");
+  const [isFollowupModalOpen, setIsFollowupModalOpen] = useState(false);
+
+  const [verifyConfirmAlert, setVerifyConfirmAlert] = useState<OperationAlert | null>(null);
+  const [isVerifyingDoc, setIsVerifyingDoc] = useState(false);
 
   const {
     data: summary = initialSummary || {
@@ -88,6 +102,67 @@ export function OperationsInboxView({ initialSummary }: OperationsInboxViewProps
     setSelectedPriority("all");
     setSelectedCategory("all");
     setSearchQuery("");
+  };
+
+  // Direct Resolution Handlers (Phase 12)
+  const handleOpenComplete = (alert: OperationAlert) => {
+    setFollowupModalAlert(alert);
+    setFollowupModalMode("complete");
+    setIsFollowupModalOpen(true);
+  };
+
+  const handleOpenReschedule = (alert: OperationAlert) => {
+    setFollowupModalAlert(alert);
+    setFollowupModalMode("reschedule");
+    setIsFollowupModalOpen(true);
+  };
+
+  const handleFollowupSuccess = () => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.operations.alerts(DASHBOARD_MEMORY_SCOPE),
+    });
+  };
+
+  const handleOpenVerifyDoc = (alert: OperationAlert) => {
+    setVerifyConfirmAlert(alert);
+  };
+
+  const handleConfirmVerifyDoc = async () => {
+    const targetRequestId = verifyConfirmAlert?.requestId || verifyConfirmAlert?.customerServiceId;
+    if (!verifyConfirmAlert || !verifyConfirmAlert.associationId || !targetRequestId) {
+      toast.error("Missing document association or request ID.");
+      return;
+    }
+
+    setIsVerifyingDoc(true);
+    try {
+      const res = await toggleDocumentVerification({
+        requestId: targetRequestId,
+        associationId: verifyConfirmAlert.associationId,
+        expectedIsVerified: false,
+        isVerified: true,
+      });
+
+      if (res.success) {
+        toast.success("Document association verified successfully.");
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.operations.alerts(DASHBOARD_MEMORY_SCOPE),
+        });
+        setVerifyConfirmAlert(null);
+      } else if (res.errorCode === "conflict") {
+        toast.error("Document verification state changed concurrently. Refreshing queue...");
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.operations.alerts(DASHBOARD_MEMORY_SCOPE),
+        });
+        setVerifyConfirmAlert(null);
+      } else {
+        toast.error(res.error || "Failed to verify document.");
+      }
+    } catch {
+      toast.error("An unexpected error occurred while verifying document.");
+    } finally {
+      setIsVerifyingDoc(false);
+    }
   };
 
   const activeAlerts = useMemo(
@@ -268,16 +343,56 @@ export function OperationsInboxView({ initialSummary }: OperationsInboxViewProps
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-end md:self-center shrink-0 w-full sm:w-auto justify-end pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-zinc-800">
+        <div className="flex items-center gap-2 flex-wrap self-end md:self-center shrink-0 w-full sm:w-auto justify-end pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-zinc-800">
+          {/* Action 1: Followup Complete & Reschedule direct actions */}
+          {alert.category === "followup" && alert.followupId && (alert.requestId || alert.customerServiceId) && (
+            <>
+              <button
+                type="button"
+                onClick={() => handleOpenComplete(alert)}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-colors"
+                title={`Complete follow-up for ${alert.customerName || "customer"}`}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Complete</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenReschedule(alert)}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[44px] bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-700/60 text-slate-700 dark:text-zinc-200 text-xs sm:text-sm font-semibold rounded-xl shadow-xs transition-colors"
+                title={`Reschedule follow-up for ${alert.customerName || "customer"}`}
+              >
+                <Clock className="h-4 w-4 text-blue-500" />
+                <span>Reschedule</span>
+              </button>
+            </>
+          )}
+
+          {/* Action 2: Document Verification direct action */}
+          {alert.category === "document" && alert.associationId && (alert.requestId || alert.customerServiceId) && (
+            <button
+              type="button"
+              onClick={() => handleOpenVerifyDoc(alert)}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[44px] bg-violet-600 hover:bg-violet-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-colors"
+              title={`Verify document for ${alert.customerName || "customer"}`}
+            >
+              <ShieldCheck className="h-4 w-4" />
+              <span>Verify Doc</span>
+            </button>
+          )}
+
+          {/* Temporary in-memory dismiss (Acknowledge) */}
           <button
             onClick={() => handleDismiss(alert.id)}
-            title="Acknowledge and dismiss from current session view"
-            aria-label={`Acknowledge alert for ${alert.title}`}
+            title="Dismiss from current session view (temporary)"
+            aria-label={`Dismiss alert for ${alert.title}`}
             className="p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
           >
             <Check className="h-4 w-4" />
           </button>
 
+          {/* Canonical Deep Link / Investigation Action */}
           <Link
             href={alert.targetUrl}
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 min-h-[44px] bg-slate-900 hover:bg-slate-800 dark:bg-violet-600 dark:hover:bg-violet-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-colors flex-1 sm:flex-initial"
@@ -662,6 +777,108 @@ export function OperationsInboxView({ initialSummary }: OperationsInboxViewProps
           </div>
         )}
       </div>
+
+      {/* Follow-up Resolve/Reschedule Modal (Phase 12) */}
+      <QuickFollowupResolveModal
+        isOpen={isFollowupModalOpen}
+        onClose={() => setIsFollowupModalOpen(false)}
+        mode={followupModalMode}
+        alert={followupModalAlert}
+        onSuccess={handleFollowupSuccess}
+      />
+
+      {/* Document Verification Confirmation Modal (Phase 12) */}
+      {verifyConfirmAlert && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isVerifyingDoc) setVerifyConfirmAlert(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="verify-doc-dialog-title"
+            className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xl overflow-hidden flex flex-col"
+          >
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 dark:border-zinc-800 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-400 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2
+                    id="verify-doc-dialog-title"
+                    className="text-base font-bold text-slate-900 dark:text-zinc-100 tracking-tight"
+                  >
+                    Verify Document
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">
+                    Confirm staff verification of document association
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setVerifyConfirmAlert(null)}
+                disabled={isVerifyingDoc}
+                aria-label="Close dialog"
+                className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-xl transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center disabled:opacity-50"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-4">
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-zinc-800/40 border border-slate-200/70 dark:border-zinc-800 text-xs space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="font-semibold text-slate-900 dark:text-zinc-100">
+                    {verifyConfirmAlert.customerName || "Customer"}
+                  </span>
+                  {verifyConfirmAlert.requestNumber && (
+                    <span className="font-mono text-[11px] font-bold text-slate-600 dark:text-zinc-300 bg-white dark:bg-zinc-800 px-2 py-0.5 rounded border border-slate-200/80 dark:border-zinc-700">
+                      Ref: {verifyConfirmAlert.requestNumber}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 text-slate-600 dark:text-zinc-400">
+                  <span className="text-slate-400">Requirement Tag:</span>
+                  <span className="font-bold text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 px-2 py-0.5 rounded border border-violet-100 dark:border-violet-900/40">
+                    {verifyConfirmAlert.requirementTag || "general"}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-zinc-300 leading-relaxed">
+                Are you sure you want to mark this document association as verified for this service request?
+              </p>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setVerifyConfirmAlert(null)}
+                  disabled={isVerifyingDoc}
+                  className="px-4 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-semibold text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmVerifyDoc}
+                  disabled={isVerifyingDoc}
+                  className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-bold text-white bg-violet-600 hover:bg-violet-700 shadow-xs transition-colors disabled:opacity-50"
+                >
+                  {isVerifyingDoc && <Loader2 className="h-4 w-4 animate-spin" />}
+                  <span>Confirm Verification</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

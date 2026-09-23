@@ -690,6 +690,8 @@ export async function toggleDocumentVerification(params: {
     // Revalidate concrete paths
     revalidatePath(`/requests/${requestId}`);
     revalidatePath("/requests");
+    revalidatePath("/dashboard");
+    revalidatePath("/operations");
     const updatedLink = updated[0] as unknown as { customer_services?: { customer_id?: string } | null };
     const custId = updatedLink?.customer_services?.customer_id;
     if (custId) {
@@ -1036,6 +1038,18 @@ export async function rescheduleFollowup(params: {
 
     if (error) {
       console.error("[rescheduleFollowup] RPC error:", error.message);
+      if (
+        error.message?.includes("Only open follow-ups") ||
+        error.message?.includes("not found") ||
+        error.code === "P0001" ||
+        error.code === "P0002"
+      ) {
+        return {
+          success: false,
+          error: "This follow-up is no longer open or was already updated. Please refresh.",
+          errorCode: "conflict",
+        };
+      }
       return { success: false, error: "Failed to reschedule follow-up.", errorCode: "rpc_failed" };
     }
 
@@ -1070,18 +1084,27 @@ export async function completeFollowup(params: {
       return { success: false, error: "Authentication required.", errorCode: "auth_required" };
     }
 
-    const { error } = await supabase
+    const { data: updatedRows, error } = await supabase
       .from("service_request_followups")
       .update({
         status: "completed",
         resolution_note: resolutionNote ? resolutionNote.trim() : null,
       })
       .eq("id", followupId)
-      .eq("status", "open");
+      .eq("status", "open")
+      .select("id");
 
     if (error) {
       console.error("[completeFollowup] Update error:", error.message);
       return { success: false, error: "Failed to complete follow-up.", errorCode: "query_failed" };
+    }
+
+    if (!updatedRows || updatedRows.length === 0) {
+      return {
+        success: false,
+        error: "This follow-up is no longer open or was already updated. Please refresh.",
+        errorCode: "conflict",
+      };
     }
 
     await revalidateRequestAndDownstream(supabase, requestId);
@@ -1114,18 +1137,27 @@ export async function cancelFollowup(params: {
       return { success: false, error: "Authentication required.", errorCode: "auth_required" };
     }
 
-    const { error } = await supabase
+    const { data: updatedRows, error } = await supabase
       .from("service_request_followups")
       .update({
         status: "cancelled",
         resolution_note: resolutionNote ? resolutionNote.trim() : null,
       })
       .eq("id", followupId)
-      .eq("status", "open");
+      .eq("status", "open")
+      .select("id");
 
     if (error) {
       console.error("[cancelFollowup] Update error:", error.message);
       return { success: false, error: "Failed to cancel follow-up.", errorCode: "query_failed" };
+    }
+
+    if (!updatedRows || updatedRows.length === 0) {
+      return {
+        success: false,
+        error: "This follow-up is no longer open or was already updated. Please refresh.",
+        errorCode: "conflict",
+      };
     }
 
     await revalidateRequestAndDownstream(supabase, requestId);
