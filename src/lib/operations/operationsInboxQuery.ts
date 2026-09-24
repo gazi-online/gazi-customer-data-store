@@ -64,12 +64,22 @@ export interface OperationsInboxSummary {
   };
 }
 
-export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary> {
+export interface OperationsInboxQueryOptions {
+  includeUpcoming?: boolean;
+  maxFollowups?: number;
+}
+
+export async function getOperationsInboxAlerts(
+  options?: OperationsInboxQueryOptions
+): Promise<OperationsInboxSummary> {
   const supabase = await createClient();
   const alerts: OperationAlert[] = [];
 
   const todayStr = getKolkataDateString(new Date());
   const in30DaysStr = getKolkataFutureDateString(30);
+
+  const includeUpcoming = options?.includeUpcoming !== false;
+  const maxFollowups = options?.maxFollowups;
 
   // Parallel execution of all independent queries for optimal performance
   const [
@@ -84,11 +94,13 @@ export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary
     { data: unverifiedDocs },
   ] = await Promise.all([
     // 1. Overdue follow-ups (Urgent)
-    getOverdueFollowups(),
+    getOverdueFollowups(maxFollowups),
     // 2. Follow-ups Due Today (Today)
-    getDueTodayFollowups(),
-    // 3. Follow-ups Upcoming (Upcoming)
-    getUpcomingFollowups(),
+    getDueTodayFollowups(maxFollowups),
+    // 3. Follow-ups Upcoming (Upcoming) - can be skipped for views that exclude upcoming
+    includeUpcoming
+      ? getUpcomingFollowups(maxFollowups)
+      : Promise.resolve({ count: 0, items: [] }),
     // 4. Requests with status = 'action_required' (High / Pending or Urgent if past due)
     supabase
       .from("customer_services")

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getKolkataTodayHalfOpenRange } from "@/lib/operations/dateUtils";
 
 export async function getDashboardStats() {
   const supabase = await createClient();
@@ -78,7 +79,15 @@ export type DashboardMetrics = {
   followupsUpcoming: number;
 };
 
-export async function getDashboardMetrics(): Promise<DashboardMetrics> {
+export type FollowupMetricsInput = {
+  followupsDueToday?: number;
+  followupsOverdue?: number;
+  followupsUpcoming?: number;
+};
+
+export async function getDashboardMetrics(
+  providedFollowupCounts?: FollowupMetricsInput
+): Promise<DashboardMetrics> {
   try {
     const supabase = await createClient();
 
@@ -91,6 +100,16 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     in30Days.setDate(now.getDate() + 30);
     const in30DaysStr = in30Days.toISOString().split("T")[0];
 
+    // Determine if we need to query follow-ups
+    const needFollowups =
+      !providedFollowupCounts ||
+      providedFollowupCounts.followupsDueToday === undefined ||
+      providedFollowupCounts.followupsOverdue === undefined ||
+      providedFollowupCounts.followupsUpcoming === undefined;
+
+    const range = needFollowups ? getKolkataTodayHalfOpenRange() : null;
+
+    // Execute core metrics queries in parallel with small count projection ('id')
     const [
       totalCustRes,
       newMonthCustRes,
@@ -99,75 +118,72 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
       syncedWeekRes,
       pendingVerifRes,
       renewalsRes,
+      todayRes,
+      overdueRes,
+      upcomingRes,
     ] = await Promise.all([
       supabase
         .from("customers")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .is("deleted_at", null),
       supabase
         .from("customers")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .is("deleted_at", null)
         .gte("created_at", startOfMonth.toISOString()),
       supabase
         .from("customers")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "active")
         .is("deleted_at", null),
       supabase
         .from("customer_documents")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "active"),
       supabase
         .from("customer_documents")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .gte("uploaded_at", startOfWeek.toISOString()),
       supabase
         .from("customer_documents")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("verified", false)
         .eq("status", "active"),
       supabase
         .from("customer_documents")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "active")
         .not("expiry_date", "is", null)
         .gte("expiry_date", todayStr)
         .lte("expiry_date", in30DaysStr),
+      // Followup queries if not precomputed
+      needFollowups && range
+        ? supabase
+            .from("service_request_followups")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "open")
+            .gte("follow_up_at", range.startOfTodayIST)
+            .lt("follow_up_at", range.startOfTomorrowIST)
+        : Promise.resolve({ count: providedFollowupCounts?.followupsDueToday ?? 0, error: null }),
+      needFollowups && range
+        ? supabase
+            .from("service_request_followups")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "open")
+            .lt("follow_up_at", range.startOfTodayIST)
+        : Promise.resolve({ count: providedFollowupCounts?.followupsOverdue ?? 0, error: null }),
+      needFollowups && range
+        ? supabase
+            .from("service_request_followups")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "open")
+            .gte("follow_up_at", range.startOfTomorrowIST)
+        : Promise.resolve({ count: providedFollowupCounts?.followupsUpcoming ?? 0, error: null }),
     ]);
 
-    // Query follow-ups safely (table might be new)
-    let followupsDueToday = 0;
-    let followupsOverdue = 0;
-    let followupsUpcoming = 0;
-
-    try {
-      const { getKolkataTodayHalfOpenRange } = await import("@/lib/operations/dateUtils");
-      const range = getKolkataTodayHalfOpenRange();
-      const [todayRes, overdueRes, upcomingRes] = await Promise.all([
-        supabase
-          .from("service_request_followups")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "open")
-          .gte("follow_up_at", range.startOfTodayIST)
-          .lt("follow_up_at", range.startOfTomorrowIST),
-        supabase
-          .from("service_request_followups")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "open")
-          .lt("follow_up_at", range.startOfTodayIST),
-        supabase
-          .from("service_request_followups")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "open")
-          .gte("follow_up_at", range.startOfTomorrowIST),
-      ]);
-      followupsDueToday = todayRes.count || 0;
-      followupsOverdue = overdueRes.count || 0;
-      followupsUpcoming = upcomingRes.count || 0;
-    } catch {
-      // Table may not exist yet prior to migration
-    }
+    const followupsDueToday = todayRes.count || 0;
+    const followupsOverdue = overdueRes.count || 0;
+    const followupsUpcoming = upcomingRes.count || 0;
 
     return {
       totalCustomers: totalCustRes.count || 0,
@@ -640,10 +656,16 @@ export type DashboardAttentionSummary = {
  * Loads compact operational items requiring immediate staff attention
  * without creating waterfalls or computing authoritative balances.
  */
-export async function getDashboardAttentionData(limit = 4): Promise<DashboardAttentionSummary> {
+export async function getDashboardAttentionData(
+  limit = 4,
+  options?: { includeUpcoming?: boolean; maxFollowups?: number }
+): Promise<DashboardAttentionSummary> {
   try {
     const { getOperationsInboxAlerts } = await import("@/lib/operations/operationsInboxQuery");
-    const summary = await getOperationsInboxAlerts();
+    const summary = await getOperationsInboxAlerts({
+      includeUpcoming: options?.includeUpcoming ?? false,
+      maxFollowups: options?.maxFollowups ?? 10,
+    });
 
     const actionable = summary.alerts.filter(
       (a) => a.priority === "urgent" || a.priority === "today" || a.priority === "pending"
@@ -679,4 +701,32 @@ export async function getDashboardAttentionData(limit = 4): Promise<DashboardAtt
       items: [],
     };
   }
+}
+
+export type DashboardSnapshot = {
+  metrics: DashboardMetrics;
+  growthData: CustomerGrowthPoint[];
+  activities: ActivityEvent[];
+  attentionData: DashboardAttentionSummary;
+};
+
+/**
+ * Fast-path server-only snapshot orchestrator for /dashboard.
+ * Coordinates independent data requirements in parallel with zero sequential waterfalls
+ * and eliminates unneeded upcoming follow-up reads and unbounded queries.
+ */
+export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
+  const [metrics, growthData, activities, attentionData] = await Promise.all([
+    getDashboardMetrics(),
+    getCustomerGrowthData("30d"),
+    getRecentActivity(6),
+    getDashboardAttentionData(4, { includeUpcoming: false, maxFollowups: 10 }),
+  ]);
+
+  return {
+    metrics,
+    growthData,
+    activities,
+    attentionData,
+  };
 }

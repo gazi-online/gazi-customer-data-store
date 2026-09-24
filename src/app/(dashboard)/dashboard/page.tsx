@@ -1,9 +1,4 @@
-import {
-  getDashboardMetrics,
-  getCustomerGrowthData,
-  getRecentActivity,
-  getDashboardAttentionData,
-} from "./actions";
+import { getDashboardSnapshot } from "./actions";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { DashboardKpis } from "@/components/dashboard/DashboardKpis";
 import { DailyAttentionQueue } from "@/components/dashboard/DailyAttentionQueue";
@@ -13,13 +8,8 @@ import { RecentActivityTable } from "@/components/dashboard/RecentActivityTable"
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  // Fetch real Supabase metrics, growth points, recent activity, and daily operational queue concurrently
-  const [metrics, growthData, activities, attentionData] = await Promise.all([
-    getDashboardMetrics(),
-    getCustomerGrowthData("30d"),
-    getRecentActivity(6),
-    getDashboardAttentionData(4),
-  ]);
+  // Fetch real Supabase metrics, growth points, recent activity, and daily operational queue via fast-path snapshot
+  const { metrics, growthData, activities, attentionData } = await getDashboardSnapshot();
 
   return (
     <div className="flex flex-col gap-5 sm:gap-6 animate-in fade-in slide-in-from-bottom-2 duration-150 w-full max-w-full overflow-x-hidden">

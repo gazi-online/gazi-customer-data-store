@@ -57,11 +57,11 @@ export interface RenewalsDueSummary {
 /**
  * Returns open follow-ups due today in Asia/Kolkata [startOfTodayIST, startOfTomorrowIST).
  */
-export async function getDueTodayFollowups() {
+export async function getDueTodayFollowups(limit?: number) {
   const supabase = await createClient();
   const { startOfTodayIST, startOfTomorrowIST } = getKolkataTodayHalfOpenRange();
 
-  const { data, count, error } = await supabase
+  let query = supabase
     .from("service_request_followups")
     .select(`
       id,
@@ -99,6 +99,12 @@ export async function getDueTodayFollowups() {
     .lt("follow_up_at", startOfTomorrowIST)
     .order("follow_up_at", { ascending: true });
 
+  if (typeof limit === "number" && limit > 0) {
+    query = query.limit(limit);
+  }
+
+  const { data, count, error } = await query;
+
   if (error) {
     console.error("[getDueTodayFollowups] Error:", error.message);
     return { count: 0, items: [] };
@@ -113,11 +119,11 @@ export async function getDueTodayFollowups() {
 /**
  * Returns open follow-ups overdue in Asia/Kolkata (< startOfTodayIST).
  */
-export async function getOverdueFollowups() {
+export async function getOverdueFollowups(limit?: number) {
   const supabase = await createClient();
   const { startOfTodayIST } = getKolkataTodayHalfOpenRange();
 
-  const { data, count, error } = await supabase
+  let query = supabase
     .from("service_request_followups")
     .select(`
       id,
@@ -154,6 +160,12 @@ export async function getOverdueFollowups() {
     .lt("follow_up_at", startOfTodayIST)
     .order("follow_up_at", { ascending: true });
 
+  if (typeof limit === "number" && limit > 0) {
+    query = query.limit(limit);
+  }
+
+  const { data, count, error } = await query;
+
   if (error) {
     console.error("[getOverdueFollowups] Error:", error.message);
     return { count: 0, items: [] };
@@ -168,11 +180,11 @@ export async function getOverdueFollowups() {
 /**
  * Returns open follow-ups upcoming in Asia/Kolkata (>= startOfTomorrowIST).
  */
-export async function getUpcomingFollowups() {
+export async function getUpcomingFollowups(limit?: number) {
   const supabase = await createClient();
   const { startOfTomorrowIST } = getKolkataTodayHalfOpenRange();
 
-  const { data, count, error } = await supabase
+  let query = supabase
     .from("service_request_followups")
     .select(`
       id,
@@ -208,6 +220,12 @@ export async function getUpcomingFollowups() {
     .eq("status", "open")
     .gte("follow_up_at", startOfTomorrowIST)
     .order("follow_up_at", { ascending: true });
+
+  if (typeof limit === "number" && limit > 0) {
+    query = query.limit(limit);
+  }
+
+  const { data, count, error } = await query;
 
   if (error) {
     console.error("[getUpcomingFollowups] Error:", error.message);
