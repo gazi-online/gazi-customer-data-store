@@ -16,6 +16,8 @@ import {
   FileText,
   AlertCircle,
   RefreshCw,
+  RotateCcw,
+  ShieldAlert,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
@@ -26,6 +28,7 @@ import {
   getTeamMembers,
   updateBusinessSettings,
 } from "@/app/(dashboard)/settings/actions";
+import { adminResetMfaAction } from "@/app/(dashboard)/settings/admin-mfa-actions";
 import {
   exportCustomersCsv,
   exportRequestsCsv,
@@ -67,6 +70,8 @@ export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMemb
   const [activeTab, setActiveTab] = useState<"profile" | "billing" | "team" | "security" | "exports">("profile");
   const [isSaving, startSaveTransition] = useTransition();
   const [isExporting, setIsExporting] = useState<string | null>(null);
+  const [resetTargetUser, setResetTargetUser] = useState<TeamMemberItem | null>(null);
+  const [isResettingMfa, startResetMfaTransition] = useTransition();
 
   // TanStack Query for MFA Security Status (staleTime: 1 min, memory-only)
   const {
@@ -651,6 +656,7 @@ export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMemb
                     <th className="py-3 px-4">Role</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4">Joined Date</th>
+                    <th className="py-3 px-4 text-right">MFA Recovery</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -680,11 +686,87 @@ export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMemb
                       <td className="py-3 px-4 text-slate-500">
                         {new Date(m.createdAt).toLocaleDateString("en-IN")}
                       </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setResetTargetUser(m)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors"
+                          title="Emergency MFA Reset"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          <span>Reset MFA</span>
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            {/* Emergency MFA Reset Confirmation Modal */}
+            {resetTargetUser && (
+              <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 max-w-md w-full shadow-lg space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                      <ShieldAlert className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-bold text-slate-900">Emergency MFA Reset</h3>
+                      <p className="text-xs text-slate-500">Authorized shop owner recovery action</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 text-xs space-y-2 text-slate-700">
+                    <div>
+                      <span className="font-semibold text-slate-800">Target Member:</span> {resetTargetUser.email || "Staff Member"}
+                    </div>
+                    <div className="font-mono text-[11px] text-slate-400">UID: {resetTargetUser.userId}</div>
+                    <p className="text-slate-600 leading-relaxed pt-1 border-t border-slate-200">
+                      This will remove all enrolled authenticator factors for this team member so they can sign in and re-enroll.
+                      It will <strong>not</strong> reset their password or change their role.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2.5 pt-2">
+                    <button
+                      type="button"
+                      disabled={isResettingMfa}
+                      onClick={() => setResetTargetUser(null)}
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isResettingMfa}
+                      onClick={() => {
+                        startResetMfaTransition(async () => {
+                          const res = await adminResetMfaAction(resetTargetUser.userId);
+                          if (res.success) {
+                            toast.success(res.message || "MFA factors successfully reset.");
+                            setResetTargetUser(null);
+                            refetchTeam();
+                          } else {
+                            toast.error(res.error || "Failed to reset MFA.");
+                          }
+                        });
+                      }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+                    >
+                      {isResettingMfa ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          <span>Resetting...</span>
+                        </>
+                      ) : (
+                        <span>Confirm Reset</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-600 border border-slate-200 space-y-1">
               <div className="font-bold text-slate-800 flex items-center gap-1.5">

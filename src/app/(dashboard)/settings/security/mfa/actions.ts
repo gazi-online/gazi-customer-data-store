@@ -43,6 +43,11 @@ export interface MfaCancelActionResult {
   error?: string;
 }
 
+export interface MfaUnenrollActionResult {
+  success: boolean;
+  error?: string;
+}
+
 /**
  * Retrieves the MFA status for the currently authenticated user.
  * Derived strictly from the authenticated server session.
@@ -88,7 +93,7 @@ export async function getMfaStatusAction(): Promise<MfaStatusActionResult> {
 /**
  * Starts TOTP enrollment on explicit user request.
  * Cleans up any prior stale unverified factors to prevent orphaned factors.
- * Rejects if user already has a verified factor.
+ * Allows primary and backup authenticator factors (GCDS application policy limits to 2 factors; Supabase platform supports multiple factors).
  */
 export async function startMfaEnrollmentAction(): Promise<MfaEnrollmentActionResult> {
   try {
@@ -105,12 +110,12 @@ export async function startMfaEnrollmentAction(): Promise<MfaEnrollmentActionRes
     // Inspect existing factors
     const factorsResult = await listMfaFactors(supabase);
 
-    // If verified factor already exists, do not permit re-enrollment in S2B
-    if (factorsResult.hasVerifiedFactor) {
+    // GCDS application policy: limit to 2 verified factors (primary and backup)
+    if (factorsResult.verified.length >= 2) {
       return {
         success: false,
         alreadyVerified: true,
-        error: "Two-step verification is already enabled for your account.",
+        error: "GCDS policy allows a maximum of 2 authenticator factors (primary and backup).",
       };
     }
 
@@ -121,9 +126,14 @@ export async function startMfaEnrollmentAction(): Promise<MfaEnrollmentActionRes
       }
     }
 
+    const isBackup = factorsResult.verified.length === 1;
+    const factorLabel = isBackup
+      ? (user.email ? `${user.email} (Backup Authenticator)` : "Backup Authenticator")
+      : (user.email || "Primary Authenticator");
+
     // Call S2A enrollment helper with issuer 'GCDS'
     const enrollment = await enrollTotpFactor(supabase, {
-      friendlyName: user.email || "GCDS Authenticator",
+      friendlyName: factorLabel,
     });
 
     if (!enrollment.success || !enrollment.factorId || !enrollment.totp) {
@@ -216,5 +226,63 @@ export async function cancelMfaEnrollmentAction(factorId: string): Promise<MfaCa
     return { success: true };
   } catch {
     return { success: false, error: "Failed to cancel enrollment." };
+  }
+}
+
+/**
+ * Allows an authenticated user to remove their own verified MFA factor.
+ * Security requirements:
+ * 1. User must be authenticated.
+ * 2. User must have an active AAL2 session (elevation required).
+ * 3. Factor must belong to current user.
+ */
+export async function unenrollOwnMfaFactorAction(
+  factorId: string
+): Promise<MfaUnenrollActionResult> {
+  try {
+    if (!factorId || typeof factorId !== "string") {
+      return { success: false, error: "Invalid factor ID." };
+    }
+
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: "Authentication required." };
+    }
+
+    // Step-up verification rule: Must be AAL2
+    const assurance = await getMfaAssuranceLevel(supabase);
+    if (assurance.currentLevel !== "aal2") {
+      return {
+        success: false,
+        error: "Verification required before removing an active factor. AAL2 assurance required.",
+      };
+    }
+
+    // Factor ownership check: verify factor belongs to this user
+    const factorsResult = await listMfaFactors(supabase);
+    const target = factorsResult.all.find((f) => f.id === factorId);
+    if (!target) {
+      return {
+        success: false,
+        error: "Factor not found or not eligible for removal.",
+      };
+    }
+
+    const unenrollResult = await unenrollTotpFactor(supabase, factorId);
+    if (!unenrollResult.success) {
+      return {
+        success: false,
+        error: unenrollResult.error || "Failed to remove factor.",
+      };
+    }
+
+    revalidatePath("/settings");
+    revalidatePath("/settings/security/mfa");
+
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to remove factor." };
   }
 }

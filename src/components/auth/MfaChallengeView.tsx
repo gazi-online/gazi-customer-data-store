@@ -206,17 +206,28 @@ export function MfaChallengeView({
             onClick={() => setShowLockoutHelp((prev) => !prev)}
             className="text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors inline-flex items-center gap-1"
           >
-            <span>Can&apos;t access your authenticator?</span>
+            <span>Lost access to authenticator? (Can&apos;t access your authenticator?)</span>
             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showLockoutHelp ? "rotate-180" : ""}`} />
           </button>
 
           {showLockoutHelp && (
-            <div className="mt-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-left text-xs text-slate-600 space-y-1.5">
+            <div className="mt-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-left text-xs text-slate-600 space-y-2">
               <p className="font-semibold text-slate-800">
-                Authenticator Recovery Information
+                Lost Authenticator Recovery Instructions
               </p>
-              <p className="leading-relaxed">
-                For security, password recovery alone does not remove two-step verification. If you have lost your phone or cannot access your authenticator app, please contact your system administrator to verify your identity and recover account access.
+              <ul className="list-disc list-inside space-y-1 text-slate-600">
+                <li>
+                  <strong>For security, password recovery alone does not remove two-step verification.</strong>
+                </li>
+                <li>
+                  Please contact an authorized GCDS administrator (Shop Owner) for an authorized MFA reset.
+                </li>
+                <li>
+                  After an authorized reset, you must sign in again and enroll MFA again.
+                </li>
+              </ul>
+              <p className="text-[11px] text-slate-400">
+                No recovery codes are issued. Account access can only be recovered through authorized identity verification by your shop owner.
               </p>
             </div>
           )}
