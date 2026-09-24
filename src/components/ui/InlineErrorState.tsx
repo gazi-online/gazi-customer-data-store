@@ -20,7 +20,7 @@ export function InlineErrorState({
 }: InlineErrorStateProps) {
   return (
     <div
-      className={`p-6 sm:p-10 text-center flex flex-col items-center justify-center space-y-2.5 ${
+      className={`p-6 sm:p-10 text-center flex flex-col items-center justify-center space-y-2.5 motion-surface-enter ${
         bordered
           ? "border border-rose-200 dark:border-rose-900/40 rounded-2xl bg-white dark:bg-zinc-900"
           : ""

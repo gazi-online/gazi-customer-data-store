@@ -77,7 +77,7 @@ export function DailyAttentionQueue({ attentionData }: DailyAttentionQueueProps)
                 Needs Attention Now
               </h2>
               {urgentCount > 0 && (
-                <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 animate-pulse">
+                <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
                   {urgentCount} urgent
                 </span>
               )}

@@ -3,6 +3,12 @@
 :root {
   --background: #F8FAFF;
   --foreground: #0F172A;
+
+  /* Modern + Classic Motion Design Tokens */
+  --ease-classic: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 140ms;
+  --duration-base: 200ms;
+  --duration-enter: 260ms;
 }
 
 @theme inline {
@@ -17,6 +23,114 @@ body {
   color: var(--foreground);
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
+
+/* ==============================================================================
+   GCDS MODERN + CLASSIC MOTION SYSTEM
+   ============================================================================== */
+
+@keyframes pageEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes surfaceEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modalEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes popoverEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Reusable Entrance Tokens */
+.motion-page-enter {
+  animation: pageEnter var(--duration-enter) var(--ease-classic) forwards;
+}
+
+.motion-surface-enter {
+  animation: surfaceEnter var(--duration-base) var(--ease-classic) forwards;
+}
+
+.motion-modal-enter {
+  animation: modalEnter var(--duration-base) var(--ease-classic) forwards;
+}
+
+.motion-popover-enter {
+  animation: popoverEnter var(--duration-fast) var(--ease-classic) forwards;
+}
+
+/* Compatibility classes mapping existing Tailwind animate-in patterns to classic easing */
+.animate-in {
+  animation-duration: var(--duration-enter);
+  animation-timing-function: var(--ease-classic);
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  animation-name: pageEnter;
+}
+
+/* Tactile Button Micro-Interaction */
+.motion-button {
+  transition: transform 120ms var(--ease-classic),
+              background-color 120ms ease-out,
+              border-color 120ms ease-out,
+              box-shadow 120ms ease-out,
+              color 120ms ease-out;
+}
+.motion-button:active {
+  transform: scale(0.985);
+}
+
+/* Subtle Interactive Card Elevation */
+.motion-card-interactive {
+  transition: transform var(--duration-fast) var(--ease-classic),
+              box-shadow var(--duration-fast) var(--ease-classic),
+              border-color var(--duration-fast) ease-out,
+              background-color var(--duration-fast) ease-out;
+}
+.motion-card-interactive:hover {
+  transform: translateY(-1px);
+}
+.motion-card-interactive:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* Staggered entrance helper utilities (capped at 4 items) */
+.motion-stagger-1 { animation-delay: 0ms; }
+.motion-stagger-2 { animation-delay: 35ms; }
+.motion-stagger-3 { animation-delay: 70ms; }
+.motion-stagger-4 { animation-delay: 105ms; }
 
 @keyframes marchingAnts {
   0% {
@@ -47,11 +161,29 @@ body {
   animation: pulseGlow 2.5s ease-in-out infinite;
 }
 
+/* ==============================================================================
+   MANDATORY: ACCESSIBILITY PREFERS-REDUCED-MOTION OVERRIDES
+   ============================================================================== */
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
   .animate-marching-ants,
-  .animate-pulse-glow {
+  .animate-pulse-glow,
+  .motion-page-enter,
+  .motion-surface-enter,
+  .motion-modal-enter,
+  .motion-popover-enter,
+  .motion-button,
+  .motion-card-interactive {
     animation: none !important;
     transform: none !important;
+    transition: none !important;
   }
 }
 

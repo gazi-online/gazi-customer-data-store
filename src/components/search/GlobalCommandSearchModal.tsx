@@ -123,7 +123,7 @@ export function GlobalCommandSearchModal({ isOpen, onClose }: GlobalCommandSearc
         aria-hidden="true"
       />
 
-      <div className="relative w-full max-w-xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[80vh] z-10">
+      <div className="relative w-full max-w-xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[80vh] z-10 motion-modal-enter">
         {/* Search Input Bar */}
         <div className="flex items-center px-4 border-b border-slate-200 shrink-0">
           <Search className="h-4 w-4 text-slate-400 shrink-0" />

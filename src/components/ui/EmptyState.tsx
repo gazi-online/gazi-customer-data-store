@@ -20,7 +20,7 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div
-      className={`p-8 sm:p-12 text-center flex flex-col items-center justify-center ${
+      className={`p-8 sm:p-12 text-center flex flex-col items-center justify-center motion-surface-enter ${
         bordered
           ? "border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-zinc-900"
           : ""
