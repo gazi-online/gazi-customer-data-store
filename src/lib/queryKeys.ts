@@ -87,5 +87,6 @@ export const queryKeys = {
     all: (cacheScope: string) => ["gcds", cacheScope, "settings"] as const,
     business: (cacheScope: string) => ["gcds", cacheScope, "settings", "business"] as const,
     team: (cacheScope: string) => ["gcds", cacheScope, "settings", "team"] as const,
+    mfaStatus: (cacheScope: string) => ["gcds", cacheScope, "settings", "mfa-status"] as const,
   },
 } as const;

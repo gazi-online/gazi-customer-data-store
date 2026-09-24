@@ -34,6 +34,8 @@ import {
 } from "@/app/(dashboard)/settings/export-actions";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { getMfaStatusAction } from "@/app/(dashboard)/settings/security/mfa/actions";
 
 interface SettingsTabsViewProps {
   initialSettings?: BusinessSettingsData | null;
@@ -62,9 +64,20 @@ const defaultFormData: Partial<BusinessSettingsData> = {
 export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMembers }: SettingsTabsViewProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"profile" | "billing" | "team" | "exports">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "billing" | "team" | "security" | "exports">("profile");
   const [isSaving, startSaveTransition] = useTransition();
   const [isExporting, setIsExporting] = useState<string | null>(null);
+
+  // TanStack Query for MFA Security Status (staleTime: 1 min, memory-only)
+  const {
+    data: mfaStatus,
+    isLoading: isMfaLoading,
+  } = useQuery({
+    queryKey: queryKeys.settings.mfaStatus(DASHBOARD_MEMORY_SCOPE),
+    queryFn: () => getMfaStatusAction(),
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
 
   // TanStack Query for Business Settings (staleTime: 5 min, memory-only)
   const {
@@ -226,6 +239,19 @@ export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMemb
           >
             <Users className="h-4 w-4 shrink-0" />
             <span>Team & Staff Roles {isTeamLoading && teamMembers.length === 0 ? "" : `(${teamMembers.length})`}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("security")}
+            className={`flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 min-h-[44px] text-xs font-bold border-b-2 transition-colors whitespace-nowrap shrink-0 rounded-t-xl ${
+              activeTab === "security"
+                ? "border-violet-600 text-violet-700 bg-violet-50/60"
+                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50/60"
+            }`}
+          >
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            <span>Security & MFA</span>
           </button>
 
           <button
@@ -785,6 +811,72 @@ export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMemb
                   supabase db dump -p ilsgrjcmyoufkeiqlaxm &gt; backup_$(date +%Y%m%d).sql
                 </code>
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: SECURITY & MFA */}
+      {activeTab === "security" && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-sm sm:text-base font-bold text-slate-900">
+              Account Security & Two-Step Verification
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Protect your account by requiring an authenticator code when signing in.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/80 p-5 sm:p-6 bg-slate-50/50 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-violet-100/70 border border-violet-200/60 flex items-center justify-center text-violet-700 shrink-0">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-slate-900">
+                      Two-Step Verification
+                    </h3>
+                    {isMfaLoading ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">
+                        Checking...
+                      </span>
+                    ) : mfaStatus?.hasVerifiedFactor ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Enabled
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                        Not set up
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-xl">
+                    Add an extra layer of protection to your account using an authenticator app (Google Authenticator, Microsoft Authenticator, Authy, etc.).
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0">
+                {mfaStatus?.hasVerifiedFactor ? (
+                  <Link
+                    href="/settings/security/mfa"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] sm:min-h-[38px] bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl shadow-xs transition-colors"
+                  >
+                    <span>View Details</span>
+                  </Link>
+                ) : (
+                  <Link
+                    href="/settings/security/mfa"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] sm:min-h-[38px] bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+                  >
+                    <span>Set up authenticator</span>
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
         </div>
