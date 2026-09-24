@@ -92,6 +92,10 @@ export interface DocumentVaultStats {
 export interface DocumentVaultResponse {
   documents: DocumentVaultRow[];
   totalCount: number;
+  page?: number;
+  pageSize?: number;
+  totalPages?: number;
+  searchTooBroad?: boolean;
   stats: DocumentVaultStats;
   error?: string;
 }

@@ -17,7 +17,9 @@ import {
   Loader2, 
   User, 
   X,
-  RefreshCw
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { getDocumentVaultRows, deleteCustomerDocument, getDocumentSignedUrl } from "./actions";
 import { getCustomerLookupRows } from "../customers/actions";
@@ -27,7 +29,7 @@ import { DocumentVaultRow } from "@/types/document";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -64,6 +66,9 @@ function DocumentsContent() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
@@ -73,7 +78,7 @@ function DocumentsContent() {
   const normalizedStatus = statusFilter === "all" ? undefined : statusFilter;
   const normalizedRenewal = renewalFilter === "all" ? undefined : renewalFilter;
 
-  // Primary TanStack Query for Document Vault Metadata
+  // Primary TanStack Query for Document Vault Metadata with bounded server pagination
   const {
     data: vaultData,
     isLoading,
@@ -86,6 +91,8 @@ function DocumentsContent() {
       documentType: normalizedDocType,
       status: normalizedStatus,
       renewalWindow: normalizedRenewal,
+      page,
+      pageSize,
     }),
     queryFn: () =>
       getDocumentVaultRows({
@@ -93,21 +100,25 @@ function DocumentsContent() {
         documentType: normalizedDocType,
         status: statusFilter,
         renewalWindow: renewalFilter,
+        page,
+        pageSize,
       }),
     staleTime: 30 * 1000,
     refetchOnWindowFocus: true,
-    placeholderData: keepPreviousData,
   });
 
   const documents = vaultData?.documents || [];
+  const totalCount = vaultData?.totalCount ?? 0;
+  const totalPages = vaultData?.totalPages ?? Math.max(1, Math.ceil(totalCount / pageSize));
   const stats = vaultData?.stats || { total: 0, active: 0, archived: 0, totalSizeBytes: 0 };
 
-  // Cached Customer Lookup Query for Upload Dropdown
+  // Lazy Customer Lookup Query: only runs when Upload Modal is actually opened
   const { data: customerLookup = [] } = useQuery({
     queryKey: queryKeys.customers.lookup(DASHBOARD_MEMORY_SCOPE),
     queryFn: () => getCustomerLookupRows(),
+    enabled: isUploadModalOpen,
     staleTime: 2 * 60 * 1000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
 
   const handleDeleteDocument = async (doc: DocumentVaultRow) => {
@@ -272,12 +283,18 @@ function DocumentsContent() {
               type="text"
               placeholder="Search by customer, document type, or filename..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
               className="w-full pl-9 pr-8 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs sm:text-sm bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:bg-white dark:focus:bg-zinc-900 focus:ring-2 focus:ring-blue-500 transition-all"
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery("")}
+                onClick={() => {
+                  setSearchQuery("");
+                  setPage(1);
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-600 min-h-[32px] min-w-[32px] flex items-center justify-center"
               >
                 <X className="h-3.5 w-3.5" />
@@ -290,7 +307,10 @@ function DocumentsContent() {
             <div className="w-full sm:w-56">
               <select
                 value={selectedDocType}
-                onChange={(e) => setSelectedDocType(e.target.value)}
+                onChange={(e) => {
+                  setSelectedDocType(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full px-3 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs sm:text-sm bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
               >
                 {DOCUMENT_TYPES.map((type) => (
@@ -305,7 +325,10 @@ function DocumentsContent() {
               {/* Status Segmented Control */}
               <div className="flex items-center space-x-1 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl text-xs font-semibold flex-1 sm:flex-initial">
                 <button
-                  onClick={() => setStatusFilter("active")}
+                  onClick={() => {
+                    setStatusFilter("active");
+                    setPage(1);
+                  }}
                   className={`px-2.5 sm:px-3 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 rounded-lg transition-all flex-1 sm:flex-initial text-center ${
                     statusFilter === "active"
                       ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-xs"
@@ -315,7 +338,10 @@ function DocumentsContent() {
                   Active ({stats.active})
                 </button>
                 <button
-                  onClick={() => setStatusFilter("all")}
+                  onClick={() => {
+                    setStatusFilter("all");
+                    setPage(1);
+                  }}
                   className={`px-2.5 sm:px-3 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 rounded-lg transition-all flex-1 sm:flex-initial text-center ${
                     statusFilter === "all"
                       ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-xs"
@@ -325,7 +351,10 @@ function DocumentsContent() {
                   All ({stats.total})
                 </button>
                 <button
-                  onClick={() => setStatusFilter("archived")}
+                  onClick={() => {
+                    setStatusFilter("archived");
+                    setPage(1);
+                  }}
                   className={`px-2.5 sm:px-3 py-2 sm:py-1.5 min-h-[36px] sm:min-h-0 rounded-lg transition-all flex-1 sm:flex-initial text-center ${
                     statusFilter === "archived"
                       ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-xs"
@@ -378,7 +407,10 @@ function DocumentsContent() {
             <button
               key={btn.value}
               type="button"
-              onClick={() => setRenewalFilter(btn.value)}
+              onClick={() => {
+                setRenewalFilter(btn.value);
+                setPage(1);
+              }}
               className={`px-3 py-1.5 min-h-[36px] sm:min-h-0 rounded-lg font-medium transition-all shrink-0 whitespace-nowrap ${
                 renewalFilter === btn.value
                   ? "bg-purple-600 text-white shadow-xs"
@@ -576,6 +608,65 @@ function DocumentsContent() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Pagination Controls Bar */}
+      {documents.length > 0 && (
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3.5 sm:p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="text-zinc-500 dark:text-zinc-400">
+            Showing <span className="font-semibold text-zinc-900 dark:text-zinc-100">{Math.min((page - 1) * pageSize + 1, totalCount)}</span> to{" "}
+            <span className="font-semibold text-zinc-900 dark:text-zinc-100">{Math.min(page * pageSize, totalCount)}</span> of{" "}
+            <span className="font-semibold text-zinc-900 dark:text-zinc-100">{totalCount}</span> documents
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Page Size Selector */}
+            <div className="flex items-center gap-1.5 text-zinc-500">
+              <span>Per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="px-2 py-1 bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer"
+              >
+                {[25, 50, 100].map((lim) => (
+                  <option key={lim} value={lim}>
+                    {lim}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Page Navigation Buttons */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={page <= 1 || isFetching}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              <span className="px-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                Page {page} of {totalPages}
+              </span>
+
+              <button
+                type="button"
+                disabled={page >= totalPages || isFetching}
+                onClick={() => setPage((p) => p + 1)}
+                className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}

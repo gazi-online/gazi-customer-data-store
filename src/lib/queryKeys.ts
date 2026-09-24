@@ -41,6 +41,8 @@ export interface DocumentVaultFilters {
   documentType?: string;
   status?: string;
   renewalWindow?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export interface ServiceCatalogFilters {

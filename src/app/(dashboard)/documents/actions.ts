@@ -221,11 +221,82 @@ export async function uploadDocument(formData: FormData) {
  * - Returns clean DocumentVaultRow[] suitable for in-memory TanStack Query caching.
  * - View / Download operations remain on-demand via getDocumentSignedUrl(doc.id).
  */
+/**
+ * Tokenize human search input into safe search tokens.
+ * Strips commas, parens, and excessive whitespace.
+ */
+function tokenizeDocumentSearchQuery(rawQuery: string): { normalizedQ: string; tokens: string[] } {
+  const sanitized = (rawQuery || "").replace(/[,()]/g, " ").trim();
+  const normalizedQ = sanitized.replace(/\s+/g, " ");
+  const tokens = normalizedQ ? normalizedQ.split(" ").filter((t) => t.length > 0) : [];
+  return { normalizedQ, tokens };
+}
+
+const MAX_DOCUMENT_SEARCH_CUSTOMER_IDS = 100;
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * Resolves customer IDs for relational search across customer identity fields
+ * (first_name, middle_name, last_name, phone, customer_code).
+ * Bounded by MAX_DOCUMENT_SEARCH_CUSTOMER_IDS with over-cap detection.
+ */
+async function resolveDocumentSearchCustomerIds(
+  supabase: SupabaseServerClient,
+  q: string
+): Promise<{ customerIds: string[]; tooBroad: boolean }> {
+  const { tokens } = tokenizeDocumentSearchQuery(q);
+  if (tokens.length === 0) {
+    return { customerIds: [], tooBroad: false };
+  }
+
+  let custQuery = supabase.from("customers").select("id").is("deleted_at", null);
+  for (const token of tokens) {
+    custQuery = custQuery.or(
+      `first_name.ilike.%${token}%,middle_name.ilike.%${token}%,last_name.ilike.%${token}%,phone.ilike.%${token}%,customer_code.ilike.%${token}%`
+    );
+  }
+
+  const { data, error } = await custQuery.limit(MAX_DOCUMENT_SEARCH_CUSTOMER_IDS + 1);
+  if (error || !data) {
+    return { customerIds: [], tooBroad: false };
+  }
+
+  if (data.length > MAX_DOCUMENT_SEARCH_CUSTOMER_IDS) {
+    return { customerIds: [], tooBroad: true };
+  }
+
+  return { customerIds: data.map((c: { id: string | number }) => String(c.id)), tooBroad: false };
+}
+
+/**
+ * Dedicated server action for cached Document Vault listings with bounded server pagination.
+ *
+ * ARCHITECTURAL & PRIVACY SAFETY BOUNDARY:
+ * - Queries minimal fields needed for listing & filtering.
+ * - Database-side search on document fields & relational customer identity fields.
+ * - Bounded pagination with clamped pageSize (default 25, max 100).
+ * - Server-side search may temporarily evaluate customer.phone or document_number to preserve search UX,
+ *   but the RETURNED client DTO strictly STRIPS:
+ *     - file_url
+ *     - signed_url
+ *     - document_number
+ *     - notes
+ *     - AI JSON / extraction data
+ *     - created_by
+ *     - storage paths
+ *     - customer phone
+ *     - Aadhaar / PAN / KYC fields
+ * - Returns clean DocumentVaultRow[] suitable for in-memory TanStack Query caching.
+ * - View / Download operations remain on-demand via getDocumentSignedUrl(doc.id).
+ */
 export async function getDocumentVaultRows(params?: {
   search?: string;
   documentType?: string;
   status?: string;
   renewalWindow?: string;
+  page?: number;
+  pageSize?: number;
 }): Promise<DocumentVaultResponse> {
   const supabase = await createClient();
 
@@ -237,6 +308,9 @@ export async function getDocumentVaultRows(params?: {
     return {
       documents: [],
       totalCount: 0,
+      page: 1,
+      pageSize: 25,
+      totalPages: 1,
       stats: { total: 0, active: 0, archived: 0, totalSizeBytes: 0 },
       error: "Authentication required. Please sign in again."
     };
@@ -247,7 +321,39 @@ export async function getDocumentVaultRows(params?: {
   const status = params?.status?.trim() || "all";
   const renewalWindow = params?.renewalWindow?.trim() || "all";
 
-  // Select minimal fields from customer_documents & joined customer
+  // Bounded pagination: default 25, clamped [1, 100]
+  const rawPage = params?.page ?? 1;
+  const page = Math.max(1, Number.isInteger(rawPage) ? rawPage : 1);
+  const rawPageSize = params?.pageSize ?? 25;
+  const pageSize = Math.min(100, Math.max(1, Number.isInteger(rawPageSize) ? rawPageSize : 25));
+
+  // 1. Relational search resolution if search term provided
+  let matchingCustomerIds: string[] = [];
+  let isSearchTooBroad = false;
+
+  if (search) {
+    const custRes = await resolveDocumentSearchCustomerIds(supabase, search);
+    if (custRes.tooBroad) {
+      isSearchTooBroad = true;
+    } else {
+      matchingCustomerIds = custRes.customerIds;
+    }
+  }
+
+  // If search was too broad, return early with zero rows and safe metadata
+  if (isSearchTooBroad) {
+    return {
+      documents: [],
+      totalCount: 0,
+      page,
+      pageSize,
+      totalPages: 0,
+      searchTooBroad: true,
+      stats: { total: 0, active: 0, archived: 0, totalSizeBytes: 0 }
+    };
+  }
+
+  // 2. Build primary paginated query on customer_documents
   let query = supabase
     .from("customer_documents")
     .select(`
@@ -273,7 +379,7 @@ export async function getDocumentVaultRows(params?: {
       )
     `, { count: 'exact' });
 
-  // Renewal Window Filter (strictly targets active versions with expiry_date)
+  // Apply Renewal Window Filter
   if (renewalWindow && renewalWindow !== "all") {
     query = query.eq("status", "active").not("expiry_date", "is", null);
     const todayStr = getKolkataDateString();
@@ -294,21 +400,85 @@ export async function getDocumentVaultRows(params?: {
     }
   }
 
-  // Document Type Filter
+  // Apply Document Type Filter
   if (documentType && documentType !== "all") {
     query = query.eq("document_type", documentType);
   }
 
-  let res: Awaited<ReturnType<(typeof query)["order"]>>;
+  // Apply Search Filter (PostgREST DB-side)
+  if (search) {
+    const { normalizedQ, tokens } = tokenizeDocumentSearchQuery(search);
+    const orConditions: string[] = [
+      `document_name.ilike.%${normalizedQ}%`,
+      `source_filename.ilike.%${normalizedQ}%`,
+      `document_number.ilike.%${normalizedQ}%`,
+      `document_type.ilike.%${normalizedQ}%`,
+    ];
+
+    if (tokens.length > 1) {
+      for (const t of tokens) {
+        orConditions.push(`document_name.ilike.%${t}%`);
+        orConditions.push(`source_filename.ilike.%${t}%`);
+      }
+    }
+
+    if (matchingCustomerIds.length > 0) {
+      orConditions.push(`customer_id.in.(${matchingCustomerIds.join(",")})`);
+    }
+
+    query = query.or(orConditions.join(","));
+  }
+
+  // Range-based pagination calculation
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  // Execute primary bounded page query and parallel stats query
+  let res: Awaited<ReturnType<typeof query.range>>;
+  let statsTotal = 0;
+  let statsActive = 0;
+  let statsArchived = 0;
+  let statsTotalSizeBytes = 0;
 
   try {
-    res = await query.order("created_at", { ascending: false });
+    const [pageRes, activeCountRes, archivedCountRes, totalCountRes, sizeRes] = await Promise.all([
+      query
+        .order("created_at", { ascending: false })
+        .range(from, to),
+      supabase
+        .from("customer_documents")
+        .select("id", { count: 'exact', head: true })
+        .eq("status", "active"),
+      supabase
+        .from("customer_documents")
+        .select("id", { count: 'exact', head: true })
+        .eq("status", "archived"),
+      supabase
+        .from("customer_documents")
+        .select("id", { count: 'exact', head: true }),
+      supabase
+        .from("customer_documents")
+        .select("file_size")
+        .not("file_size", "is", null)
+    ]);
+
+    res = pageRes;
+    statsActive = activeCountRes.count ?? 0;
+    statsArchived = archivedCountRes.count ?? 0;
+    statsTotal = totalCountRes.count ?? 0;
+
+    if (sizeRes.data && Array.isArray(sizeRes.data)) {
+      statsTotalSizeBytes = sizeRes.data.reduce((sum: number, r: { file_size?: number | null }) => sum + (r.file_size || 0), 0);
+    }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to load documents";
     console.error("[getDocumentVaultRows] Query failure:", message);
     return {
       documents: [],
       totalCount: 0,
+      page,
+      pageSize,
+      totalPages: 0,
       stats: { total: 0, active: 0, archived: 0, totalSizeBytes: 0 },
       error: message
     };
@@ -319,6 +489,9 @@ export async function getDocumentVaultRows(params?: {
     return {
       documents: [],
       totalCount: 0,
+      page,
+      pageSize,
+      totalPages: 0,
       stats: { total: 0, active: 0, archived: 0, totalSizeBytes: 0 },
       error: res.error.message
     };
@@ -347,45 +520,12 @@ export async function getDocumentVaultRows(params?: {
     } | null;
   }
 
-  const count = res.count;
+  const filteredTotalCount = res.count ?? 0;
   const rawDocs = (res.data || []) as unknown as RawVaultRow[];
-  let filteredDocs: RawVaultRow[] = rawDocs;
-
-  // Server-side search filtering across customer name, code, phone, filename, document_name, document_type, document_number
-  if (search) {
-    const q = search.toLowerCase();
-    filteredDocs = filteredDocs.filter((doc) => {
-      const custName = [doc.customer?.first_name, doc.customer?.middle_name, doc.customer?.last_name]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      const code = (doc.customer?.customer_code || "").toLowerCase();
-      const phone = (doc.customer?.phone || "").toLowerCase();
-      const docType = (doc.document_type || "").toLowerCase();
-      const filename = (doc.source_filename || "").toLowerCase();
-      const docName = (doc.document_name || "").toLowerCase();
-      const docNum = (doc.document_number || "").toLowerCase();
-
-      return (
-        custName.includes(q) ||
-        code.includes(q) ||
-        phone.includes(q) ||
-        docType.includes(q) ||
-        filename.includes(q) ||
-        docName.includes(q) ||
-        docNum.includes(q)
-      );
-    });
-  }
-
-  // Compute summary stats before stripping
-  const totalCount = count || filteredDocs.length;
-  const activeCount = filteredDocs.filter((d) => d.status === 'active' || !d.status).length;
-  const archivedCount = filteredDocs.filter((d) => d.status === 'archived').length;
-  const totalSizeBytes = filteredDocs.reduce((acc, d) => acc + (d.file_size || 0), 0);
+  const totalPages = Math.ceil(filteredTotalCount / pageSize);
 
   // Strip all non-whitelisted fields before returning DTO
-  const cleanRows: DocumentVaultRow[] = filteredDocs.map((doc) => ({
+  const cleanRows: DocumentVaultRow[] = rawDocs.map((doc) => ({
     id: doc.id,
     customer_id: doc.customer_id,
     document_type: doc.document_type as DocumentVaultRow["document_type"],
@@ -408,12 +548,15 @@ export async function getDocumentVaultRows(params?: {
 
   return {
     documents: cleanRows,
-    totalCount,
+    totalCount: filteredTotalCount,
+    page,
+    pageSize,
+    totalPages,
     stats: {
-      total: totalCount,
-      active: activeCount,
-      archived: archivedCount,
-      totalSizeBytes
+      total: statsTotal,
+      active: statsActive,
+      archived: statsArchived,
+      totalSizeBytes: statsTotalSizeBytes
     }
   };
 }
@@ -960,7 +1103,7 @@ export async function rerunExtraction(documentId: string, customerId: string) {
   // Check Extraction Cache
   const cacheRes = await ExtractionCache.lookupCache(supabase, user.id, requestHash);
   let extractionResult: any = null;
-  let cacheHit = cacheRes.hit;
+  const cacheHit = cacheRes.hit;
 
   if (cacheHit && cacheRes.resultJson) {
     extractionResult = {
