@@ -36,18 +36,27 @@ export default async function CustomerProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  let customer;
 
+  // 1. Concurrently start customer lookup and independent secondary reads (Optimization B)
+  const customerPromise = getCustomerById(id);
+  const allDocumentsPromise = getCustomerDocuments(id, true, false);
+  const aiImportsPromise = getCustomerAiImports(id);
+  const customerServicesPromise = getCustomerServices(id);
+
+  let customer;
   try {
-    customer = await getCustomerById(id);
+    customer = await customerPromise;
     if (!customer || customer.deleted_at) {
       notFound();
     }
-  } catch {
+  } catch (err: unknown) {
+    if (err && typeof err === "object" && "digest" in err && (err as { digest: string }).digest.startsWith("NEXT_NOT_FOUND")) {
+      throw err;
+    }
     notFound();
   }
 
-  // Concurrently run independent secondary profile reads
+  // 2. Profile photo signing depends on customer data; launch once customer is resolved
   const photoPromise = (async () => {
     if (customer.photo_source) {
       return await getProfilePhotoSignedUrl(customer.photo_source);
@@ -57,11 +66,7 @@ export default async function CustomerProfilePage({
     return null;
   })();
 
-  // Single document query — activeDocuments derived client/render-side to avoid duplicate DB/signing work
-  const allDocumentsPromise = getCustomerDocuments(id, true);
-  const aiImportsPromise = getCustomerAiImports(id);
-  const customerServicesPromise = getCustomerServices(id);
-
+  // 3. Await all remaining independent profile reads concurrently
   const [photoRes, allDocsRes, aiImportsRes, customerServicesRes] = await Promise.allSettled([
     photoPromise,
     allDocumentsPromise,

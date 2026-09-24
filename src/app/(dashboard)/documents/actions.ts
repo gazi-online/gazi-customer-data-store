@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { AIProviderRegistry } from "@/lib/ai/providers";
 import { PromptManager } from "@/lib/ai/prompts/PromptManager";
 import { ExtractionCache } from "@/lib/ai/cache/ExtractionCache";
-import { CustomerDocument, DocumentVaultRow, DocumentVaultResponse } from "@/types/document";
+import { CustomerDocument, DocumentVaultRow, DocumentVaultResponse, AiImportHistoryRecord } from "@/types/document";
 import { v4 as uuidv4 } from "uuid";
 import { getKolkataDateString, getKolkataFutureDateString } from "@/lib/operations/dateUtils";
 
@@ -593,11 +593,16 @@ export async function getAllDocuments(params?: {
 }
 
 /**
- * Fetch documents for a specific customer with short-lived signed URLs.
+ * Fetch documents for a specific customer.
+ *
+ * PERFORMANCE & SECURITY (P1A Fast Path):
+ * - By default (signUrls = false), returns document metadata immediately with ZERO storage signed URL calls.
+ * - View & Download operations are executed securely on-demand via getDocumentSignedUrl(doc.id).
+ * - Callers that explicitly require batch pre-signed URLs may pass signUrls = true.
  */
-export async function getCustomerDocuments(customerId: string, includeHistory = false) {
+export async function getCustomerDocuments(customerId: string, includeHistory = false, signUrls = false) {
   const supabase = await createClient();
-  let query = supabase
+  const query = supabase
     .from("customer_documents")
     .select("*")
     .eq("customer_id", customerId);
@@ -611,10 +616,19 @@ export async function getCustomerDocuments(customerId: string, includeHistory = 
 
   let filtered = documents || [];
   if (!includeHistory) {
-    filtered = filtered.filter((d: any) => d.status === 'active' || !d.status);
+    filtered = filtered.filter((d: { status?: string }) => d.status === 'active' || !d.status);
   }
 
-  // Generate short-lived signed URLs (15 mins) for preview securely
+  // Fast path: Return metadata immediately without N Supabase Storage network round trips
+  if (!signUrls) {
+    return filtered.map((doc: Record<string, unknown>) => ({
+      ...doc,
+      uploaded_at: (doc.uploaded_at as string) || (doc.created_at as string),
+      signed_url: undefined,
+    })) as CustomerDocument[];
+  }
+
+  // Opt-in path: Generate short-lived signed URLs (15 mins) for callers that explicitly request them
   const docsWithUrls: CustomerDocument[] = await Promise.all(
     filtered.map(async (doc) => {
       let signedUrl = "";
@@ -874,7 +888,20 @@ export async function getCustomerAiImports(customerId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ai_import_history")
-    .select("*")
+    .select(`
+      id,
+      created_by,
+      customer_id,
+      status,
+      cache_hit,
+      ai_provider,
+      model_name,
+      prompt_version,
+      processing_time_ms,
+      error_message,
+      final_json,
+      created_at
+    `)
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
 
@@ -883,7 +910,7 @@ export async function getCustomerAiImports(customerId: string) {
     return [];
   }
 
-  return data || [];
+  return (data || []) as unknown as AiImportHistoryRecord[];
 }
 
 export async function rerunExtraction(documentId: string, customerId: string) {

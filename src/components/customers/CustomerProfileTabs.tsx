@@ -66,6 +66,7 @@ export function CustomerProfileTabs({
   const [filterDocStatus, setFilterDocStatus] = useState<'active' | 'all' | 'archived'>('active');
   const [runningRerunId, setRunningRerunId] = useState<string | null>(null);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+  const [viewingDocId, setViewingDocId] = useState<string | null>(null);
   const [rerunReviewResult, setRerunReviewResult] = useState<MergedResult | null>(null);
   
   // Transactional on-demand active services (never cached in TanStack Query)
@@ -219,6 +220,40 @@ export function CustomerProfileTabs({
       });
     } catch (err: any) {
       toast.error(err.message || "Failed to archive document");
+    }
+  };
+
+  const handleViewDoc = async (doc: CustomerDocument) => {
+    // Fast path: if signed URL was already generated, open immediately
+    if (doc.signed_url) {
+      window.open(doc.signed_url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    let newTab: Window | null = null;
+    try {
+      newTab = window.open("about:blank", "_blank");
+    } catch {
+      // Browser popup blocked; fallback to opening once signed URL is ready
+    }
+
+    setViewingDocId(doc.id);
+    try {
+      const result = await getDocumentSignedUrl(doc.id, false);
+      if (result.error || !result.signedUrl) {
+        throw new Error(result.error || "Could not generate secure viewing link");
+      }
+      if (newTab) {
+        newTab.location.href = result.signedUrl;
+      } else {
+        window.open(result.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (err: unknown) {
+      if (newTab) newTab.close();
+      const message = err instanceof Error ? err.message : "Failed to view document";
+      toast.error(message);
+    } finally {
+      setViewingDocId(null);
     }
   };
 
@@ -419,16 +454,18 @@ export function CustomerProfileTabs({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-zinc-100 dark:border-zinc-800">
-                      {doc.signed_url && (
-                        <a
-                          href={doc.signed_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-semibold transition-colors min-h-[38px] inline-flex items-center"
-                        >
-                          Preview
-                        </a>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleViewDoc(doc)}
+                        disabled={viewingDocId === doc.id}
+                        className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-semibold transition-colors min-h-[38px] inline-flex items-center disabled:opacity-50"
+                        title="Preview Document"
+                      >
+                        {viewingDocId === doc.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                        ) : null}
+                        Preview
+                      </button>
 
                       <button
                         onClick={() => handleDownloadDoc(doc)}
