@@ -155,17 +155,17 @@ export function DashboardKpis({ metrics }: DashboardKpisProps) {
         </div>
       </div>
 
-      {/* Operations Desk Dispatch Banner */}
-      <div className="sm:col-span-2 lg:col-span-4 bg-slate-900 dark:bg-zinc-900 rounded-[16px] sm:rounded-[18px] p-4 sm:p-5 text-white shadow-sm border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Operations Desk Dispatch Card */}
+      <div className="sm:col-span-2 lg:col-span-4 bg-white dark:bg-zinc-900 rounded-[16px] sm:rounded-[18px] p-4 sm:p-5 border border-slate-200 dark:border-zinc-800 shadow-[0_4px_18px_rgba(15,23,42,0.04)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 shrink-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
             <CalendarClock className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-white tracking-wide truncate">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-zinc-100 tracking-wide truncate">
               Daily Operations Desk
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-zinc-400">
               Live follow-up pipeline & document renewals in Asia/Kolkata
             </p>
           </div>
@@ -175,76 +175,128 @@ export function DashboardKpis({ metrics }: DashboardKpisProps) {
           {/* Overdue */}
           <Link
             href="/requests?followup=overdue"
-            className={`min-h-[48px] px-3 py-2 rounded-xl border transition-all flex flex-col justify-between ${
+            className={`min-h-[48px] px-3 py-2 rounded-xl border transition-all flex flex-col justify-between focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-2 dark:focus:ring-offset-zinc-900 ${
               followupsOverdue > 0
-                ? "bg-rose-950/40 border-rose-800/80 hover:bg-rose-900/50 text-rose-300"
-                : "bg-slate-800/60 border-slate-700/60 hover:bg-slate-800 text-slate-300"
+                ? "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/60 hover:bg-rose-100/70 dark:hover:bg-rose-900/50 hover:border-rose-300 text-rose-700 dark:text-rose-300"
+                : "bg-slate-50/70 dark:bg-zinc-800/40 border-slate-200/70 dark:border-zinc-700/60 hover:bg-slate-100/70 dark:hover:bg-zinc-800/70 hover:border-slate-300 dark:hover:border-zinc-600 text-slate-600 dark:text-zinc-300"
             }`}
           >
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-wider ${
+                followupsOverdue > 0 ? "text-rose-600/80 dark:text-rose-400" : "text-slate-400 dark:text-zinc-400"
+              }`}
+            >
               Overdue
             </span>
             <div className="flex items-baseline justify-between mt-1">
-              <span className="text-base sm:text-lg font-bold font-mono text-white">
+              <span
+                className={`text-base sm:text-lg font-bold font-mono ${
+                  followupsOverdue > 0 ? "text-rose-700 dark:text-rose-200" : "text-slate-900 dark:text-zinc-100"
+                }`}
+              >
                 {followupsOverdue}
               </span>
-              {followupsOverdue > 0 && <AlertTriangle className="h-3.5 w-3.5 text-rose-400 shrink-0 ml-1" />}
+              {followupsOverdue > 0 ? (
+                <AlertTriangle className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400 shrink-0 ml-1" />
+              ) : (
+                <AlertTriangle className="h-3.5 w-3.5 text-slate-300 dark:text-zinc-600 shrink-0 ml-1" />
+              )}
             </div>
           </Link>
 
           {/* Due Today */}
           <Link
             href="/requests?followup=today"
-            className={`min-h-[48px] px-3 py-2 rounded-xl border transition-all flex flex-col justify-between ${
+            className={`min-h-[48px] px-3 py-2 rounded-xl border transition-all flex flex-col justify-between focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-2 dark:focus:ring-offset-zinc-900 ${
               followupsDueToday > 0
-                ? "bg-amber-950/40 border-amber-800/80 hover:bg-amber-900/50 text-amber-300"
-                : "bg-slate-800/60 border-slate-700/60 hover:bg-slate-800 text-slate-300"
+                ? "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/60 hover:bg-amber-100/70 dark:hover:bg-amber-900/50 hover:border-amber-300 text-amber-800 dark:text-amber-300"
+                : "bg-slate-50/70 dark:bg-zinc-800/40 border-slate-200/70 dark:border-zinc-700/60 hover:bg-slate-100/70 dark:hover:bg-zinc-800/70 hover:border-slate-300 dark:hover:border-zinc-600 text-slate-600 dark:text-zinc-300"
             }`}
           >
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-wider ${
+                followupsDueToday > 0 ? "text-amber-700/80 dark:text-amber-400" : "text-slate-400 dark:text-zinc-400"
+              }`}
+            >
               Due Today
             </span>
             <div className="flex items-baseline justify-between mt-1">
-              <span className="text-base sm:text-lg font-bold font-mono text-white">
+              <span
+                className={`text-base sm:text-lg font-bold font-mono ${
+                  followupsDueToday > 0 ? "text-amber-800 dark:text-amber-200" : "text-slate-900 dark:text-zinc-100"
+                }`}
+              >
                 {followupsDueToday}
               </span>
-              <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0 ml-1" />
+              <Clock
+                className={`h-3.5 w-3.5 shrink-0 ml-1 ${
+                  followupsDueToday > 0 ? "text-amber-500 dark:text-amber-400" : "text-slate-300 dark:text-zinc-600"
+                }`}
+              />
             </div>
           </Link>
 
           {/* Upcoming */}
           <Link
             href="/requests?followup=upcoming"
-            className="min-h-[48px] px-3 py-2 rounded-xl border bg-slate-800/60 border-slate-700/60 hover:bg-slate-800 text-slate-300 transition-all flex flex-col justify-between"
+            className={`min-h-[48px] px-3 py-2 rounded-xl border transition-all flex flex-col justify-between focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-2 dark:focus:ring-offset-zinc-900 ${
+              followupsUpcoming > 0
+                ? "bg-sky-50/60 dark:bg-sky-950/30 border-sky-200/70 dark:border-sky-900/50 hover:bg-sky-100/60 dark:hover:bg-sky-900/40 hover:border-sky-300 text-sky-800 dark:text-sky-300"
+                : "bg-slate-50/70 dark:bg-zinc-800/40 border-slate-200/70 dark:border-zinc-700/60 hover:bg-slate-100/70 dark:hover:bg-zinc-800/70 hover:border-slate-300 dark:hover:border-zinc-600 text-slate-600 dark:text-zinc-300"
+            }`}
           >
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-wider ${
+                followupsUpcoming > 0 ? "text-sky-700/80 dark:text-sky-400" : "text-slate-400 dark:text-zinc-400"
+              }`}
+            >
               Upcoming
             </span>
             <div className="flex items-baseline justify-between mt-1">
-              <span className="text-base sm:text-lg font-bold font-mono text-white">
+              <span
+                className={`text-base sm:text-lg font-bold font-mono ${
+                  followupsUpcoming > 0 ? "text-sky-800 dark:text-sky-200" : "text-slate-900 dark:text-zinc-100"
+                }`}
+              >
                 {followupsUpcoming}
               </span>
-              <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0 ml-1" />
+              <Calendar
+                className={`h-3.5 w-3.5 shrink-0 ml-1 ${
+                  followupsUpcoming > 0 ? "text-sky-500 dark:text-sky-400" : "text-slate-300 dark:text-zinc-600"
+                }`}
+              />
             </div>
           </Link>
 
           {/* Renewals Due */}
           <Link
             href="/documents?renewal=30d"
-            className={`min-h-[48px] px-3 py-2 rounded-xl border transition-all flex flex-col justify-between ${
+            className={`min-h-[48px] px-3 py-2 rounded-xl border transition-all flex flex-col justify-between focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:ring-offset-2 dark:focus:ring-offset-zinc-900 ${
               renewalsDue > 0
-                ? "bg-purple-950/40 border-purple-800/80 hover:bg-purple-900/50 text-purple-300"
-                : "bg-slate-800/60 border-slate-700/60 hover:bg-slate-800 text-slate-300"
+                ? "bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-900/60 hover:bg-purple-100/70 dark:hover:bg-purple-900/50 hover:border-purple-300 text-purple-700 dark:text-purple-300"
+                : "bg-slate-50/70 dark:bg-zinc-800/40 border-slate-200/70 dark:border-zinc-700/60 hover:bg-slate-100/70 dark:hover:bg-zinc-800/70 hover:border-slate-300 dark:hover:border-zinc-600 text-slate-600 dark:text-zinc-300"
             }`}
           >
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-wider ${
+                renewalsDue > 0 ? "text-purple-600/80 dark:text-purple-400" : "text-slate-400 dark:text-zinc-400"
+              }`}
+            >
               30d Expiries
             </span>
             <div className="flex items-baseline justify-between mt-1">
-              <span className="text-base sm:text-lg font-bold font-mono text-white">
+              <span
+                className={`text-base sm:text-lg font-bold font-mono ${
+                  renewalsDue > 0 ? "text-purple-700 dark:text-purple-200" : "text-slate-900 dark:text-zinc-100"
+                }`}
+              >
                 {renewalsDue}
               </span>
-              <RefreshCw className="h-3.5 w-3.5 text-purple-400 shrink-0 ml-1" />
+              <RefreshCw
+                className={`h-3.5 w-3.5 shrink-0 ml-1 ${
+                  renewalsDue > 0 ? "text-purple-500 dark:text-purple-400" : "text-slate-300 dark:text-zinc-600"
+                }`}
+              />
             </div>
           </Link>
         </div>
