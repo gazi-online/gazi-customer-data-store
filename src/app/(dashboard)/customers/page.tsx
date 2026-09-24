@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 import { CustomerTable } from "@/components/tables/CustomerTable";
 
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -10,13 +10,15 @@ export default function CustomersPage() {
       <PageHeader
         title="Customers"
         description="Manage and view all your customer data."
+        icon={Users}
+        iconVariant="badge"
         actions={
           <Link 
             href="/customers/new" 
-            className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2.5 min-h-[44px] bg-violet-600 hover:bg-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-white rounded-xl transition-colors shadow-xs font-semibold text-xs sm:text-sm"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 min-h-[44px] bg-violet-600 hover:bg-violet-700 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 text-white rounded-xl transition-all shadow-xs font-semibold text-xs sm:text-sm"
           >
-            <Plus className="mr-1.5 h-4 w-4 shrink-0" />
-            Add Customer
+            <Plus className="h-4 w-4 shrink-0" />
+            <span>Add Customer</span>
           </Link>
         }
       />
