@@ -3,7 +3,7 @@
 import React, { useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, AlertCircle, Loader2, LogOut, KeyRound } from "lucide-react";
+import { ShieldCheck, AlertCircle, Loader2, LogOut, KeyRound, ChevronDown } from "lucide-react";
 import {
   verifyMfaChallengeAction,
   signOutChallengeAction,
@@ -24,6 +24,7 @@ export function MfaChallengeView({
   const router = useRouter();
   const [code, setCode] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showLockoutHelp, setShowLockoutHelp] = useState(false);
 
   const [isVerifying, startVerifyTransition] = useTransition();
   const [isSigningOut, startSignOutTransition] = useTransition();
@@ -197,6 +198,29 @@ export function MfaChallengeView({
             </button>
           </div>
         </form>
+
+        {/* Safe Lockout Guidance */}
+        <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+          <button
+            type="button"
+            onClick={() => setShowLockoutHelp((prev) => !prev)}
+            className="text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors inline-flex items-center gap-1"
+          >
+            <span>Can&apos;t access your authenticator?</span>
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showLockoutHelp ? "rotate-180" : ""}`} />
+          </button>
+
+          {showLockoutHelp && (
+            <div className="mt-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-left text-xs text-slate-600 space-y-1.5">
+              <p className="font-semibold text-slate-800">
+                Authenticator Recovery Information
+              </p>
+              <p className="leading-relaxed">
+                For security, password recovery alone does not remove two-step verification. If you have lost your phone or cannot access your authenticator app, please contact your system administrator to verify your identity and recover account access.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

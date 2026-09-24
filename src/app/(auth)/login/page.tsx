@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -132,12 +133,20 @@ export default function LoginPage() {
 
           {/* Password field */}
           <div className="space-y-1.5">
-            <label
-              htmlFor="password-input"
-              className="block text-sm font-medium text-slate-700"
-            >
-              Password
-            </label>
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="password-input"
+                className="block text-sm font-medium text-slate-700"
+              >
+                Password
+              </label>
+              <Link
+                href="/forgot-password"
+                className="text-xs font-semibold text-violet-600 hover:text-violet-700 transition-colors"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <div className="relative">
               <input
                 id="password-input"
