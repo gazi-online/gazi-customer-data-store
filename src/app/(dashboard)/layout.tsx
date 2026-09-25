@@ -22,6 +22,7 @@ import {
 import { logout } from "./actions";
 import { useState, useEffect } from "react";
 import { GlobalCommandSearchModal } from "@/components/search/GlobalCommandSearchModal";
+import { LogoutConfirmationModal } from "@/components/auth/LogoutConfirmationModal";
 import { useQueryClient } from "@tanstack/react-query";
 import { QueryProvider } from "@/providers/QueryProvider";
 
@@ -43,14 +44,20 @@ interface SidebarContentProps {
   pathname: string;
   onClose?: () => void;
   isMobileDrawer?: boolean;
+  onRequestLogout?: () => void;
 }
 
-function SidebarContent({ pathname, onClose, isMobileDrawer = false }: SidebarContentProps) {
+function SidebarContent({ pathname, onClose, isMobileDrawer = false, onRequestLogout }: SidebarContentProps) {
   const queryClient = useQueryClient();
 
-  const handleLogout = async () => {
-    queryClient.clear();
-    await logout();
+  const handleSignOutClick = async () => {
+    if (onRequestLogout) {
+      if (onClose) onClose();
+      onRequestLogout();
+    } else {
+      queryClient.clear();
+      await logout();
+    }
   };
 
   return (
@@ -139,7 +146,7 @@ function SidebarContent({ pathname, onClose, isMobileDrawer = false }: SidebarCo
 
         <button
           type="button"
-          onClick={handleLogout}
+          onClick={handleSignOutClick}
           className="w-full min-h-[44px] flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-rose-50 hover:text-rose-600 transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
         >
           <LogOut className="h-5 w-5 text-slate-400 group-hover:text-rose-500 transition-colors shrink-0" />
@@ -156,8 +163,22 @@ function DashboardShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const queryClient = useQueryClient();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleConfirmLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      queryClient.clear();
+      await logout();
+    } catch {
+      setIsLoggingOut(false);
+    }
+  };
 
   // Global shortcut for Command/Ctrl + K
   useEffect(() => {
@@ -214,7 +235,10 @@ function DashboardShell({
     <div className="flex h-screen overflow-hidden bg-[#F8FAFF] print:block print:h-auto print:overflow-visible print:bg-white">
       {/* Sidebar - Desktop */}
       <aside className="w-64 bg-white border-r border-slate-200/80 flex-col hidden md:flex shrink-0 print:hidden select-none">
-        <SidebarContent pathname={pathname} />
+        <SidebarContent
+          pathname={pathname}
+          onRequestLogout={() => setLogoutModalOpen(true)}
+        />
       </aside>
 
       {/* Sidebar - Mobile Drawer Overlay */}
@@ -237,7 +261,8 @@ function DashboardShell({
             <SidebarContent 
               pathname={pathname} 
               onClose={() => setMobileMenuOpen(false)} 
-              isMobileDrawer 
+              isMobileDrawer
+              onRequestLogout={() => setLogoutModalOpen(true)}
             />
           </aside>
         </div>
@@ -340,6 +365,16 @@ function DashboardShell({
       <GlobalCommandSearchModal
         isOpen={searchModalOpen}
         onClose={() => setSearchModalOpen(false)}
+      />
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmationModal
+        isOpen={logoutModalOpen}
+        onClose={() => {
+          if (!isLoggingOut) setLogoutModalOpen(false);
+        }}
+        onConfirm={handleConfirmLogout}
+        isLoggingOut={isLoggingOut}
       />
     </div>
   );
