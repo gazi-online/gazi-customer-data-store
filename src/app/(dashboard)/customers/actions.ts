@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { CustomerFormData, CustomerListRow, CustomerLookupRow } from "@/types/customer";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export async function getCustomerLookupRows(): Promise<CustomerLookupRow[]> {
   const supabase = await createClient();
@@ -72,15 +73,15 @@ export async function createCustomer(data: CustomerFormData) {
   const supabase = await createClient();
   
   // Sanitize payload: omit empty customer_code so DB trigger assigns next atomic sequence
-  const payload: Record<string, any> = { ...data };
-  if (!payload.customer_code || payload.customer_code.trim() === "") {
+  const payload: Record<string, unknown> = { ...data };
+  if (!payload.customer_code || (typeof payload.customer_code === "string" && payload.customer_code.trim() === "")) {
     delete payload.customer_code;
-  } else {
+  } else if (typeof payload.customer_code === "string") {
     payload.customer_code = payload.customer_code.trim();
   }
 
   const maxAttempts = 3;
-  let lastError: any = null;
+  let lastError: { message?: string } | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const { data: inserted, error } = await supabase
@@ -99,7 +100,7 @@ export async function createCustomer(data: CustomerFormData) {
     // Retry ONLY on unique constraint violation specifically for customer_code
     const isCustomerCodeUniqueViolation = 
       error.code === "23505" && 
-      (error.message?.includes("customers_customer_code_key") || (error as any).details?.includes("customer_code"));
+      (error.message?.includes("customers_customer_code_key") || (error as { details?: string }).details?.includes("customer_code"));
 
     if (isCustomerCodeUniqueViolation && attempt < maxAttempts) {
       // In case of conflict with a custom/stale code, fallback to atomic DB sequence
@@ -117,7 +118,7 @@ export async function createCustomer(data: CustomerFormData) {
 export async function updateCustomer(id: string, data: CustomerFormData) {
   const supabase = await createClient();
   
-  const payload: Record<string, any> = { ...data };
+  const payload: Record<string, unknown> = { ...data };
   if (payload.customer_code === "" || payload.customer_code === undefined) {
     delete payload.customer_code;
   } else if (typeof payload.customer_code === "string") {
@@ -138,6 +139,7 @@ export async function updateCustomer(id: string, data: CustomerFormData) {
 export async function softDeleteCustomer(id: string) {
   if (!id) return { error: "Customer ID is required" };
   const supabase = await createClient();
+  await requireAal2(supabase);
   
   const { error } = await supabase
     .from("customers")
@@ -156,6 +158,7 @@ export async function softDeleteCustomer(id: string) {
 export async function restoreCustomer(id: string) {
   if (!id) return { error: "Customer ID is required" };
   const supabase = await createClient();
+  await requireAal2(supabase);
   
   const { error } = await supabase
     .from("customers")

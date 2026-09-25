@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { enforceMfaRoutePolicy } from "@/lib/auth/mfaEnforcement";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -36,34 +37,6 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const { data: claimsData, error: claimsError } =
-    await supabase.auth.getClaims();
-
-  const claims = claimsError ? null : claimsData?.claims;
-  const isAuthenticated = Boolean(claims);
-
-  const pathname = request.nextUrl.pathname;
-
-  const protectedRoutes = [
-    "/dashboard",
-    "/operations",
-    "/communications",
-    "/requests",
-    "/customers",
-    "/invoices",
-    "/payments",
-    "/documents",
-    "/services",
-    "/reports",
-    "/settings",
-  ];
-
-  const isProtectedRoute = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-
-  const isAuthRoute = pathname.startsWith("/login");
-
   function redirectWithSession(url: URL) {
     const response = NextResponse.redirect(url);
 
@@ -80,23 +53,15 @@ export async function updateSession(request: NextRequest) {
     return response;
   }
 
-  if (!isAuthenticated && isProtectedRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return redirectWithSession(url);
-  }
-
-  if (isAuthenticated && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return redirectWithSession(url);
-  }
-
-  // Redirect root to dashboard if logged in, otherwise login
-  if (pathname === "/") {
-    const url = request.nextUrl.clone();
-    url.pathname = isAuthenticated ? "/dashboard" : "/login";
-    return redirectWithSession(url);
+  // Centralized mandatory MFA route policy enforcement
+  const policyResponse = await enforceMfaRoutePolicy(
+    request,
+    supabaseResponse,
+    supabase,
+    redirectWithSession
+  );
+  if (policyResponse) {
+    return policyResponse;
   }
 
   return supabaseResponse;

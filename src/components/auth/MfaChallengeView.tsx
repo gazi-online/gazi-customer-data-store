@@ -10,21 +10,34 @@ import {
 } from "@/app/(auth)/mfa/verify/actions";
 import { toast } from "sonner";
 
+export interface MfaChallengeFactorOption {
+  id: string;
+  friendlyName?: string;
+  factorType?: "totp";
+  createdAt?: string;
+}
+
 interface MfaChallengeViewProps {
   factorId: string;
   factorName: string;
   safeNext: string;
+  factors?: MfaChallengeFactorOption[];
 }
 
 export function MfaChallengeView({
   factorId,
   factorName,
   safeNext,
+  factors,
 }: MfaChallengeViewProps) {
   const router = useRouter();
+  const [selectedFactorId, setSelectedFactorId] = useState<string>(factorId);
   const [code, setCode] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showLockoutHelp, setShowLockoutHelp] = useState(false);
+
+  const activeFactor = factors?.find((f) => f.id === selectedFactorId);
+  const activeFactorName = activeFactor?.friendlyName || factorName;
 
   const [isVerifying, startVerifyTransition] = useTransition();
   const [isSigningOut, startSignOutTransition] = useTransition();
@@ -58,7 +71,7 @@ export function MfaChallengeView({
     startVerifyTransition(async () => {
       try {
         const res = await verifyMfaChallengeAction({
-          factorId,
+          factorId: selectedFactorId,
           code,
           next: safeNext,
         });
@@ -118,10 +131,41 @@ export function MfaChallengeView({
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-normal leading-relaxed">
             Enter the 6-digit code from your authenticator app.
           </p>
-          <span className="inline-flex items-center gap-1 mt-2 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600">
-            <ShieldCheck className="h-3 w-3 text-violet-600" />
-            {factorName}
-          </span>
+
+          {/* Factor switcher if multiple verified factors exist */}
+          {factors && factors.length > 1 ? (
+            <div className="mt-3 w-full bg-slate-100/90 p-1 rounded-xl flex gap-1" role="tablist" aria-label="Select authenticator factor">
+              {factors.map((f, idx) => {
+                const isSelected = f.id === selectedFactorId;
+                const label = f.friendlyName || (idx === 0 ? "Primary Authenticator" : "Backup Authenticator");
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    onClick={() => {
+                      setSelectedFactorId(f.id);
+                      setCode("");
+                      setErrorMessage(null);
+                    }}
+                    className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg transition-all truncate ${
+                      isSelected
+                        ? "bg-white text-violet-700 shadow-2xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <span className="inline-flex items-center gap-1 mt-2 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600">
+              <ShieldCheck className="h-3 w-3 text-violet-600" />
+              {activeFactorName}
+            </span>
+          )}
         </div>
 
         {/* Error Alert with aria-live */}

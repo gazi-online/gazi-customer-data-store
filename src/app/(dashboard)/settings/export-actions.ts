@@ -7,9 +7,12 @@ import {
   generateDocumentsCatalogCsv,
   generateInvoicesCsv,
 } from "@/lib/export/dataExportEngine";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export async function exportCustomersCsv(): Promise<string> {
   const supabase = await createClient();
+  await requireAal2(supabase);
+
   const { data: userData, error: authError } = await supabase.auth.getUser();
   if (authError || !userData?.user) throw new Error("Authentication required");
 
@@ -25,6 +28,8 @@ export async function exportCustomersCsv(): Promise<string> {
 
 export async function exportRequestsCsv(): Promise<string> {
   const supabase = await createClient();
+  await requireAal2(supabase);
+
   const { data: userData, error: authError } = await supabase.auth.getUser();
   if (authError || !userData?.user) throw new Error("Authentication required");
 
@@ -49,6 +54,8 @@ export async function exportRequestsCsv(): Promise<string> {
 
 export async function exportDocumentsCatalogCsv(): Promise<string> {
   const supabase = await createClient();
+  await requireAal2(supabase);
+
   const { data: userData, error: authError } = await supabase.auth.getUser();
   if (authError || !userData?.user) throw new Error("Authentication required");
 
@@ -74,6 +81,8 @@ export async function exportDocumentsCatalogCsv(): Promise<string> {
 
 export async function exportInvoicesCsv(): Promise<string> {
   const supabase = await createClient();
+  await requireAal2(supabase);
+
   const { data: userData, error: authError } = await supabase.auth.getUser();
   if (authError || !userData?.user) throw new Error("Authentication required");
 

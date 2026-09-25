@@ -45,6 +45,9 @@ export interface MfaCancelActionResult {
 
 export interface MfaUnenrollActionResult {
   success: boolean;
+  mustEnroll?: boolean;
+  remainingFactorCount?: number;
+  redirectUrl?: string;
   error?: string;
 }
 
@@ -278,10 +281,88 @@ export async function unenrollOwnMfaFactorAction(
       };
     }
 
+    // Inspect remaining factors authoritatively
+    const remainingFactorsResult = await listMfaFactors(supabase);
+    const remainingCount = remainingFactorsResult.verified.length;
+
+    if (remainingCount === 0) {
+      // Final verified factor was removed. Supabase JWT may remain AAL2 until refreshSession().
+      // Explicitly refresh session to immediately downgrade AAL2 -> AAL1.
+      let refreshSuccess = false;
+      try {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error && data?.session) {
+          refreshSuccess = true;
+        }
+      } catch {
+        refreshSuccess = false;
+      }
+
+      if (!refreshSuccess) {
+        // Refresh failed; force sign out fail-closed to prevent stale AAL2 bypass
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // Ignore signOut errors, fail closed
+        }
+        return {
+          success: false,
+          error: "Session could not be securely refreshed. Please sign in again.",
+          redirectUrl: "/login",
+        };
+      }
+
+      // Re-read assurance and factor state to confirm authoritative downgrade
+      const [recheckedAssurance, recheckedFactors] = await Promise.all([
+        getMfaAssuranceLevel(supabase),
+        listMfaFactors(supabase),
+      ]);
+
+      const isDowngraded = recheckedAssurance.currentLevel !== "aal2" && !recheckedAssurance.isAal2;
+      const isZeroFactors = recheckedFactors.verified.length === 0;
+
+      if (!isDowngraded || !isZeroFactors) {
+        // Authoritative downgrade could not be confirmed; force sign out fail-closed
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // Ignore signOut errors
+        }
+        return {
+          success: false,
+          error: "Session assurance could not be securely downgraded. Please sign in again.",
+          redirectUrl: "/login",
+        };
+      }
+
+      revalidatePath("/", "layout");
+      revalidatePath("/settings");
+      revalidatePath("/settings/security/mfa");
+
+      return {
+        success: true,
+        mustEnroll: true,
+        remainingFactorCount: 0,
+        redirectUrl: "/settings/security/mfa",
+      };
+    }
+
+    // One or more verified factors remain (e.g. removed backup, primary remains)
+    try {
+      await supabase.auth.refreshSession();
+    } catch {
+      // Safe to continue if at least one factor remains
+    }
+
+    revalidatePath("/", "layout");
     revalidatePath("/settings");
     revalidatePath("/settings/security/mfa");
 
-    return { success: true };
+    return {
+      success: true,
+      mustEnroll: false,
+      remainingFactorCount: remainingCount,
+    };
   } catch {
     return { success: false, error: "Failed to remove factor." };
   }

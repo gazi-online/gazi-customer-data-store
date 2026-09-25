@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export interface BusinessSettingsData {
   id: number;
@@ -73,6 +74,8 @@ export async function getBusinessSettings(): Promise<BusinessSettingsData | null
 
 export async function updateBusinessSettings(formData: Partial<BusinessSettingsData>) {
   const supabase = await createClient();
+  await requireAal2(supabase);
+
   const { data: userData, error: authError } = await supabase.auth.getUser();
   if (authError || !userData?.user) {
     throw new Error("Authentication required");
