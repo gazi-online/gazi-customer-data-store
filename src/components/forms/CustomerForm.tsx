@@ -647,6 +647,22 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
               {errors.last_name && <p className="text-sm text-red-500">{errors.last_name.message}</p>}
             </div>
 
+            <div className="space-y-2 md:col-span-3">
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Name in Native Language
+                <span className="ml-1.5 text-[11px] font-normal text-zinc-400 dark:text-zinc-500">(বাংলা / हिंदी / অন্য ভাষায় নাম)</span>
+              </label>
+              <input
+                {...register("original_language_name")}
+                className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow"
+                placeholder="e.g. রাহুল কুমার শর্মা"
+                lang="bn"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">Optional — enter the customer&apos;s name as written in their local language or script.</p>
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Date of Birth</label>
               <input {...register("date_of_birth")} type="date" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" />
