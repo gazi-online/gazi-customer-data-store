@@ -1,13 +1,16 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { type SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { AIProviderRegistry } from "@/lib/ai/providers";
-import { PromptManager } from "@/lib/ai/prompts/PromptManager";
+import { type AIExtractionResult } from "@/lib/ai/providers/base";
+import { PromptManager, type AiProvider, type PromptVersion } from "@/lib/ai/prompts/PromptManager";
 import { ExtractionCache } from "@/lib/ai/cache/ExtractionCache";
 import { CustomerDocument, DocumentVaultRow, DocumentVaultResponse, AiImportHistoryRecord } from "@/types/document";
 import { v4 as uuidv4 } from "uuid";
 import { getKolkataDateString, getKolkataFutureDateString } from "@/lib/operations/dateUtils";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
@@ -23,13 +26,13 @@ const FALLBACK_BUCKET = "customer-profiles";
 /**
  * Helper to upload to Supabase storage with primary / fallback bucket support
  */
-async function uploadToPrivateStorage(supabase: any, storagePath: string, file: File) {
+async function uploadToPrivateStorage(supabase: SupabaseClient, storagePath: string, file: File) {
   let bucketUsed = PRIMARY_BUCKET;
   let { data, error } = await supabase.storage
     .from(PRIMARY_BUCKET)
     .upload(storagePath, file, { cacheControl: '3600', upsert: false });
 
-  if (error && (error.message?.includes("Bucket not found") || error.statusCode === '404' || (error as any).code === 'NoSuchBucket')) {
+  if (error && (error.message?.includes("Bucket not found") || (error as { statusCode?: string }).statusCode === '404' || (error as { code?: string }).code === 'NoSuchBucket')) {
     bucketUsed = FALLBACK_BUCKET;
     const fallbackRes = await supabase.storage
       .from(FALLBACK_BUCKET)
@@ -44,12 +47,12 @@ async function uploadToPrivateStorage(supabase: any, storagePath: string, file: 
 /**
  * Helper to create signed URL with primary / fallback bucket support
  */
-async function createSignedUrlSafe(supabase: any, storagePath: string, expiresInSeconds = 900, options: any = {}) {
+async function createSignedUrlSafe(supabase: SupabaseClient, storagePath: string, expiresInSeconds = 900, options: { download?: string | boolean } = {}) {
   let { data, error } = await supabase.storage
     .from(PRIMARY_BUCKET)
     .createSignedUrl(storagePath, expiresInSeconds, options);
 
-  if (error && (error.message?.includes("Bucket not found") || error.statusCode === '404' || (error as any).code === 'NoSuchBucket')) {
+  if (error && (error.message?.includes("Bucket not found") || (error as { statusCode?: string }).statusCode === '404' || (error as { code?: string }).code === 'NoSuchBucket')) {
     const fallbackRes = await supabase.storage
       .from(FALLBACK_BUCKET)
       .createSignedUrl(storagePath, expiresInSeconds, options);
@@ -63,12 +66,12 @@ async function createSignedUrlSafe(supabase: any, storagePath: string, expiresIn
 /**
  * Helper to remove object with primary / fallback bucket support
  */
-async function removeStorageObjectSafe(supabase: any, storagePath: string) {
+async function removeStorageObjectSafe(supabase: SupabaseClient, storagePath: string) {
   let { data, error } = await supabase.storage
     .from(PRIMARY_BUCKET)
     .remove([storagePath]);
 
-  if (error && (error.message?.includes("Bucket not found") || error.statusCode === '404' || (error as any).code === 'NoSuchBucket')) {
+  if (error && (error.message?.includes("Bucket not found") || (error as { statusCode?: string }).statusCode === '404' || (error as { code?: string }).code === 'NoSuchBucket')) {
     const fallbackRes = await supabase.storage
       .from(FALLBACK_BUCKET)
       .remove([storagePath]);
@@ -85,6 +88,7 @@ async function removeStorageObjectSafe(supabase: any, storagePath: string) {
  */
 export async function uploadCustomerDocument(formData: FormData) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const file = formData.get("file") as File | null;
   const customerId = formData.get("customer_id") as string | null;
   const documentType = formData.get("document_type") as string | null;
@@ -130,7 +134,7 @@ export async function uploadCustomerDocument(formData: FormData) {
   const storagePath = `customers/${customerId}/${uuidv4()}-${sanitizedOriginalName}`;
 
   // Upload to Supabase Private Storage
-  const { error: uploadError, bucketUsed } = await uploadToPrivateStorage(supabase, storagePath, file);
+  const { error: uploadError } = await uploadToPrivateStorage(supabase, storagePath, file);
 
   if (uploadError) {
     console.error("[uploadCustomerDocument] Storage upload error:", uploadError.message);
@@ -138,7 +142,7 @@ export async function uploadCustomerDocument(formData: FormData) {
   }
 
   // Insert metadata into DB with graceful fallback for schema versions
-  const fullPayload: any = {
+  const fullPayload: Record<string, unknown> = {
     customer_id: customerId,
     document_type: documentType,
     document_name: documentName,
@@ -166,7 +170,7 @@ export async function uploadCustomerDocument(formData: FormData) {
 
   // If column mismatch occurs on older schema, fallback to core columns
   if (dbError && dbError.message?.includes("Could not find the")) {
-    const corePayload: any = {
+    const corePayload: Record<string, unknown> = {
       customer_id: customerId,
       document_type: documentType,
       file_url: storagePath,
@@ -299,6 +303,7 @@ export async function getDocumentVaultRows(params?: {
   pageSize?: number;
 }): Promise<DocumentVaultResponse> {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const {
     data: { user },
@@ -574,6 +579,7 @@ export async function getAllDocuments(params?: {
   limit?: number;
 }) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const {
     data: { user },
@@ -685,17 +691,18 @@ export async function getAllDocuments(params?: {
   // Client-side search filtering across customer name, code, phone, filename, document_name, document_type
   if (search) {
     const q = search.toLowerCase();
-    filteredDocs = filteredDocs.filter((doc: any) => {
-      const custName = [doc.customer?.first_name, doc.customer?.middle_name, doc.customer?.last_name]
+    filteredDocs = filteredDocs.filter((doc: Record<string, unknown>) => {
+      const cust = doc.customer as { first_name?: string; middle_name?: string; last_name?: string; customer_code?: string; phone?: string } | undefined;
+      const custName = [cust?.first_name, cust?.middle_name, cust?.last_name]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      const code = (doc.customer?.customer_code || "").toLowerCase();
-      const phone = (doc.customer?.phone || "").toLowerCase();
-      const docType = (doc.document_type || "").toLowerCase();
-      const filename = (doc.source_filename || doc.file_url || "").toLowerCase();
-      const docName = (doc.document_name || "").toLowerCase();
-      const docNum = (doc.document_number || "").toLowerCase();
+      const code = (cust?.customer_code || "").toLowerCase();
+      const phone = (cust?.phone || "").toLowerCase();
+      const docType = (typeof doc.document_type === 'string' ? doc.document_type : "").toLowerCase();
+      const filename = (typeof doc.source_filename === 'string' ? doc.source_filename : typeof doc.file_url === 'string' ? doc.file_url : "").toLowerCase();
+      const docName = (typeof doc.document_name === 'string' ? doc.document_name : "").toLowerCase();
+      const docNum = (typeof doc.document_number === 'string' ? doc.document_number : "").toLowerCase();
 
       return (
         custName.includes(q) ||
@@ -711,17 +718,17 @@ export async function getAllDocuments(params?: {
 
   // Eliminate N+1 signed-URL generation on initial listing.
   // Load metadata immediately; signed URLs are fetched on-demand when preview or download is clicked.
-  const docsWithMetadata: CustomerDocument[] = filteredDocs.map((doc: any) => ({
-    ...doc,
-    uploaded_at: doc.uploaded_at || doc.created_at,
+  const docsWithMetadata: CustomerDocument[] = filteredDocs.map((doc: Record<string, unknown>) => ({
+    ...(doc as unknown as CustomerDocument),
+    uploaded_at: (doc.uploaded_at || doc.created_at) as string,
     signed_url: ""
   }));
 
   // Compute summary stats
   const totalCount = count || filteredDocs.length;
-  const activeCount = filteredDocs.filter((d: any) => d.status === 'active' || !d.status).length;
-  const archivedCount = filteredDocs.filter((d: any) => d.status === 'archived').length;
-  const totalSizeBytes = filteredDocs.reduce((acc: number, d: any) => acc + (d.file_size || 0), 0);
+  const activeCount = filteredDocs.filter((d: Record<string, unknown>) => d.status === 'active' || !d.status).length;
+  const archivedCount = filteredDocs.filter((d: Record<string, unknown>) => d.status === 'archived').length;
+  const totalSizeBytes = filteredDocs.reduce((acc: number, d: Record<string, unknown>) => acc + (typeof d.file_size === 'number' ? d.file_size : 0), 0);
 
   return {
     documents: docsWithMetadata,
@@ -745,6 +752,7 @@ export async function getAllDocuments(params?: {
  */
 export async function getCustomerDocuments(customerId: string, includeHistory = false, signUrls = false) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const query = supabase
     .from("customer_documents")
     .select("*")
@@ -806,6 +814,7 @@ export async function getCustomerDocuments(customerId: string, includeHistory = 
  */
 export async function getDocumentSignedUrl(documentId: string, download = false, customFilename?: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const {
     data: { user },
@@ -865,6 +874,7 @@ export async function getDocumentSignedUrl(documentId: string, download = false,
  */
 export async function deleteCustomerDocument(documentId: string, hardDelete = true) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   // Fetch document details first
   const { data: doc, error: fetchErr } = await supabase
@@ -934,6 +944,7 @@ export async function deleteDocument(documentId: string, _fileUrl?: string, cust
 
 export async function replaceDocument(formData: FormData) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const file = formData.get("file") as File;
   const customerId = formData.get("customer_id") as string;
   const oldDocumentId = formData.get("old_document_id") as string;
@@ -1010,6 +1021,7 @@ export async function replaceDocument(formData: FormData) {
 
 export async function archiveDocument(documentId: string, customerId: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const { error } = await supabase
     .from("customer_documents")
@@ -1029,6 +1041,7 @@ export async function archiveDocument(documentId: string, customerId: string) {
 
 export async function getCustomerAiImports(customerId: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data, error } = await supabase
     .from("ai_import_history")
     .select(`
@@ -1058,6 +1071,7 @@ export async function getCustomerAiImports(customerId: string) {
 
 export async function rerunExtraction(documentId: string, customerId: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthorized" };
@@ -1087,8 +1101,8 @@ export async function rerunExtraction(documentId: string, customerId: string) {
   const modelName = 'gemini-flash-latest';
 
   const finalPrompt = PromptManager.generateFinalPrompt({
-    provider: providerName as any,
-    version: promptVersion as any,
+    provider: (providerName as AiProvider) || 'gemini',
+    version: (promptVersion as PromptVersion) || 'v1',
     documentTypes: [doc.document_type]
   });
 
@@ -1102,7 +1116,16 @@ export async function rerunExtraction(documentId: string, customerId: string) {
 
   // Check Extraction Cache
   const cacheRes = await ExtractionCache.lookupCache(supabase, user.id, requestHash);
-  let extractionResult: any = null;
+  let extractionResult: AIExtractionResult | {
+    status: 'success' | 'failed';
+    parsedJson?: unknown;
+    modelName: string;
+    processingTimeMs: number;
+    inputTokens: number;
+    outputTokens: number;
+    estimatedCost: number;
+    errorMessage?: string;
+  } | null = null;
   const cacheHit = cacheRes.hit;
 
   if (cacheHit && cacheRes.resultJson) {

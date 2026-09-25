@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { uploadCustomerDocument } from "@/app/(dashboard)/documents/actions";
 import { createInvoice } from "@/app/(dashboard)/invoices/actions";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 import {
   RequestDrawerData,
   RequestDrawerResult,
@@ -85,6 +86,7 @@ export async function getServiceRequestDrawerData(requestId: string): Promise<Re
   }
 
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return { data: null, error: "Authentication required to view service request details.", errorCode: "auth_required" };
@@ -319,6 +321,7 @@ export async function getEligibleRequestDocuments(
 
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return { data: null, error: "Authentication required.", errorCode: "auth_required" };
@@ -406,6 +409,7 @@ export async function attachDocumentToRequest(params: {
 
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return { success: false, error: "Authentication required.", errorCode: "auth_required" };
@@ -511,6 +515,7 @@ export async function uploadAndAttachDocumentToRequest(params: {
 
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return { success: false, error: "Authentication required.", errorCode: "auth_required" };
@@ -591,6 +596,7 @@ export async function detachDocumentFromRequest(params: {
 
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return { success: false, error: "Authentication required.", errorCode: "auth_required" };
@@ -659,6 +665,7 @@ export async function toggleDocumentVerification(params: {
 
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return { success: false, error: "Authentication required.", errorCode: "auth_required" };
@@ -722,6 +729,7 @@ export async function getRequestBillingSummary(requestId: string): Promise<{
   }
 
   const supabase = await createClient();
+  await requireAal2(supabase);
   const {
     data: { user },
     error: authError,
@@ -820,6 +828,7 @@ export async function generateInvoiceForRequest(params: {
   }
 
   const supabase = await createClient();
+  await requireAal2(supabase);
   const {
     data: { user },
     error: authError,
@@ -961,6 +970,7 @@ export async function scheduleFollowup(params: {
 
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return { success: false, error: "Authentication required.", errorCode: "auth_required" };
@@ -1024,6 +1034,7 @@ export async function rescheduleFollowup(params: {
 
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return { success: false, error: "Authentication required.", errorCode: "auth_required" };
@@ -1079,6 +1090,7 @@ export async function completeFollowup(params: {
 
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return { success: false, error: "Authentication required.", errorCode: "auth_required" };
@@ -1132,6 +1144,7 @@ export async function cancelFollowup(params: {
 
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return { success: false, error: "Authentication required.", errorCode: "auth_required" };

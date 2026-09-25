@@ -13,6 +13,7 @@ import {
   cancelFollowup as cancelRequestFollowup,
   FollowupMutationResult,
 } from "@/app/(dashboard)/requests/actions";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export interface CustomerFollowupItem {
   id: string;
@@ -64,6 +65,7 @@ export async function getCustomerFollowups(
   }
 
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   // Query service_request_followups through customer_services
   const { data, error } = await supabase
@@ -204,6 +206,7 @@ export async function createCustomerFollowup(params: {
 
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
     const {
       data: { user },
       error: authError,
@@ -325,6 +328,7 @@ export async function rescheduleCustomerFollowup(params: {
   newNote?: string | null;
   resolutionNote?: string | null;
 }): Promise<FollowupMutationResult> {
+  await requireAal2();
   const result = await rescheduleRequestFollowup({
     followupId: params.followupId,
     requestId: params.requestId,
@@ -351,6 +355,7 @@ export async function completeCustomerFollowup(params: {
   customerId: string;
   resolutionNote?: string | null;
 }): Promise<FollowupMutationResult> {
+  await requireAal2();
   const result = await completeRequestFollowup({
     followupId: params.followupId,
     requestId: params.requestId,
@@ -375,6 +380,7 @@ export async function cancelCustomerFollowup(params: {
   customerId: string;
   resolutionNote?: string | null;
 }): Promise<FollowupMutationResult> {
+  await requireAal2();
   const result = await cancelRequestFollowup({
     followupId: params.followupId,
     requestId: params.requestId,

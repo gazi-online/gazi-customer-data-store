@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export interface SearchResultItem {
   id: string;
@@ -34,6 +35,7 @@ export async function unifiedGlobalSearch(rawQuery: string): Promise<GroupedSear
   }
 
   const supabase = await createClient();
+  await requireAal2(supabase);
   const safeSearchPattern = `%${query.replace(/[%_]/g, '')}%`;
 
   // Parallel tenant-isolated queries across 4 core entities

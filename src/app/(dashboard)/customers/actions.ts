@@ -7,6 +7,7 @@ import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export async function getCustomerLookupRows(): Promise<CustomerLookupRow[]> {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data, error } = await supabase
     .from("customers")
     .select("id, customer_code, first_name, middle_name, last_name, phone")
@@ -20,6 +21,7 @@ export async function getCustomerLookupRows(): Promise<CustomerLookupRow[]> {
 
 export async function getCustomerListRows(searchQuery?: string, statusFilter?: string): Promise<CustomerListRow[]> {
   const supabase = await createClient();
+  await requireAal2(supabase);
   let query = supabase
     .from("customers")
     .select("id, customer_code, first_name, middle_name, last_name, phone, email, status, created_at")
@@ -41,6 +43,7 @@ export async function getCustomerListRows(searchQuery?: string, statusFilter?: s
 
 export async function getCustomers(searchQuery?: string, statusFilter?: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   let query = supabase
     .from("customers")
     .select("*")
@@ -63,6 +66,7 @@ export async function getCustomers(searchQuery?: string, statusFilter?: string) 
 
 export async function getCustomerById(id: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data, error } = await supabase.from("customers").select("*").eq("id", id).single();
   
   if (error) throw new Error(error.message);
@@ -71,6 +75,7 @@ export async function getCustomerById(id: string) {
 
 export async function createCustomer(data: CustomerFormData) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   
   // Sanitize payload: omit empty customer_code so DB trigger assigns next atomic sequence
   const payload: Record<string, unknown> = { ...data };
@@ -117,6 +122,7 @@ export async function createCustomer(data: CustomerFormData) {
 
 export async function updateCustomer(id: string, data: CustomerFormData) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   
   const payload: Record<string, unknown> = { ...data };
   if (payload.customer_code === "" || payload.customer_code === undefined) {
@@ -187,6 +193,7 @@ export async function checkDuplicateCustomer(params: {
   excludeId?: string;
 }) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const warnings: string[] = [];
 
   if (params.phone) {

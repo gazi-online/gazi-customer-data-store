@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export type CustomerTimelineEventType =
   | "customer_created"
@@ -75,6 +76,7 @@ export async function getCustomerUnifiedTimeline(
   }
 
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   // Run all authoritative reads concurrently for low latency
   const [

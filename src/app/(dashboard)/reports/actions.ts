@@ -3,9 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { ReportEngine } from "@/lib/reports/ReportEngine";
 import { ReportFilterParams } from "@/lib/reports/report-types";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export async function getReportsOverviewData(params: ReportFilterParams) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { dateFrom, dateTo } = ReportEngine.resolveFilterDates(params);
 
   let invQuery = supabase
@@ -62,6 +64,7 @@ export async function getReportsOverviewData(params: ReportFilterParams) {
 
 export async function getReceivablesAgeingData(params: ReportFilterParams) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   let invQuery = supabase
     .from("invoices")
@@ -87,6 +90,7 @@ export async function getReceivablesAgeingData(params: ReportFilterParams) {
 
 export async function getCustomerReceivableSummaryData(params: ReportFilterParams) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   let custQuery = supabase
     .from("customers")
@@ -122,6 +126,7 @@ export async function getCustomerReceivableSummaryData(params: ReportFilterParam
 
 export async function getCollectionsAnalyticsData(params: ReportFilterParams) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { dateFrom, dateTo } = ReportEngine.resolveFilterDates(params);
 
   let payQuery = supabase
@@ -152,6 +157,7 @@ export async function getCollectionsAnalyticsData(params: ReportFilterParams) {
 
 export async function getTaxReadinessSummaryData(params: ReportFilterParams) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { dateFrom, dateTo } = ReportEngine.resolveFilterDates(params);
 
   let invQuery = supabase
@@ -182,6 +188,7 @@ export async function getCustomerStatementData(
   dateTo?: string
 ) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const { data: customer, error: custErr } = await supabase
     .from("customers")
@@ -224,6 +231,7 @@ export async function getCustomerStatementData(
 
 export async function getCustomersForReportFilter() {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data: customers } = await supabase
     .from("customers")
     .select("id, first_name, middle_name, last_name, customer_code")
@@ -233,6 +241,7 @@ export async function getCustomersForReportFilter() {
 
 export async function getServiceWorkloadData(params: ReportFilterParams) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { dateFrom, dateTo } = ReportEngine.resolveFilterDates(params);
 
   // Filter boundary conversion to compare with created_at and completed_at

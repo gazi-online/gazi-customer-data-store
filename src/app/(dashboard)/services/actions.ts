@@ -9,9 +9,11 @@ import {
   attachDocumentToRequest,
   detachDocumentFromRequest,
 } from "@/app/(dashboard)/requests/actions";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export async function getServices(searchQuery?: string, statusFilter?: string, categoryFilter?: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   let query = supabase.from("services").select("*").order("created_at", { ascending: false });
 
   if (searchQuery) {
@@ -33,6 +35,7 @@ export async function getServices(searchQuery?: string, statusFilter?: string, c
 
 export async function getServiceById(id: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data, error } = await supabase.from("services").select("*").eq("id", id).single();
   
   if (error) throw new Error(error.message);
@@ -41,6 +44,7 @@ export async function getServiceById(id: string) {
 
 export async function upsertService(data: ServiceFormData) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   
   if (data.id) {
     const { error } = await supabase.from("services").update({
@@ -72,6 +76,7 @@ export async function upsertService(data: ServiceFormData) {
 
 export async function checkDuplicateServiceCode(code: string, excludeId?: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   let q = supabase.from("services").select("id").eq("service_code", code);
   
   if (excludeId) {
@@ -84,6 +89,7 @@ export async function checkDuplicateServiceCode(code: string, excludeId?: string
 
 export async function getActiveServices() {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data, error } = await supabase.from("services").select("*").ilike("status", "active").order("service_name", { ascending: true });
   
   if (error) throw new Error(error.message);
@@ -92,6 +98,7 @@ export async function getActiveServices() {
 
 export async function getCustomerServices(customerId: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data, error } = await supabase
     .from("customer_services")
     .select("*, service:services(*)")
@@ -121,6 +128,7 @@ export async function upsertCustomerService(data: {
   delivered_at?: string | null;
 }) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return { error: "Authentication required" };
@@ -207,6 +215,7 @@ export async function setRequestPaymentWaiver(requestId: string, waived: boolean
   }
 
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return { error: "Authentication required" };
@@ -248,6 +257,7 @@ export async function transitionServiceRequestStatus(params: {
   }
 
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return { error: "Authentication required" };
@@ -327,6 +337,7 @@ export async function getServiceRequestById(id: string) {
   }
 
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data, error } = await supabase
     .from("customer_services")
     .select(`
@@ -356,6 +367,7 @@ export async function getServiceRequestDocuments(customerServiceId: string) {
   }
 
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data, error } = await supabase
     .from("service_request_documents")
     .select(`
@@ -383,6 +395,8 @@ export async function attachDocumentToServiceRequest(params: {
   requirementTag?: string;
   notes?: string;
 }) {
+  const supabase = await createClient();
+  await requireAal2(supabase);
   const { customerServiceId, documentId, requirementTag, notes } = params;
   const result = await attachDocumentToRequest({
     requestId: customerServiceId,
@@ -411,6 +425,7 @@ export async function detachDocumentFromServiceRequest(
   }
 
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return { error: "Authentication required" };

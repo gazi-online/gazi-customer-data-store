@@ -38,6 +38,7 @@ export interface TeamMemberItem {
 
 export async function getBusinessSettings(): Promise<BusinessSettingsData | null> {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data, error } = await supabase
     .from("business_settings")
     .select(`
@@ -132,6 +133,7 @@ export async function updateBusinessSettings(formData: Partial<BusinessSettingsD
 
 export async function getTeamMembers(): Promise<TeamMemberItem[]> {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const { data, error } = await supabase
     .from("business_memberships")

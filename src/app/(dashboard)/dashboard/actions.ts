@@ -2,9 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getKolkataTodayHalfOpenRange } from "@/lib/operations/dateUtils";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export async function getDashboardStats() {
   const supabase = await createClient();
+  await requireAal2(supabase);
   
   const { count: totalCustomers } = await supabase
     .from("customers")
@@ -47,6 +49,7 @@ export async function getDashboardStats() {
 
 export async function getRecentCustomers() {
   const supabase = await createClient();
+  await requireAal2(supabase);
   
   const { data, error } = await supabase
     .from("customers")
@@ -90,6 +93,7 @@ export async function getDashboardMetrics(
 ): Promise<DashboardMetrics> {
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -232,6 +236,7 @@ export type ActivityEvent = {
 export async function getRecentActivity(limit = 6): Promise<ActivityEvent[]> {
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
 
     const [docsRes, custRes, servRes] = await Promise.all([
       supabase
@@ -384,6 +389,7 @@ export async function getCustomerGrowthData(
   period: "7d" | "30d" | "90d" | "1y" = "30d"
 ): Promise<CustomerGrowthPoint[]> {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const now = new Date();
   let from: Date;
@@ -448,6 +454,7 @@ export async function getCustomerGrowthData(
 /** Revenue overview: paid vs outstanding per month over last N months */
 export async function getRevenueChartData(months = 6): Promise<RevenuePoint[]> {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const now = new Date();
   const from = new Date(now);
@@ -499,6 +506,7 @@ export async function getRevenueChartData(months = 6): Promise<RevenuePoint[]> {
 /** Customer status distribution for donut chart */
 export async function getCustomerStatusDistribution(): Promise<StatusDistPoint[]> {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const { data, error } = await supabase
     .from("customers")
@@ -528,6 +536,7 @@ export async function getCustomerStatusDistribution(): Promise<StatusDistPoint[]
 /** Service type distribution */
 export async function getServiceTypeDistribution(): Promise<ServiceDistPoint[]> {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const { data, error } = await supabase
     .from("customer_services")
@@ -564,6 +573,7 @@ export type PaymentGaugeData = {
 
 export async function getPaymentStatusData(): Promise<PaymentGaugeData> {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -661,6 +671,8 @@ export async function getDashboardAttentionData(
   options?: { includeUpcoming?: boolean; maxFollowups?: number }
 ): Promise<DashboardAttentionSummary> {
   try {
+    const supabase = await createClient();
+    await requireAal2(supabase);
     const { getOperationsInboxAlerts } = await import("@/lib/operations/operationsInboxQuery");
     const summary = await getOperationsInboxAlerts({
       includeUpcoming: options?.includeUpcoming ?? false,
@@ -716,6 +728,8 @@ export type DashboardSnapshot = {
  * and eliminates unneeded upcoming follow-up reads and unbounded queries.
  */
 export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
+  const supabase = await createClient();
+  await requireAal2(supabase);
   const [metrics, growthData, activities, attentionData] = await Promise.all([
     getDashboardMetrics(),
     getCustomerGrowthData("30d"),

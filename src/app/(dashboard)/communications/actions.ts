@@ -14,6 +14,7 @@ import {
   CommunicationOutcome,
 } from "@/lib/communications/communicationEngine";
 import { getKolkataDateString, getKolkataFutureDateString } from "@/lib/operations/dateUtils";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export interface RecordCommunicationPayload {
   customerId: string;
@@ -28,6 +29,7 @@ export interface RecordCommunicationPayload {
 
 export async function getShopBusinessName(): Promise<string> {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data } = await supabase
     .from("business_settings")
     .select("business_name")
@@ -39,6 +41,7 @@ export async function getShopBusinessName(): Promise<string> {
 
 export async function getContactQueue(): Promise<ContactQueueItem[]> {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const items: ContactQueueItem[] = [];
 
   // Compute date strings locally (no DB call — safe to do before parallelizing)
@@ -254,6 +257,7 @@ export async function getContactQueue(): Promise<ContactQueueItem[]> {
 
 export async function recordCommunication(payload: RecordCommunicationPayload) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data: userData, error: authError } = await supabase.auth.getUser();
   if (authError || !userData?.user) {
     throw new Error("Authentication required");
@@ -297,6 +301,7 @@ export async function recordCommunication(payload: RecordCommunicationPayload) {
 
 export async function getCustomerCommunications(customerId: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data, error } = await supabase
     .from("customer_communications")
     .select("*")
@@ -312,6 +317,7 @@ export async function getCustomerCommunications(customerId: string) {
 
 export async function getRequestCommunications(requestId: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
   const { data, error } = await supabase
     .from("customer_communications")
     .select("*")

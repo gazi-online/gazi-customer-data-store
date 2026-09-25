@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { PaymentMethod } from "@/types/billing";
 import { BillingEngine } from "@/lib/billing/BillingEngine";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export interface PaymentListItem {
   id: string;
@@ -37,6 +38,7 @@ export async function getPayments(
   methodFilter?: string
 ): Promise<PaymentListItem[]> {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   let query = supabase
     .from("payments")
@@ -102,6 +104,7 @@ export interface CreatePaymentPayload {
 
 export async function createPayment(payload: CreatePaymentPayload) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   if (!payload.customer_id) {
     return { error: "Customer selection is required." };
@@ -197,6 +200,7 @@ export async function createPayment(payload: CreatePaymentPayload) {
 
 export async function allocatePayment(paymentId: string, invoiceId: string, amount: number) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const roundedAmount = BillingEngine.roundMoney(Number(amount));
   if (roundedAmount <= 0) {
@@ -237,6 +241,7 @@ export async function allocatePayment(paymentId: string, invoiceId: string, amou
 
 export async function unallocatePayment(paymentId: string, invoiceId: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const { data: res, error } = await supabase.rpc("unallocate_payment_atomic", {
     p_payment_id: paymentId,
@@ -262,6 +267,7 @@ export async function unallocatePayment(paymentId: string, invoiceId: string) {
 
 export async function voidPayment(paymentId: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const { data: res, error } = await supabase.rpc("void_payment_atomic", {
     p_payment_id: paymentId,
@@ -285,6 +291,7 @@ export async function voidPayment(paymentId: string) {
 
 export async function refundPayment(paymentId: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const { data: res, error } = await supabase.rpc("refund_payment_atomic", {
     p_payment_id: paymentId,
@@ -308,6 +315,7 @@ export async function refundPayment(paymentId: string) {
 
 export async function getDashboardBillingSummary() {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   try {
     const today = new Date().toISOString().split("T")[0];
@@ -399,6 +407,7 @@ export async function getPaymentFormOptions(): Promise<{
   openInvoices: PaymentFormInvoiceOption[];
 }> {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const [custRes, invRes] = await Promise.all([
     supabase

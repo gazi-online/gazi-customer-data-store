@@ -17,9 +17,9 @@ import { ParsedDocumentFields } from "@/lib/ocr/ocr-types";
 
 import {
   countUsableFields,
-  getSmartImportFailure,
-  type SmartImportFailureResult
+  getSmartImportFailure
 } from "@/lib/ocr/errorClassification";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export async function extractDataFromDocuments(formData: FormData) {
   const fullServerActionStart = performance.now();
@@ -27,9 +27,7 @@ export async function extractDataFromDocuments(formData: FormData) {
   
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) throw new Error("Unauthorized");
+    const { user } = await requireAal2(supabase);
 
     const fileReadStart = performance.now();
     const files = formData.getAll('files') as File[];
@@ -669,6 +667,8 @@ export async function extractDataFromDocuments(formData: FormData) {
 
 export async function testGeminiConnection() {
   try {
+    const supabase = await createClient();
+    await requireAal2(supabase);
     const provider = AIProviderRegistry.getProvider('gemini');
     
     // We send a minimal prompt to Gemini
@@ -699,6 +699,7 @@ export async function getProfilePhotoSignedUrl(path: string | null) {
   if (!path) return null;
   try {
     const supabase = await createClient();
+    await requireAal2(supabase);
     const { data, error } = await supabase.storage.from('customer-profiles').createSignedUrl(path, 3600); // 1 hour
     if (error) {
       console.error("[getProfilePhotoSignedUrl] Error:", error.message);
@@ -714,8 +715,7 @@ export async function getProfilePhotoSignedUrl(path: string | null) {
 export async function cropAndUploadProfilePhoto(formData: FormData) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "Unauthorized" };
+    const { user } = await requireAal2(supabase);
 
     const file = formData.get("file") as File;
     const boxJson = formData.get("bounding_box") as string;
@@ -806,6 +806,8 @@ export async function getAiProviderStatus(): Promise<{
   claude: boolean;
   local: boolean;
 }> {
+  const supabase = await createClient();
+  await requireAal2(supabase);
   return {
     gemini: !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 0,
     openai: !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim().length > 0,
@@ -817,8 +819,7 @@ export async function getAiProviderStatus(): Promise<{
 export async function generateCustomerJsonWithProvider(formData: FormData) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Unauthorized");
+    await requireAal2(supabase);
 
     const providerId = (formData.get("provider") as string || "gemini").toLowerCase();
     const files = formData.getAll('files') as File[];
@@ -907,8 +908,7 @@ export async function generateCustomerJsonWithProvider(formData: FormData) {
 export async function processOcrSpaceDocument(formData: FormData) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Unauthorized");
+    await requireAal2(supabase);
 
     const files = formData.getAll('files') as File[];
     if (files.length === 0) {

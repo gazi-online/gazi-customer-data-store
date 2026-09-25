@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { BillingEngine } from "@/lib/billing/BillingEngine";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 export interface InvoiceListItem {
   id: string;
@@ -25,6 +26,7 @@ export interface InvoiceListItem {
 
 export async function getInvoices(searchQuery?: string, statusFilter?: string): Promise<InvoiceListItem[]> {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   let query = supabase
     .from("invoices")
@@ -79,6 +81,7 @@ export async function getInvoices(searchQuery?: string, statusFilter?: string): 
 
 export async function getInvoiceById(id: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const { data: invoice, error: invError } = await supabase
     .from("invoices")
@@ -177,6 +180,7 @@ export type CreateInvoiceResult =
 
 export async function createInvoice(payload: CreateInvoicePayload): Promise<CreateInvoiceResult> {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   if (!payload.customer_id) {
     return { error: "Customer selection is required." };
@@ -235,6 +239,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Crea
 
 export async function issueInvoice(id: string, requestId?: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   const { error } = await supabase
     .from("invoices")
@@ -258,6 +263,7 @@ export async function issueInvoice(id: string, requestId?: string) {
 
 export async function cancelInvoice(id: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   // Check if invoice has payments allocated before cancelling
   const { data: inv } = await supabase
@@ -291,6 +297,7 @@ export async function cancelInvoice(id: string) {
 
 export async function getCustomerBillingSummary(customerId: string) {
   const supabase = await createClient();
+  await requireAal2(supabase);
 
   try {
     const [invRes, payRes] = await Promise.all([

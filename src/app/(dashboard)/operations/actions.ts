@@ -2,6 +2,7 @@
 
 import { getOperationsInboxAlerts as queryOperationsInboxAlerts } from "@/lib/operations/operationsInboxQuery";
 import type { OperationsInboxSummary } from "@/lib/operations/operationsInboxQuery";
+import { requireAal2 } from "@/lib/auth/mfaEnforcement";
 
 /**
  * Server action to fetch operations inbox alerts for client SWR query.
@@ -11,5 +12,6 @@ import type { OperationsInboxSummary } from "@/lib/operations/operationsInboxQue
  * - This data is NEVER used for financial mutations, invoice balances, or request FSM transitions.
  */
 export async function getOperationsInboxAlerts(): Promise<OperationsInboxSummary> {
+  await requireAal2();
   return queryOperationsInboxAlerts();
 }
