@@ -417,25 +417,25 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           </button>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              {isEditing 
-                ? "Edit Customer" 
-                : workflowMode === 'review' 
-                  ? "Review Customer Details" 
+              {isEditing
+                ? "Edit Customer"
+                : workflowMode === 'review'
+                  ? "Check Customer Details"
                   : "Add New Customer"}
             </h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-              {isEditing 
-                ? "Update customer details." 
+              {isEditing
+                ? "Update customer details."
                 : workflowMode === 'review'
-                  ? "Verify extracted details and save customer to store."
+                  ? "Review and correct the details, then save the customer."
                   : workflowMode === 'smart_import'
-                    ? "Upload customer documents for fast auto-detection, or enter manually."
-                    : "Fill in customer details manually."}
+                    ? "Upload documents or enter details manually."
+                    : "Fill in the customer's details."}
             </p>
           </div>
         </div>
 
-        {/* Workflow Segmented Controls (When creating new customer) */}
+        {/* Stage indicator — operator-readable */}
         {!isEditing && (
           <div className="flex items-center bg-zinc-100 dark:bg-zinc-800/80 p-1 rounded-xl self-start sm:self-auto border border-zinc-200/60 dark:border-zinc-700/60">
             <button
@@ -447,8 +447,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                   : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
               }`}
             >
-              <span>✨ Smart Import</span>
-              <span className="hidden md:inline-block text-[10px] bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.2 rounded-full font-medium">Faster</span>
+              <span>📄 Upload Documents</span>
             </button>
             <button
               type="button"
@@ -463,7 +462,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             </button>
             {workflowMode === 'review' && (
               <span className="px-3.5 py-1.5 text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded-lg">
-                Step 2: Review
+                ✓ Check Details
               </span>
             )}
           </div>
@@ -591,12 +590,15 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-8 shadow-sm space-y-8 relative"
       >
         
-        {/* Personal Details */}
+        {/* ── SECTION: Name & Basic Details ── */}
         <div>
           <div className="flex items-center justify-between mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-2">
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Personal Details</h2>
+            <div>
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Name &amp; Basic Details</h2>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">Photo, name parts, date of birth, and gender</p>
+            </div>
           </div>
-          
+
           <div className="mb-8 flex items-center space-x-6">
             <div className="relative h-24 w-24 rounded-full border-2 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 overflow-hidden flex items-center justify-center shrink-0">
               {uploadingPhoto ? (
@@ -625,28 +627,31 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Customer Code</label>
+            {/* Customer Code — full-width on its own row so names stand out */}
+            <div className="space-y-2 md:col-span-3 md:max-w-xs">
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Customer Code <span className="text-xs font-normal text-zinc-400">(optional)</span></label>
               <input {...register("customer_code")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. CUST-001" />
             </div>
-            
+
+            {/* Name trio — clearly grouped, equal columns on desktop */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">First Name <span className="text-red-500">*</span></label>
+              <label className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">First Name <span className="text-red-500">*</span></label>
               <input {...register("first_name")} autoFocus={!isEditing} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Rahul" />
               {errors.first_name && <p className="text-sm text-red-500">{errors.first_name.message}</p>}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Middle Name</label>
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Middle Name <span className="text-xs font-normal text-zinc-400">(optional)</span></label>
               <input {...register("middle_name")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Kumar" />
             </div>
             
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Last Name <span className="text-red-500">*</span></label>
+              <label className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Last Name <span className="text-red-500">*</span></label>
               <input {...register("last_name")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Sharma" />
               {errors.last_name && <p className="text-sm text-red-500">{errors.last_name.message}</p>}
             </div>
 
+            {/* Native / Bengali name — full-width row, clearly labeled */}
             <div className="space-y-2 md:col-span-3">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Name in Native Language
@@ -663,6 +668,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
               <p className="text-xs text-zinc-400 dark:text-zinc-500">Optional — enter the customer&apos;s name as written in their local language or script.</p>
             </div>
 
+            {/* Date of birth and gender — secondary row */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Date of Birth</label>
               <input {...register("date_of_birth")} type="date" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" />

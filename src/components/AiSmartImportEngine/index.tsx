@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { Bot, CheckCircle2, Copy, Sparkles } from "lucide-react";
 import { ImportJob, MergedResult, AiProvider, Conflict, ConflictField } from "./types";
 import { DataNormalizer } from "./DataNormalizer";
@@ -496,58 +496,141 @@ export function AiSmartImportEngine({
     toast.success("Form Auto-Filled Successfully");
   };
 
+  // Show initial "choose how to add" screen when no files staged and not extracting
+  const showInitialChoice = !isExtracting && stagedFiles.length === 0 && inputMethod === 'file';
+
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xs overflow-hidden mb-6 transition-all">
-      {/* Calm Header */}
-      <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-            <Sparkles className="w-4 h-4" />
+
+      {/* Header — shown when NOT on the initial choice screen */}
+      {!showInitialChoice && (
+        <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                {inputMethod === 'json' ? 'Paste Customer Details (JSON)' : 'Upload Documents'}
+              </h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {inputMethod === 'json'
+                  ? 'Paste a JSON block with customer data.'
+                  : 'We will read the details from your documents automatically.'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">AI Smart Import Engine</h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Upload customer documents to automatically read and review details.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center space-x-2">
-          {onSwitchToManual && (
+          <div className="flex items-center space-x-2">
+            {onSwitchToManual && (
+              <button
+                type="button"
+                onClick={onSwitchToManual}
+                className="text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Enter Manually Instead
+              </button>
+            )}
             <button
               type="button"
-              onClick={onSwitchToManual}
-              className="text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              onClick={() => setInputMethod(inputMethod === 'file' ? 'json' : 'file')}
+              className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 px-2 py-1"
+              title="Switch between Document Upload and JSON input"
             >
-              Skip to Manual Entry
+              {inputMethod === 'file' ? 'Advanced: JSON' : '\u2190 Back to Upload'}
             </button>
-          )}
-          {/* Advanced / Developer JSON tab toggle */}
-          <button 
-            type="button"
-            onClick={() => setInputMethod(inputMethod === 'file' ? 'json' : 'file')}
-            className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 px-2 py-1"
-            title="Switch between Document Upload and JSON input"
-          >
-            {inputMethod === 'file' ? "Advanced: JSON" : "Back to Upload"}
-          </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Progress State Indicator during extraction */}
+      {/* Reading Documents progress */}
       {isExtracting && (
         <div className="px-6 py-4 bg-blue-50/50 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/40">
           <div className="flex items-center space-x-3">
             <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
             <div className="flex-1">
-              <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">Reading documents & extracting details...</p>
-              <p className="text-[11px] text-blue-700 dark:text-blue-300">Combining document text and preparing customer fields for review.</p>
+              <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">Reading Documents...</p>
+              <p className="text-[11px] text-blue-700 dark:text-blue-300">Identifying customer details from the uploaded files.</p>
             </div>
           </div>
         </div>
       )}
 
-      <div className="p-5">
-        {inputMethod === 'file' ? (
+      {/* Initial choice screen */}
+      {showInitialChoice && (
+        <div className="p-6">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5 text-center">
+            Choose how you want to add the customer&apos;s details.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Primary: Upload Documents */}
+            <div className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-blue-200 dark:border-blue-800/60 bg-blue-50/60 dark:bg-blue-950/20">
+              <div className="w-11 h-11 rounded-xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Upload Documents</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                  Fastest — upload Aadhaar, PAN, or other ID documents and we&apos;ll read the customer&apos;s details.
+                </p>
+              </div>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+                Recommended
+              </span>
+              {/* Invisible file trigger — clicking the PremiumDropzone input happens below */}
+            </div>
+
+            {/* Secondary: Enter Manually */}
+            {onSwitchToManual && (
+              <button
+                type="button"
+                onClick={onSwitchToManual}
+                className="group flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-zinc-200 dark:border-zinc-700/60 bg-zinc-50/60 dark:bg-zinc-800/30 hover:border-zinc-300 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-all text-left focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 min-h-[44px]"
+              >
+                <div className="w-11 h-11 rounded-xl bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center text-zinc-500 dark:text-zinc-400 group-hover:scale-105 transition-transform">
+                  <Bot className="w-5 h-5" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Enter Manually</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                    Type customer information yourself, field by field.
+                  </p>
+                </div>
+              </button>
+            )}
+          </div>
+
+          {/* Advanced JSON link — very secondary */}
+          <div className="mt-5 text-center">
+            <button
+              type="button"
+              onClick={() => setInputMethod('json')}
+              className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 underline-offset-2 hover:underline"
+            >
+              Advanced: Paste JSON data
+            </button>
+          </div>
+
+          {/* Show PremiumDropzone hidden so user can interact with it directly */}
+          <div className="mt-4">
+            <PremiumDropzone
+              stagedFiles={stagedFiles}
+              onFilesAdded={handleFilesAdded}
+              onFileRemoved={handleRemoveStagedFile}
+              onSideChanged={handleSideChanged}
+              onClearAll={handleClearAll}
+              onAnalyze={handleExtractMultiDocuments}
+              isExtracting={isExtracting}
+              errors={validationErrors}
+              onDismissError={handleDismissError}
+              onDismissAllErrors={handleDismissAllErrors}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Upload area — shown when files are staged */}
+      {!showInitialChoice && inputMethod === 'file' && (
+        <div className="p-5">
           <PremiumDropzone
             stagedFiles={stagedFiles}
             onFilesAdded={handleFilesAdded}
@@ -560,86 +643,89 @@ export function AiSmartImportEngine({
             onDismissError={handleDismissError}
             onDismissAllErrors={handleDismissAllErrors}
           />
-        ) : (
-            <div className="space-y-4">
-              <JsonAiGenerator onJsonGenerated={(jsonStr) => setJsonText(jsonStr)} />
-              
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                  Customer Extraction JSON Editor
-                </label>
-                <div className="flex items-center space-x-3">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        const text = await navigator.clipboard.readText();
-                        if (!text || !text.trim()) {
-                          toast.error("Clipboard is empty.");
-                          return;
-                        }
-                        const parsed = JSONValidator.cleanAndParse(text);
-                        const canonicalJson = {
-                          customer: parsed.customer || {},
-                          address: parsed.address || {},
-                          documents: parsed.documents || {},
-                          detected_documents: parsed.detected_documents || [],
-                          confidence_summary: parsed.confidence_summary || { overall: 0.9, low_confidence_fields: [] }
-                        };
-                        setJsonText(JSON.stringify(canonicalJson, null, 2));
-                        toast.success("Valid JSON pasted and verified from clipboard!");
-                      } catch {
-                        toast.error("Clipboard does not contain valid JSON.");
-                      }
-                    }}
-                    className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Paste from Clipboard
-                  </button>
-                  {jsonText.trim() && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(jsonText);
-                        toast.success("JSON copied to clipboard!");
-                      }}
-                      className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center"
-                    >
-                      <Copy className="w-3.5 h-3.5 mr-1" /> Copy JSON
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <textarea 
-                value={jsonText}
-                onChange={(e) => setJsonText(e.target.value)}
-                placeholder={`{\n  "customer": {\n    "full_name": "Rahul Kumar",\n    "dob": "1995-01-10"\n  }\n}`}
-                className="w-full p-4 bg-white dark:bg-zinc-900 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all min-h-[220px]"
-              />
-              <div className="flex justify-end space-x-3">
-                {jsonText.trim() && (
-                  <button 
-                    type="button" 
-                    onClick={() => setJsonText("")}
-                    className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-lg hover:bg-zinc-200 transition-colors font-semibold text-xs"
-                  >
-                    Clear Box
-                  </button>
-                )}
-                <button 
-                  type="button" 
-                  onClick={handleAddJson}
-                  className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-semibold text-xs shadow-sm flex items-center"
-                >
-                  <Bot className="w-4 h-4 mr-1.5" /> Parse & Review JSON
-                </button>
-              </div>
-            </div>
-          )}
         </div>
+      )}
 
-      {/* Review Panel Overlay (for manual review mode or standalone consumers) */}
+      {/* JSON paste area */}
+      {!showInitialChoice && inputMethod === 'json' && (
+        <div className="p-5 space-y-4">
+          <JsonAiGenerator onJsonGenerated={(jsonStr) => setJsonText(jsonStr)} />
+
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+              Customer Extraction JSON Editor
+            </label>
+            <div className="flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const text = await navigator.clipboard.readText();
+                    if (!text || !text.trim()) {
+                      toast.error("Clipboard is empty.");
+                      return;
+                    }
+                    const parsed = JSONValidator.cleanAndParse(text);
+                    const canonicalJson = {
+                      customer: parsed.customer || {},
+                      address: parsed.address || {},
+                      documents: parsed.documents || {},
+                      detected_documents: parsed.detected_documents || [],
+                      confidence_summary: parsed.confidence_summary || { overall: 0.9, low_confidence_fields: [] }
+                    };
+                    setJsonText(JSON.stringify(canonicalJson, null, 2));
+                    toast.success("Valid JSON pasted and verified from clipboard!");
+                  } catch {
+                    toast.error("Clipboard does not contain valid JSON.");
+                  }
+                }}
+                className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Paste from Clipboard
+              </button>
+              {jsonText.trim() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(jsonText);
+                    toast.success("JSON copied to clipboard!");
+                  }}
+                  className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center"
+                >
+                  <Copy className="w-3.5 h-3.5 mr-1" /> Copy JSON
+                </button>
+              )}
+            </div>
+          </div>
+
+          <textarea
+            value={jsonText}
+            onChange={(e) => setJsonText(e.target.value)}
+            placeholder={`{\n  "customer": {\n    "full_name": "Rahul Kumar",\n    "dob": "1995-01-10"\n  }\n}`}
+            className="w-full p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all min-h-[220px]"
+          />
+          <div className="flex justify-end space-x-3">
+            {jsonText.trim() && (
+              <button
+                type="button"
+                onClick={() => setJsonText("")}
+                className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-lg hover:bg-zinc-200 transition-colors font-semibold text-xs"
+              >
+                Clear
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleAddJson}
+              className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold text-xs shadow-sm flex items-center"
+            >
+              <Bot className="w-4 h-4 mr-1.5" /> Read Customer Details
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Review Panel Overlay (for non-autoAdvance consumers) */}
       {!autoAdvance && mergedResult && (
         <ReviewPanel result={mergedResult} onConfirm={handleConfirmReview} />
       )}
