@@ -15,9 +15,8 @@ import { createCustomer, updateCustomer, checkDuplicateCustomer } from "@/app/(d
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
-import { AiSmartImportEngine } from "../AiSmartImportEngine";
+import { AiSmartImportEngine, SmartImportMetadata } from "../AiSmartImportEngine";
 import { IndiaPincodeProvider } from "@/lib/address/IndiaPincodeProvider";
-import { PincodeLookupResult } from "@/lib/address/address-types";
 import { useRef, useMemo } from "react";
 import {
   FieldOrigins,
@@ -74,6 +73,12 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   const [aiDataApplied, setAiDataApplied] = useState(false);
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
   const isEditing = !!initialData;
+
+  // UX Workflow state: 'smart_import' | 'manual' | 'review'
+  const [workflowMode, setWorkflowMode] = useState<'smart_import' | 'manual' | 'review'>(
+    isEditing ? 'manual' : 'smart_import'
+  );
+  const [importMeta, setImportMeta] = useState<SmartImportMetadata | null>(null);
 
   const defaultValues = useMemo<CustomerFormData>(() => {
     return initialData ? {
@@ -293,7 +298,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     setPreviewPhotoUrl(null);
   };
 
-  const handleAutoFill = (data: Record<string, any>) => {
+  const handleAutoFill = (data: Record<string, unknown>, meta?: SmartImportMetadata) => {
     const currentValues = getValues();
     const origins = fieldOriginsRef.current!;
 
@@ -311,12 +316,23 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       origins[field] = origin;
     }
 
+    // Set candidate photo storage path if provided
+    if (meta?.candidatePhotoStoragePath && !getValues("photo_source")) {
+      setValue("photo_source", meta.candidatePhotoStoragePath, { shouldValidate: true, shouldDirty: true });
+      origins.photo_source = "import";
+    }
+
+    if (meta) {
+      setImportMeta(meta);
+    }
+
     if (skippedNotice) {
       toast.warning(skippedNotice);
     }
 
     setAiDataApplied(true);
-    toast.success("AI extracted data applied to form. Please review before saving.");
+    setWorkflowMode("review");
+    toast.success("Details extracted — Please review and save customer.");
   };
 
   const onSubmit = async (data: CustomerFormData) => {
@@ -381,29 +397,147 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   };
 
   return (
-    <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-150 space-y-8 pb-12">
-      <div className="flex items-center">
-        <button 
-          onClick={() => router.back()} 
-          className="mr-4 p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            {isEditing ? "Edit Customer" : "Add New Customer"}
-          </h1>
-          <p className="text-zinc-500 dark:text-zinc-400 mt-1">
-            {isEditing ? "Update customer details." : "Use AI Import or fill in manually."}
-          </p>
+    <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-150 space-y-6 pb-20 sm:pb-12">
+      {/* Header and Step Context */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center">
+          <button 
+            type="button"
+            onClick={() => {
+              if (workflowMode === 'review') {
+                setWorkflowMode('smart_import');
+              } else {
+                router.back();
+              }
+            }} 
+            className="mr-3 p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
+            title={workflowMode === 'review' ? "Back to Document Upload" : "Go back"}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              {isEditing 
+                ? "Edit Customer" 
+                : workflowMode === 'review' 
+                  ? "Review Customer Details" 
+                  : "Add New Customer"}
+            </h1>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+              {isEditing 
+                ? "Update customer details." 
+                : workflowMode === 'review'
+                  ? "Verify extracted details and save customer to store."
+                  : workflowMode === 'smart_import'
+                    ? "Upload customer documents for fast auto-detection, or enter manually."
+                    : "Fill in customer details manually."}
+            </p>
+          </div>
         </div>
+
+        {/* Workflow Segmented Controls (When creating new customer) */}
+        {!isEditing && (
+          <div className="flex items-center bg-zinc-100 dark:bg-zinc-800/80 p-1 rounded-xl self-start sm:self-auto border border-zinc-200/60 dark:border-zinc-700/60">
+            <button
+              type="button"
+              onClick={() => setWorkflowMode('smart_import')}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+                workflowMode === 'smart_import'
+                  ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              <span>✨ Smart Import</span>
+              <span className="hidden md:inline-block text-[10px] bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.2 rounded-full font-medium">Faster</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkflowMode('manual')}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                workflowMode === 'manual'
+                  ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+              }`}
+            >
+              ✍️ Enter Manually
+            </button>
+            {workflowMode === 'review' && (
+              <span className="px-3.5 py-1.5 text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded-lg">
+                Step 2: Review
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Advanced AI Smart Import Engine */}
-      {!isEditing && <AiSmartImportEngine onAutoFill={handleAutoFill} />}
+      {/* Smart Import Upload Stage */}
+      {!isEditing && workflowMode === 'smart_import' && (
+        <AiSmartImportEngine 
+          onAutoFill={handleAutoFill} 
+          onSwitchToManual={() => setWorkflowMode('manual')}
+          autoAdvance={true}
+        />
+      )}
+
+      {/* Review Banner: Source Documents context & Change Documents action */}
+      {workflowMode === 'review' && (
+        <div className="bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-sm animate-in fade-in slide-in-from-top-2">
+          <div className="space-y-1">
+            <div className="flex items-center space-x-2">
+              <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+              <p className="text-sm font-semibold text-blue-950 dark:text-blue-100">
+                Extracted from documents — Review and edit fields
+              </p>
+            </div>
+            {importMeta?.sourceDocuments && importMeta.sourceDocuments.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-xs text-blue-700 dark:text-blue-300 font-medium mr-1">Contributed documents:</span>
+                {importMeta.sourceDocuments.map((doc, idx) => (
+                  <span 
+                    key={idx} 
+                    className="inline-flex items-center text-[11px] font-medium bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-blue-200 dark:border-zinc-700 shadow-2xs"
+                  >
+                    {doc.name} {doc.side !== 'Single' && `(${doc.side})`}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setWorkflowMode('smart_import')}
+            className="text-xs font-semibold text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 self-start sm:self-auto px-3 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 hover:bg-blue-100/50 dark:hover:bg-blue-900/50 transition-colors"
+          >
+            Change Documents
+          </button>
+        </div>
+      )}
+
+      {/* Name suggestion banner if available & unapplied */}
+      {importMeta?.nameSuggestion && !getValues("first_name") && (
+        <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-xl p-3.5 flex items-center justify-between text-xs">
+          <div className="text-indigo-900 dark:text-indigo-200">
+            Suggested Name Components: <span className="font-semibold">{importMeta.nameSuggestion.first_name} {importMeta.nameSuggestion.last_name}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (importMeta.nameSuggestion) {
+                setValue("first_name", importMeta.nameSuggestion.first_name, { shouldValidate: true, shouldDirty: true });
+                setValue("middle_name", importMeta.nameSuggestion.middle_name, { shouldValidate: true, shouldDirty: true });
+                setValue("last_name", importMeta.nameSuggestion.last_name, { shouldValidate: true, shouldDirty: true });
+                toast.success("Suggested name parts applied.");
+              }
+            }}
+            className="text-indigo-700 dark:text-indigo-300 font-bold hover:underline"
+          >
+            Apply Suggested Name
+          </button>
+        </div>
+      )}
 
       {/* Task 7: AI Data Review Banner */}
-      {aiDataApplied && (
+      {aiDataApplied && workflowMode !== 'review' && (
         <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center space-x-3">
             <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -436,6 +570,9 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           </ul>
         </div>
       )}
+
+      {/* The Canonical Form: Rendered when in 'manual' or 'review' or editing */}
+      {(isEditing || workflowMode === 'manual' || workflowMode === 'review') && (
 
       <form
         onSubmit={handleSubmit(onSubmit)}
@@ -727,10 +864,39 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           </button>
           <button type="submit" disabled={isLoading} className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-sm">
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEditing ? "Save Changes" : "Add Customer"}
+            {isEditing ? "Save Changes" : workflowMode === 'review' ? "Save Customer" : "Add Customer"}
           </button>
         </div>
       </form>
+      )}
+
+      {/* Mobile Sticky Save Action Bar for effortless one-tap save in review/manual modes */}
+      {(isEditing || workflowMode === 'manual' || workflowMode === 'review') && (
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 p-3 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-t border-zinc-200 dark:border-zinc-800 z-30 shadow-lg flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (workflowMode === 'review') {
+                setWorkflowMode('smart_import');
+              } else {
+                router.back();
+              }
+            }}
+            className="px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 rounded-lg bg-zinc-50 dark:bg-zinc-800"
+          >
+            {workflowMode === 'review' ? "Documents" : "Back"}
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit(onSubmit)}
+            disabled={isLoading}
+            className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center gap-2"
+          >
+            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isEditing ? "Save Changes" : workflowMode === 'review' ? "Save Customer" : "Add Customer"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

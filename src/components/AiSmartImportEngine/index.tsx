@@ -1,8 +1,6 @@
-"use client";
-
 import { useState, useEffect, useRef } from "react";
-import { Bot, FileImage, CheckCircle2, Copy } from "lucide-react";
-import { ImportJob, MergedResult, AiProvider } from "./types";
+import { Bot, CheckCircle2, Copy, Sparkles } from "lucide-react";
+import { ImportJob, MergedResult, AiProvider, Conflict, ConflictField } from "./types";
 import { DataNormalizer } from "./DataNormalizer";
 import { MergeEngine } from "./MergeEngine";
 import { ReviewPanel } from "./components/ReviewPanel";
@@ -20,12 +18,30 @@ import { JSONValidator } from "@/lib/ai/parser/validator";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { extractDataFromDocuments } from "@/app/(dashboard)/customers/ai-actions";
+import { suggestNameComponentsFromFullName } from "./nameUtils";
+import { resolveRelationshipConflictPayload } from "./relationshipUtils";
+import { isBengaliScript } from "@/lib/names/BengaliNameTransliterator";
 
-interface AiSmartImportEngineProps {
-  onAutoFill: (data: Record<string, unknown>) => void;
+export interface SmartImportMetadata {
+  sourceDocuments?: Array<{ name: string; side: DocumentSide }>;
+  conflicts?: Conflict[];
+  mergedResult?: MergedResult;
+  candidatePhotoUrl?: string;
+  candidatePhotoStoragePath?: string;
+  nameSuggestion?: { first_name: string; middle_name: string; last_name: string; isReliable: boolean } | null;
 }
 
-export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
+export interface AiSmartImportEngineProps {
+  onAutoFill: (data: Record<string, unknown>, meta?: SmartImportMetadata) => void;
+  onSwitchToManual?: () => void;
+  autoAdvance?: boolean;
+}
+
+export function AiSmartImportEngine({ 
+  onAutoFill, 
+  onSwitchToManual, 
+  autoAdvance = true 
+}: AiSmartImportEngineProps) {
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [mergedResult, setMergedResult] = useState<MergedResult | null>(null);
   const [inputMethod, setInputMethod] = useState<'file' | 'json'>('file');
@@ -241,7 +257,56 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
       
       const merged = MergeEngine.merge(updatedJobs);
       setMergedResult(merged);
-      toast.success(`Customer JSON parsed & ready for review`);
+
+      if (autoAdvance) {
+        // Resolve data from merged result directly for form autofill
+        const conflictFields = new Set(merged.conflicts.map(c => c.field));
+        const hasRelConflict = merged.conflicts.some(c => (c.field as string) === 'relationship_interpretation');
+        const flat: Record<string, unknown> = {};
+        const mergedDataRecord = merged.data as Record<string, { value?: unknown } | undefined>;
+        Object.keys(merged.data).forEach(key => {
+          if (key !== 'profile_photo') {
+            if (conflictFields.has(key as ConflictField)) {
+              flat[key] = undefined;
+            } else if (hasRelConflict && (key === 'father_name' || key === 'spouse_name')) {
+              flat[key] = undefined;
+            } else {
+              flat[key] = mergedDataRecord[key]?.value;
+            }
+          }
+        });
+
+        // Resolve name suggestion if no explicit first/last name
+        const hasExplicitNameComponents = !!(merged.data.first_name?.value && merged.data.last_name?.value);
+        let nameSug = null;
+        if (!hasExplicitNameComponents && flat.full_name) {
+          nameSug = suggestNameComponentsFromFullName(flat.full_name as string);
+          if (nameSug && nameSug.isReliable) {
+            flat.first_name = nameSug.first_name;
+            flat.middle_name = nameSug.middle_name;
+            flat.last_name = nameSug.last_name;
+          }
+        }
+
+        // Bengali name safety
+        const docNativeName: string | undefined = merged.data.original_language_name?.value;
+        if (docNativeName && isBengaliScript(docNativeName)) {
+          flat.original_language_name = docNativeName;
+        } else {
+          delete flat.original_language_name;
+        }
+
+        const finalData = resolveRelationshipConflictPayload(flat, merged.conflicts, merged.data);
+        onAutoFill(finalData, {
+          sourceDocuments: [{ name: "JSON Data", side: "Both" }],
+          conflicts: merged.conflicts,
+          mergedResult: merged,
+          nameSuggestion: nameSug
+        });
+        toast.success("Customer details ready for review");
+      } else {
+        toast.success(`Customer JSON parsed & ready for review`);
+      }
     } catch {
       toast.error("Invalid JSON format");
     }
@@ -260,7 +325,7 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
     }
 
     setIsExtracting(true);
-    const toastId = toast.loading("Reading document & extracting information...");
+    const toastId = toast.loading("Reading documents & preparing details...");
 
     try {
       const formData = new FormData();
@@ -331,6 +396,8 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
         }
       };
 
+      const recordedSources = stagedFiles.map(sf => ({ name: sf.file.name, side: sf.side }));
+
       // Clean up preview URLs
       stagedFiles.forEach(sf => {
         if (sf.previewUrl) {
@@ -345,10 +412,65 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
       const merged = MergeEngine.merge([newJob]);
       setMergedResult(merged);
 
-      if (res.warning) {
-        toast.info(res.warning, { id: toastId });
+      if (autoAdvance) {
+        // Resolve data from merged result directly for form autofill
+        const conflictFields = new Set(merged.conflicts.map(c => c.field));
+        const hasRelConflict = merged.conflicts.some(c => (c.field as string) === 'relationship_interpretation');
+        const flat: Record<string, unknown> = {};
+        const mergedDataRecord = merged.data as Record<string, { value?: unknown } | undefined>;
+        Object.keys(merged.data).forEach(key => {
+          if (key !== 'profile_photo') {
+            if (conflictFields.has(key as ConflictField)) {
+              flat[key] = undefined;
+            } else if (hasRelConflict && (key === 'father_name' || key === 'spouse_name')) {
+              flat[key] = undefined;
+            } else {
+              flat[key] = mergedDataRecord[key]?.value;
+            }
+          }
+        });
+
+        // Resolve name suggestion if no explicit first/last name
+        const hasExplicitNameComponents = !!(merged.data.first_name?.value && merged.data.last_name?.value);
+        let nameSug = null;
+        if (!hasExplicitNameComponents && flat.full_name) {
+          nameSug = suggestNameComponentsFromFullName(flat.full_name as string);
+          if (nameSug && nameSug.isReliable) {
+            flat.first_name = nameSug.first_name;
+            flat.middle_name = nameSug.middle_name;
+            flat.last_name = nameSug.last_name;
+          }
+        }
+
+        // Bengali name safety
+        const docNativeName: string | undefined = merged.data.original_language_name?.value;
+        if (docNativeName && isBengaliScript(docNativeName)) {
+          flat.original_language_name = docNativeName;
+        } else {
+          delete flat.original_language_name;
+        }
+
+        const finalData = resolveRelationshipConflictPayload(flat, merged.conflicts, merged.data);
+        
+        onAutoFill(finalData, {
+          sourceDocuments: recordedSources,
+          conflicts: merged.conflicts,
+          mergedResult: merged,
+          candidatePhotoStoragePath: merged.data.profile_photo?.storage_path,
+          nameSuggestion: nameSug
+        });
+
+        if (res.warning) {
+          toast.info(res.warning, { id: toastId });
+        } else {
+          toast.success("Documents processed — Review customer details below", { id: toastId });
+        }
       } else {
-        toast.success("Document analysis complete — Review extracted details", { id: toastId });
+        if (res.warning) {
+          toast.info(res.warning, { id: toastId });
+        } else {
+          toast.success("Document analysis complete — Review extracted details", { id: toastId });
+        }
       }
     } catch (error: unknown) {
       const errObj = error as { message?: string } | null;
@@ -375,58 +497,70 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
   };
 
   return (
-    <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border border-indigo-200 dark:border-indigo-800/50 rounded-2xl shadow-sm relative overflow-hidden mb-8">
-      {/* Decorative Bot */}
-      <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
-        <Bot className="h-48 w-48 text-indigo-600" />
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden mb-6">
+      {/* Calm Header */}
+      <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">AI Smart Import Engine</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Upload customer documents to automatically fill customer details.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          {onSwitchToManual && (
+            <button
+              type="button"
+              onClick={onSwitchToManual}
+              className="text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+            >
+              Skip to Manual Entry
+            </button>
+          )}
+          {/* Advanced / Developer JSON tab toggle */}
+          <button 
+            type="button"
+            onClick={() => setInputMethod(inputMethod === 'file' ? 'json' : 'file')}
+            className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 px-2 py-1"
+            title="Switch between Document Upload and JSON input"
+          >
+            {inputMethod === 'file' ? "Advanced: JSON" : "Back to Upload"}
+          </button>
+        </div>
       </div>
 
-      <div className="p-6 relative z-10">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center">
-            <div className="bg-indigo-600 p-2.5 rounded-xl mr-4 shadow-md shadow-indigo-200 dark:shadow-none">
-              <Bot className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-indigo-950 dark:text-indigo-200 tracking-tight">AI Smart Import Engine</h2>
-              <p className="text-sm text-indigo-700/80 dark:text-indigo-300/80 font-medium mt-0.5">
-                Zero-Click Multi-Document AI Auto-Detection & Extraction
-              </p>
+      {/* Progress State Indicator during extraction */}
+      {isExtracting && (
+        <div className="px-6 py-4 bg-blue-50/50 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/40">
+          <div className="flex items-center space-x-3">
+            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">Reading documents & extracting details...</p>
+              <p className="text-[11px] text-blue-700 dark:text-blue-300">Combining document text and preparing customer fields for review.</p>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Input Method Tabs */}
-        <div className="flex border-b border-indigo-100 dark:border-indigo-800/50 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-t-xl overflow-hidden">
-          <button 
-            onClick={() => setInputMethod('file')}
-            className={`flex-1 py-3 text-sm font-semibold transition-colors flex justify-center items-center ${inputMethod === 'file' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 bg-white dark:bg-zinc-900' : 'text-zinc-500 hover:text-indigo-600'}`}
-          >
-            <FileImage className="w-4 h-4 mr-2" /> Select Documents
-          </button>
-          <button 
-            onClick={() => setInputMethod('json')}
-            className={`flex-1 py-3 text-sm font-semibold transition-colors flex justify-center items-center ${inputMethod === 'json' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 bg-white dark:bg-zinc-900' : 'text-zinc-500 hover:text-indigo-600'}`}
-          >
-            <Bot className="w-4 h-4 mr-2" /> Paste JSON
-          </button>
-        </div>
-
-        <div className="p-4 bg-white/60 dark:bg-zinc-900/60 rounded-b-xl border border-indigo-100 dark:border-indigo-800/50">
-          {inputMethod === 'file' ? (
-            <PremiumDropzone
-              stagedFiles={stagedFiles}
-              onFilesAdded={handleFilesAdded}
-              onFileRemoved={handleRemoveStagedFile}
-              onSideChanged={handleSideChanged}
-              onClearAll={handleClearAll}
-              onAnalyze={handleExtractMultiDocuments}
-              isExtracting={isExtracting}
-              errors={validationErrors}
-              onDismissError={handleDismissError}
-              onDismissAllErrors={handleDismissAllErrors}
-            />
-          ) : (
+      <div className="p-5">
+        {inputMethod === 'file' ? (
+          <PremiumDropzone
+            stagedFiles={stagedFiles}
+            onFilesAdded={handleFilesAdded}
+            onFileRemoved={handleRemoveStagedFile}
+            onSideChanged={handleSideChanged}
+            onClearAll={handleClearAll}
+            onAnalyze={handleExtractMultiDocuments}
+            isExtracting={isExtracting}
+            errors={validationErrors}
+            onDismissError={handleDismissError}
+            onDismissAllErrors={handleDismissAllErrors}
+          />
+        ) : (
             <div className="space-y-4">
               <JsonAiGenerator onJsonGenerated={(jsonStr) => setJsonText(jsonStr)} />
               
@@ -504,10 +638,9 @@ export function AiSmartImportEngine({ onAutoFill }: AiSmartImportEngineProps) {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Review Panel Overlay */}
-      {mergedResult && (
+      {/* Review Panel Overlay (for manual review mode or standalone consumers) */}
+      {!autoAdvance && mergedResult && (
         <ReviewPanel result={mergedResult} onConfirm={handleConfirmReview} />
       )}
     </div>
