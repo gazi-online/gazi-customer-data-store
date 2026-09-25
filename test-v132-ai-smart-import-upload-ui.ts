@@ -433,11 +433,12 @@ assert(
   "27. Reduced motion media query disables marching ants and pulse animations"
 );
 
-// 28. JSON Import tab is preserved untouched
+// 28. JSON Import tab is preserved untouched with functional generator, editor and parse action
 assert(
   indexCode.includes("<JsonAiGenerator") &&
   indexCode.includes("Customer Extraction JSON Editor") &&
-  indexCode.includes("Parse & Review JSON"),
+  indexCode.includes("onClick={handleAddJson}") &&
+  (indexCode.includes("Read Customer Details") || indexCode.includes("Parse & Review JSON")),
   "28. JSON Import tab and JSON Editor components preserved completely intact"
 );
 
