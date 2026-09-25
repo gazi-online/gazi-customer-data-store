@@ -481,21 +481,21 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
       {/* Review Banner: Source Documents context & Change Documents action */}
       {workflowMode === 'review' && (
-        <div className="bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-sm animate-in fade-in slide-in-from-top-2">
-          <div className="space-y-1">
+        <div className="bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/50 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-2xs animate-in fade-in slide-in-from-top-2">
+          <div className="space-y-1.5">
             <div className="flex items-center space-x-2">
               <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
-              <p className="text-sm font-semibold text-blue-950 dark:text-blue-100">
+              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 Extracted from documents — Review and edit fields
               </p>
             </div>
             {importMeta?.sourceDocuments && importMeta.sourceDocuments.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                <span className="text-xs text-blue-700 dark:text-blue-300 font-medium mr-1">Contributed documents:</span>
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium mr-1">Source documents:</span>
                 {importMeta.sourceDocuments.map((doc, idx) => (
                   <span 
                     key={idx} 
-                    className="inline-flex items-center text-[11px] font-medium bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-blue-200 dark:border-zinc-700 shadow-2xs"
+                    className="inline-flex items-center text-[11px] font-medium bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2.5 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-700 shadow-2xs"
                   >
                     {doc.name} {doc.side !== 'Single' && `(${doc.side})`}
                   </span>
@@ -506,7 +506,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           <button
             type="button"
             onClick={() => setWorkflowMode('smart_import')}
-            className="text-xs font-semibold text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 self-start sm:self-auto px-3 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 hover:bg-blue-100/50 dark:hover:bg-blue-900/50 transition-colors"
+            className="text-xs font-semibold text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 self-start sm:self-auto px-3.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-zinc-800 hover:bg-blue-50/50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
           >
             Change Documents
           </button>
@@ -872,7 +872,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
       {/* Mobile Sticky Save Action Bar for effortless one-tap save in review/manual modes */}
       {(isEditing || workflowMode === 'manual' || workflowMode === 'review') && (
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 p-3 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-t border-zinc-200 dark:border-zinc-800 z-30 shadow-lg flex items-center justify-between gap-3">
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-t border-zinc-200 dark:border-zinc-800 z-30 shadow-lg flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => {
@@ -882,7 +882,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                 router.back();
               }
             }}
-            className="px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 rounded-lg bg-zinc-50 dark:bg-zinc-800"
+            className="px-4 py-2.5 border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 rounded-lg bg-zinc-50 dark:bg-zinc-800 active:bg-zinc-100 transition-colors"
           >
             {workflowMode === 'review' ? "Documents" : "Back"}
           </button>
@@ -890,7 +890,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             type="button"
             onClick={handleSubmit(onSubmit)}
             disabled={isLoading}
-            className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center gap-2"
+            className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-xs flex items-center justify-center gap-2 transition-all"
           >
             {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
             {isEditing ? "Save Changes" : workflowMode === 'review' ? "Save Customer" : "Add Customer"}

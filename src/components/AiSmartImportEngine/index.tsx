@@ -497,17 +497,17 @@ export function AiSmartImportEngine({
   };
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden mb-6">
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xs overflow-hidden mb-6 transition-all">
       {/* Calm Header */}
-      <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
-            <Sparkles className="w-5 h-5" />
+          <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+            <Sparkles className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">AI Smart Import Engine</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">AI Smart Import Engine</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Upload customer documents to automatically fill customer details.
+              Upload customer documents to automatically read and review details.
             </p>
           </div>
         </div>
