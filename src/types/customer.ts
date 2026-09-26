@@ -3,6 +3,7 @@ export type Gender = 'male' | 'female' | 'other';
 
 export interface Customer {
   id: string;
+  business_id?: string;
   customer_code: string | null;
   first_name: string;
   middle_name: string | null;
@@ -65,6 +66,7 @@ export type CustomerLookupRow = Pick<
 >;
 
 export interface CustomerFormData {
+  business_id?: string;
   customer_code?: string;
   first_name: string;
   middle_name?: string;
