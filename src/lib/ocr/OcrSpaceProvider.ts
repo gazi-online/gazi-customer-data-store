@@ -179,7 +179,11 @@ export class OcrSpaceProvider {
       }
     }
 
-    const engine = process.env.OCR_SPACE_ENGINE || "2";
+    // Engine 3 is required for Bengali (বাংলা) and Devanagari/Hindi (हिंदी) script preservation.
+    // Engine 1 and Engine 2 silently strip non-Latin Unicode characters from the OCR output,
+    // which causes original_language_name to be permanently lost before DocumentTextParser runs.
+    // OCR_SPACE_ENGINE env var can still override for special deployments.
+    const engine = process.env.OCR_SPACE_ENGINE || "3";
     const language = process.env.OCR_SPACE_LANGUAGE || "auto";
 
     // 3. Controlled Same-Provider Retry (Max 3 attempts for 502/503/504)

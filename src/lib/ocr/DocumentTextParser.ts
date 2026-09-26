@@ -65,9 +65,12 @@ export class DocumentTextParser {
     const hasBengali = (str: string) => /[\u0980-\u09FF]/.test(str);
     const hasNativeScript = (str: string) => hasDevanagari(str) || hasBengali(str);
 
-    // Clean noise from native script name lines
+    // Clean noise from native script name lines.
+    // If the line contains a label separator (colon or dash), strip the label prefix first
+    // so that e.g. "নাম: জেসমিরা খাতুন" → "জেসমিরা খাতুন" rather than "নাম জেসমিরা খাতুন".
     const cleanNativeName = (line: string): string => {
-      return line.replace(/[^\u0900-\u097F\u0980-\u09FF\s.]/g, '').trim();
+      const afterSep = line.includes(':') || line.includes('-') ? line.split(/[:\-]/)[1] : line;
+      return (afterSep ?? line).replace(/[^\u0900-\u097F\u0980-\u09FF\s.]/g, '').trim();
     };
 
     // Clean noise from Latin name lines
@@ -510,10 +513,14 @@ export class DocumentTextParser {
         const u = line.toUpperCase();
 
         if ((u.includes("ELECTOR'S NAME") || u.includes("NAME") || line.includes("নাম") || line.includes("नाम")) && !u.includes("FATHER") && !u.includes("HUSBAND") && !u.includes("ELECTION") && !u.includes("COMMISSION")) {
-          const candidates = [
-            line.split(/[:\-]/)[1]?.trim(),
-            lines[i + 1]?.trim()
-          ].filter(Boolean) as string[];
+          // Build candidates in priority order:
+          // 1. Text after the colon/dash on the same line (e.g. "নাম: জেসমিরা খাতুন" → "জেসমিরা খাতুন")
+          // 2. Next line (unlabelled name line)
+          // We do NOT include the full current line as a candidate because it contains the
+          // label word (e.g. নাম) which would pollute cleanNativeName output.
+          const afterSep = line.split(/[:\-]/)[1]?.trim();
+          const nextLine = lines[i + 1]?.trim();
+          const candidates = [afterSep, nextLine].filter(Boolean) as string[];
 
           for (const cand of candidates) {
             if (!cand || isNonPersonHeader(cand)) continue;
