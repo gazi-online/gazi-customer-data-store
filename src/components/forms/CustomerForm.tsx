@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, Languages } from "lucide-react";
 import { Customer, CustomerFormData } from "@/types/customer";
 import { getProfilePhotoSignedUrl } from "@/app/(dashboard)/customers/ai-actions";
 import { createClient } from "@/lib/supabase/client";
@@ -72,6 +72,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [aiDataApplied, setAiDataApplied] = useState(false);
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
+  const [nativeNameDismissed, setNativeNameDismissed] = useState(false);
   const isEditing = !!initialData;
 
   // UX Workflow state: 'smart_import' | 'manual' | 'review'
@@ -324,6 +325,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
     if (meta) {
       setImportMeta(meta);
+      setNativeNameDismissed(false); // reset for fresh import
     }
 
     if (skippedNotice) {
@@ -658,6 +660,47 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                 spellCheck={false}
               />
               <p className="text-xs text-zinc-400 dark:text-zinc-500">Optional — enter the customer&apos;s name as written in their local language or script.</p>
+
+              {/* Native name suggestion card: shown only when a candidate exists, field is empty, and not dismissed */}
+              {importMeta?.nativeNameCandidate && !nativeNameDismissed && !getValues("original_language_name") && (
+                <div className="mt-2 flex items-start gap-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 animate-in fade-in slide-in-from-top-1">
+                  <Languages className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-200 uppercase tracking-wide mb-0.5">
+                      Native name found from document
+                    </p>
+                    <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100 font-mono break-all">
+                      {importMeta.nativeNameCandidate.value}
+                    </p>
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      Source: {importMeta.nativeNameCandidate.provenance}
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                    <button
+                      type="button"
+                      id="use-native-name-suggestion"
+                      onClick={() => {
+                        if (!importMeta.nativeNameCandidate) return;
+                        setValue("original_language_name", importMeta.nativeNameCandidate.value, { shouldValidate: true, shouldDirty: true });
+                        if (fieldOriginsRef.current) fieldOriginsRef.current.original_language_name = 'user';
+                        setNativeNameDismissed(true);
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm whitespace-nowrap"
+                    >
+                      Use this name
+                    </button>
+                    <button
+                      type="button"
+                      id="ignore-native-name-suggestion"
+                      onClick={() => setNativeNameDismissed(true)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors whitespace-nowrap"
+                    >
+                      Ignore
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Date of birth and gender — secondary row */}

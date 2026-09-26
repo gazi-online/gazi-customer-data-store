@@ -29,6 +29,11 @@ export interface SmartImportMetadata {
   candidatePhotoUrl?: string;
   candidatePhotoStoragePath?: string;
   nameSuggestion?: { first_name: string; middle_name: string; last_name: string; isReliable: boolean } | null;
+  /**
+   * Native-script name candidate extracted from the document.
+   * MUST NOT be silently auto-filled — requires explicit operator confirmation via UI.
+   */
+  nativeNameCandidate?: { value: string; provenance: string } | null;
 }
 
 export interface AiSmartImportEngineProps {
@@ -289,20 +294,20 @@ export function AiSmartImportEngine({
           }
         }
 
-        // Native name safety (supports Bengali, Hindi/Devanagari, and other native Indic scripts)
+        // Native name: extract candidate but DO NOT auto-fill — operator must explicitly confirm.
         const docNativeName: string | undefined = merged.data.original_language_name?.value;
-        if (docNativeName && hasMeaningfulNativeScript(docNativeName)) {
-          flat.original_language_name = docNativeName;
-        } else {
-          delete flat.original_language_name;
-        }
+        delete flat.original_language_name; // never silently injected
+        const nativeNameCandidate = (docNativeName && hasMeaningfulNativeScript(docNativeName))
+          ? { value: docNativeName, provenance: 'JSON Data' }
+          : null;
 
         const finalData = resolveRelationshipConflictPayload(flat, merged.conflicts, merged.data);
         onAutoFill(finalData, {
           sourceDocuments: [{ name: "JSON Data", side: "Both" }],
           conflicts: merged.conflicts,
           mergedResult: merged,
-          nameSuggestion: nameSug
+          nameSuggestion: nameSug,
+          nativeNameCandidate
         });
         toast.success("Customer details ready for review");
       } else {
@@ -443,13 +448,12 @@ export function AiSmartImportEngine({
           }
         }
 
-        // Native name safety (supports Bengali, Hindi/Devanagari, and other native Indic scripts)
+        // Native name: extract candidate but DO NOT auto-fill — operator must explicitly confirm.
         const docNativeName: string | undefined = merged.data.original_language_name?.value;
-        if (docNativeName && hasMeaningfulNativeScript(docNativeName)) {
-          flat.original_language_name = docNativeName;
-        } else {
-          delete flat.original_language_name;
-        }
+        delete flat.original_language_name; // never silently injected
+        const nativeNameCandidate = (docNativeName && hasMeaningfulNativeScript(docNativeName))
+          ? { value: docNativeName, provenance: recordedSources.map(s => s.name).join(', ') }
+          : null;
 
         const finalData = resolveRelationshipConflictPayload(flat, merged.conflicts, merged.data);
         
@@ -458,7 +462,8 @@ export function AiSmartImportEngine({
           conflicts: merged.conflicts,
           mergedResult: merged,
           candidatePhotoStoragePath: merged.data.profile_photo?.storage_path,
-          nameSuggestion: nameSug
+          nameSuggestion: nameSug,
+          nativeNameCandidate
         });
 
         if (res.warning) {
