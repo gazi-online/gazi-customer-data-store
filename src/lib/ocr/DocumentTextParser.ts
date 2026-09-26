@@ -103,7 +103,7 @@ export class DocumentTextParser {
       // 3. DOB / YOB (Front or Combined only — Aadhaar Back never carries cardholder DOB)
       let dobMatch: RegExpMatchArray | null = null;
       if (documentType !== 'aadhaar_back') {
-        dobMatch = cleanText.match(/\b(?:DOB|Date of Birth|DATE OF BIRTH|जन्म तिथि|जन्म तारीख)[:\s]*(\d{2}[\/\-.]\d{2}[\/\-.]\d{4})\b/i) ||
+        dobMatch = cleanText.match(/\b(?:DOB|Date of Birth|DATE OF BIRTH|जन्म तिथि|जन्म तारीख|জন্ম তারিখ|জন্মতারিখ)[:\s]*(\d{2}[\/\-.]\d{2}[\/\-.]\d{4})\b/i) ||
                    cleanText.match(/\b(\d{2}[\/\-.]\d{2}[\/\-.]\d{4})\b/);
         if (dobMatch) {
           const norm = normalizeDateStr(dobMatch[1]);
@@ -123,7 +123,7 @@ export class DocumentTextParser {
 
         for (let i = 0; i < lines.length; i++) {
           const u = lines[i].toUpperCase();
-          if (u.includes('DOB') || u.includes('DATE OF BIRTH') || u.includes('जन्म तिथि') || u.includes('जन्म तारीख')) dobLineIdx = i;
+          if (u.includes('DOB') || u.includes('DATE OF BIRTH') || u.includes('जन्म तिथि') || u.includes('जन्म तारीख') || lines[i].includes('জন্ম তারিখ') || lines[i].includes('জন্মতারিখ')) dobLineIdx = i;
           if (u.includes('MALE') || u.includes('FEMALE') || u.includes('TRANSGENDER') || u.includes('पुरुष') || u.includes('महिला') || u.includes('মহিলা')) genderLineIdx = i;
         }
 
@@ -509,13 +509,26 @@ export class DocumentTextParser {
         const line = lines[i];
         const u = line.toUpperCase();
 
-        if ((u.includes("ELECTOR'S NAME") || u.includes("NAME") || line.includes("नाम")) && !u.includes("FATHER") && !u.includes("HUSBAND") && !u.includes("ELECTION") && !u.includes("COMMISSION")) {
-          const val = line.split(/[:\-]/)[1]?.trim() || lines[i + 1]?.trim();
-          if (val && !isNonPersonHeader(val) && /^[A-Za-z\s.]{3,40}$/.test(val)) {
-            result.customer!.full_name = cleanLatinName(val);
+        if ((u.includes("ELECTOR'S NAME") || u.includes("NAME") || line.includes("নাম") || line.includes("नाम")) && !u.includes("FATHER") && !u.includes("HUSBAND") && !u.includes("ELECTION") && !u.includes("COMMISSION")) {
+          const candidates = [
+            line.split(/[:\-]/)[1]?.trim(),
+            lines[i + 1]?.trim()
+          ].filter(Boolean) as string[];
+
+          for (const cand of candidates) {
+            if (!cand || isNonPersonHeader(cand)) continue;
+
+            if (hasNativeScript(cand)) {
+              const cleanedNative = cleanNativeName(cand);
+              if (cleanedNative.length >= 2 && !result.customer!.original_language_name) {
+                result.customer!.original_language_name = cleanedNative;
+              }
+            } else if (/^[A-Za-z\s.]{3,40}$/.test(cand) && !result.customer!.full_name) {
+              result.customer!.full_name = cleanLatinName(cand);
+            }
           }
         }
-        if (u.includes("FATHER'S NAME") || u.includes("FATHER NAME") || line.includes("पिता का नाम")) {
+        if (u.includes("FATHER'S NAME") || u.includes("FATHER NAME") || line.includes("पिता का नाम") || line.includes("পিতার নাম")) {
           const val = line.split(/[:\-]/)[1]?.trim() || lines[i + 1]?.trim();
           if (val && !isNonPersonHeader(val) && /^[A-Za-z\s.]{3,40}$/.test(val)) {
             result.customer!.father_name = cleanLatinName(val);

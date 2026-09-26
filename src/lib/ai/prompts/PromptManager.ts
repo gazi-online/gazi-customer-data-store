@@ -54,7 +54,7 @@ export class PromptManager {
 
     basePrompt += `\n\nNAME EXTRACTION RULES (CRITICAL):
 1. FULL NAME: The complete name visible on the document must always be extracted into \`full_name\`. Never lose \`full_name\`, even if first/middle/last splitting fails.
-2. ORIGINAL LANGUAGE NAME: If the name appears in a non-Latin/original script, preserve it exactly as displayed in \`original_language_name\`. Do not translate it. Do not transliterate it unless another explicit field requires it.
+2. ORIGINAL LANGUAGE NAME: When a person's name appears in a native/non-Latin script (such as Bengali বাংলা, Hindi/Devanagari हिंदी, etc.), preserve it exactly in \`original_language_name\`. Do not transliterate or translate it. Do not fabricate a native name if only Latin/English script is present on the document.
 3. FIRST / MIDDLE / LAST: Only populate these fields when the document provides enough evidence to identify the components reliably. Do NOT split a name merely because spaces exist. For example, for "Reshma Khatun", do NOT automatically assume first_name = Reshma and last_name = Khatun unless the document structure supports it. If uncertain, set first_name = null, middle_name = null, last_name = null, and keep full_name = "Reshma Khatun".
 4. If the document clearly indicates First Name / Middle Name / Last Name, then populate those fields.
 5. RELATIONSHIP TEXT MUST NOT BECOME PART OF CUSTOMER NAME. Examples: "RAHUL KUMAR S/O RAM KUMAR" → full_name = "RAHUL KUMAR", father_name = "RAM KUMAR". "PRIYA SHARMA W/O AMIT SHARMA" → full_name = "PRIYA SHARMA", spouse_name = "AMIT SHARMA". Do not include S/O, D/O, W/O, H/O or relationship labels inside full_name.

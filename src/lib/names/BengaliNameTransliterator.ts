@@ -25,3 +25,5 @@
 export function isBengaliScript(value: string): boolean {
   return /[\u0980-\u09FF]/.test(value);
 }
+
+export { hasMeaningfulNativeScript } from './nameSafety';

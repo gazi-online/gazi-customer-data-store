@@ -7,6 +7,7 @@ import { PincodeLookupResult } from "@/lib/address/address-types";
 import { toast } from "sonner";
 import { suggestNameComponentsFromFullName } from "../nameUtils";
 import { isBengaliScript } from "@/lib/names/BengaliNameTransliterator";
+import { hasMeaningfulNativeScript } from "@/lib/names/nameSafety";
 import { resolveRelationshipConflictPayload, resolveConflictTransition } from "../relationshipUtils";
 import { getPhotoIdentityKey, resolvePhotoConfirmationPayload, resolveUsePhotoAction, resolveRejectPhotoAction } from "../photoUtils";
 
@@ -73,10 +74,10 @@ export function ReviewPanel({
     ? suggestNameComponentsFromFullName(resolvedData.full_name)
     : null;
 
-  // Document-derived Bengali name: original_language_name from the extraction result
+  // Document-derived native name: original_language_name from the extraction result
   const docNativeName: string | undefined = result.data.original_language_name?.value;
-  // A document Bengali name is valid only if it contains Bengali Unicode
-  const hasDocBengaliName = !!(docNativeName && isBengaliScript(docNativeName));
+  // A document native name is valid only if it contains meaningful native script
+  const hasDocNativeName = !!(docNativeName && hasMeaningfulNativeScript(docNativeName));
 
   const currentFullName: string | undefined = resolvedData.full_name;
 
@@ -125,8 +126,8 @@ export function ReviewPanel({
     setBengaliSuggestions([]);
     setBengaliSuggestionsUnavailable(false);
 
-    // If document already has a Bengali name, or full_name is empty/Bengali → skip
-    if (hasDocBengaliName) return;
+    // If document already has a native name, or full_name is empty/Bengali → skip
+    if (hasDocNativeName) return;
     const fn = currentFullName;
     if (!fn || isBengaliScript(fn)) return;
 
@@ -158,7 +159,7 @@ export function ReviewPanel({
 
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFullName, hasDocBengaliName]);
+  }, [currentFullName, hasDocNativeName]);
 
 const ALL_FIELDS: (keyof NormalizedData)[] = [
   'full_name',
@@ -339,12 +340,12 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
       result.data
     );
 
-    // --- Bengali original_language_name safety ---
+    // --- Original language native name safety ---
     // Only allow original_language_name in finalData if:
-    //   A) it came from the document (hasDocBengaliName), OR
+    //   A) it came from the document (hasDocNativeName), OR
     //   B) user explicitly accepted a generated suggestion (bengaliSuggestionAccepted)
     //      AND that suggestion belongs to the current full_name (stale guard)
-    if (!hasDocBengaliName) {
+    if (!hasDocNativeName) {
       // Only pass original_language_name when the user explicitly accepted a suggestion
       // AND that suggestion is still valid for the current full_name (stale guard).
       const suggestionIsStillValid =
@@ -358,12 +359,10 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
         finalData.original_language_name = bengaliSuggestions[selectedBengaliIdx!].value;
       } else {
         // Unaccepted suggestion — do NOT auto-populate.
-        // Also drop any extraction-derived non-Bengali value (e.g. Hindi Devanagari)
-        // since the UI contract expects Bengali here.
         delete finalData.original_language_name;
       }
     }
-    // If hasDocBengaliName: resolvedData already contains the document value — pass through unchanged.
+    // If hasDocNativeName: resolvedData already contains the document value — pass through unchanged.
 
     // Photo approval and payload resolution (Finding 6)
     const confirmedPayload = resolvePhotoConfirmationPayload(
@@ -626,8 +625,8 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
               BENGALI ORIGINAL-LANGUAGE NAME SECTION
               ============================================================ */}
 
-          {/* Case A: Document already contains a valid Bengali person name */}
-          {hasDocBengaliName && docNativeName && (
+          {/* Case A: Document already contains a valid native person name */}
+          {hasDocNativeName && docNativeName && (
             <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800">
               <div className="flex items-start gap-3">
                 <Languages className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
@@ -644,7 +643,7 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
                     {docNativeName}
                   </p>
                   <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1">
-                    Exact spelling preserved from OCR. Will be used in Confirm &amp; Auto Fill.
+                    Exact spelling preserved from source document. Will be used in Confirm &amp; Auto Fill.
                   </p>
                 </div>
               </div>
@@ -652,7 +651,7 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
           )}
 
           {/* Case B: Loading state — Google Input Tools in flight */}
-          {!hasDocBengaliName && bengaliSuggestionsLoading && (
+          {!hasDocNativeName && bengaliSuggestionsLoading && (
             <div className="mb-6 p-4 rounded-xl bg-violet-50 border border-violet-200 dark:bg-violet-950/20 dark:border-violet-800">
               <div className="flex items-center gap-3 text-violet-700 dark:text-violet-300">
                 <Loader2 className="h-4 w-4 animate-spin shrink-0" />
@@ -662,7 +661,7 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
           )}
 
           {/* Case B-err: Google Input Tools unavailable */}
-          {!hasDocBengaliName && !bengaliSuggestionsLoading && bengaliSuggestionsUnavailable && (
+          {!hasDocNativeName && !bengaliSuggestionsLoading && bengaliSuggestionsUnavailable && (
             <div className="mb-6 p-4 rounded-xl bg-zinc-50 border border-zinc-200 dark:bg-zinc-800/50 dark:border-zinc-700">
               <div className="flex items-center gap-3 text-zinc-500 dark:text-zinc-400">
                 <Languages className="h-4 w-4 shrink-0" />
@@ -672,7 +671,7 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
           )}
 
           {/* Case B: Suggestions loaded — user must explicitly accept */}
-          {!hasDocBengaliName && !bengaliSuggestionsLoading && bengaliSuggestions.length > 0 && (
+          {!hasDocNativeName && !bengaliSuggestionsLoading && bengaliSuggestions.length > 0 && (
             <div className="mb-6 p-4 rounded-xl bg-violet-50 border border-violet-200 dark:bg-violet-950/20 dark:border-violet-800">
               <div className="flex items-start gap-3">
                 <Languages className="h-5 w-5 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />

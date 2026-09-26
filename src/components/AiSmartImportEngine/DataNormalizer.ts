@@ -1,4 +1,5 @@
 import { NormalizedData, AiField } from './types';
+import { hasMeaningfulNativeScript } from '@/lib/names/nameSafety';
 
 function toAiField<T>(value: any, metadata?: any, defaultConfidence: number = 0.9): AiField<T> | undefined {
   if (value === undefined || value === null || value === '') return undefined;
@@ -84,9 +85,46 @@ export class DataNormalizer {
     const fullName = customer.full_name || customer.fullName || customer.name;
     if (fullName) normalized.full_name = toAiField(fullName, conf.full_name);
 
-    // Original Language Name
-    const origLangName = customer.original_language_name || customer.originalLanguageName;
-    if (origLangName) normalized.original_language_name = toAiField(origLangName, conf.original_language_name);
+    // Original Language Name (canonical alias resolution & native script validation)
+    const rawOrigLangCandidate =
+      customer.original_language_name ??
+      customer.originalLanguageName ??
+      customer.native_name ??
+      customer.name_native ??
+      customer.local_name ??
+      customer.name_local ??
+      customer.bengali_name ??
+      customer.bangla_name ??
+      customer.name_bengali ??
+      customer.hindi_name ??
+      customer.name_hindi ??
+      customer.vernacular_name ??
+      rawData.original_language_name ??
+      rawData.originalLanguageName ??
+      rawData.native_name ??
+      rawData.name_native ??
+      rawData.local_name ??
+      rawData.name_local ??
+      rawData.bengali_name ??
+      rawData.bangla_name ??
+      rawData.name_bengali ??
+      rawData.hindi_name ??
+      rawData.name_hindi ??
+      rawData.vernacular_name;
+
+    if (rawOrigLangCandidate !== undefined && rawOrigLangCandidate !== null) {
+      const candidateStr =
+        typeof rawOrigLangCandidate === 'object' && rawOrigLangCandidate !== null && 'value' in rawOrigLangCandidate
+          ? String((rawOrigLangCandidate as any).value ?? '')
+          : (typeof rawOrigLangCandidate === 'string' ? rawOrigLangCandidate : '');
+
+      if (hasMeaningfulNativeScript(candidateStr)) {
+        normalized.original_language_name = toAiField(
+          rawOrigLangCandidate,
+          conf.original_language_name ?? conf.native_name ?? conf.bengali_name ?? conf.local_name
+        );
+      }
+    }
 
     // First Name
     const firstName = customer.first_name || customer.firstName;

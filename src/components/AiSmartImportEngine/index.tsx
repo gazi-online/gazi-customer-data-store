@@ -20,7 +20,7 @@ import { v4 as uuidv4 } from "uuid";
 import { extractDataFromDocuments } from "@/app/(dashboard)/customers/ai-actions";
 import { suggestNameComponentsFromFullName } from "./nameUtils";
 import { resolveRelationshipConflictPayload } from "./relationshipUtils";
-import { isBengaliScript } from "@/lib/names/BengaliNameTransliterator";
+import { hasMeaningfulNativeScript } from "@/lib/names/nameSafety";
 
 export interface SmartImportMetadata {
   sourceDocuments?: Array<{ name: string; side: DocumentSide }>;
@@ -289,9 +289,9 @@ export function AiSmartImportEngine({
           }
         }
 
-        // Bengali name safety
+        // Native name safety (supports Bengali, Hindi/Devanagari, and other native Indic scripts)
         const docNativeName: string | undefined = merged.data.original_language_name?.value;
-        if (docNativeName && isBengaliScript(docNativeName)) {
+        if (docNativeName && hasMeaningfulNativeScript(docNativeName)) {
           flat.original_language_name = docNativeName;
         } else {
           delete flat.original_language_name;
@@ -443,9 +443,9 @@ export function AiSmartImportEngine({
           }
         }
 
-        // Bengali name safety
+        // Native name safety (supports Bengali, Hindi/Devanagari, and other native Indic scripts)
         const docNativeName: string | undefined = merged.data.original_language_name?.value;
-        if (docNativeName && isBengaliScript(docNativeName)) {
+        if (docNativeName && hasMeaningfulNativeScript(docNativeName)) {
           flat.original_language_name = docNativeName;
         } else {
           delete flat.original_language_name;
