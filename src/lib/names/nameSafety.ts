@@ -19,20 +19,22 @@ const HARD_REJECT_TERMS: string[] = [
   'FOOD & SUPPLIES', 'KHADYA SURAKSHA', 'PASSBOOK', 'BANK STATEMENT', 'STATE BANK',
   'SAVINGS BANK', 'HELP', 'WWW.', 'HTTP', 'HTTPS', 'AUTHORITY', 'ENROLMENT',
   // Hindi
-  'भारत सरकार', 'पश्चिमबंग सरकार', 'पश्चिम बंगाल सरकार', 'राज्य सरकार', 'आयकर विभाग',
-  'निर्वाचन आयोग', 'चुनाव आयोग', 'राशन कार्ड', 'खाद्य विभाग', 'आधार',
+  'भारत सरकार', 'पश्चिमबंग सरकार', 'पश्चिम बंगाल सरकार', 'पश्चिम बंगाल', 'पश्चिमबंग', 'राज्य सरकार', 'आयकर विभाग',
+  'निर्वाचन आयोग', 'चुनाव आयोग', 'राशन कार्ड', 'खाद्य विभाग', 'आधार', 'पता',
+  'पिता का नाम', 'पति का नाम', 'माता का নাম',
   // Bengali
-  'পশ্চিমবঙ্গ সরকার', 'ভারত সরকার', 'ইউনিক আইডেন্টিফিকেশন', 'অথরিটি অব ইন্ডিয়া',
-  'ইন্ডিয়া', 'নির্বাচন কমিশন', 'আয়কর বিভাগ', 'আধার',
+  'পশ্চিমবঙ্গ সরকার', 'পশ্চিমবঙ্গ', 'পশ্চিম বঙ্গ', 'ভারত সরকার', 'ইউনিক আইডেন্টিফিকেশন', 'অথরিটি অব ইন্ডিয়া',
+  'ইন্ডিয়া', 'নির্বাচন কমিশন', 'আয়কর বিভাগ', 'আধার', 'ঠিকানা',
+  'পিতার নাম', 'স্বামীর নাম', 'মাতার নাম', 'অভিভাবকের নাম',
 ];
 
 const GOVT_PATTERNS: RegExp[] = [
   /\bgovt\b|\bgovernment\b/i,
   /\bministry\b|\bdepartment\b|\bcommission\b|\bauthority\b/i,
   /\belection commission\b|\bincome tax\b/i,
-  /\bপশ্চিমবঙ্গ|\bপশ্চিম বঙ্গ/u,
-  /\bভারত সরকার|\bসরকার\b/u,
-  /\bभारत सरकार|\bपश्चिमबंग|\bआयकर|\bनिर्वाचन/u,
+  /(?:^|[^\p{L}\p{N}])(?:পশ্চিমবঙ্গ|পশ্চিম\s*বঙ্গ)(?:[^\p{L}\p{N}]|$)/u,
+  /(?:^|[^\p{L}\p{N}])(?:ভারত\s*সরকার|সরকার)(?:[^\p{L}\p{N}]|$)/u,
+  /(?:^|[^\p{L}\p{N}])(?:भारत\s*सरकार|पश्चिमबंग|पश्चिम\s*बंगाल|आयकर|निर्वाचन)(?:[^\p{L}\p{N}]|$)/u,
 ];
 
 /**
@@ -57,10 +59,15 @@ export function isNonPersonNameCandidate(value: string): boolean {
 
   // Reject document labels, DOB/gender lines, long numbers
   if (
-    /\b(DOB|Date of Birth|YOB|Year of Birth|जन्म तिथि|जन्म वर्ष|जन्म तारीख|জন্ম তারিখ|জন্মতারিখ|জন্ম সাল)\b/i.test(value) ||
-    /\b(MALE|FEMALE|TRANSGENDER|पुरुष|महिला|মহিলা)\b/i.test(value) ||
-    /\b(Address|पता|ঠিকানা|PIN|Pincode|Post Office)\b/i.test(value) ||
+    /\b(DOB|Date of Birth|YOB|Year of Birth|PIN|Pincode|Post Office)\b/i.test(value) ||
+    /(?:^|[^\p{L}\p{N}])(?:जन्म\s*(?:तिथि|वर्ष|तारीख)|জন্ম\s*(?:তারিখ|সাল))(?:[^\p{L}\p{N}]|$)/iu.test(value) ||
+    /\b(MALE|FEMALE|TRANSGENDER)\b/i.test(value) ||
+    /(?:^|[^\p{L}\p{N}])(?:पुरुष|महिला)(?:[^\p{L}\p{N}]|$)/u.test(value) ||
+    /\b(Address)\b/i.test(value) ||
+    /(?:^|[^\p{L}\p{N}])(?:पता|ঠিকানা)(?:[^\p{L}\p{N}]|$)/u.test(value) ||
     /\b(S\/O|D\/O|W\/O|H\/O|C\/O|Son of|Daughter of|Wife of|Husband of|Care of)\b/i.test(value) ||
+    /(?:^|[^\p{L}\p{N}])(?:পিতা|পিতার নাম|মাতা|মাতার নাম|স্বামী|স্বামীর নাম|অভিভাবক|অভিভাবকের নাম)(?:[^\p{L}\p{N}]|$)/u.test(value) ||
+    /(?:^|[^\p{L}\p{N}])(?:पिता|पिता का नाम|माता|माता का नाम|पति|पति का नाम|अभिभावक)(?:[^\p{L}\p{N}]|$)/u.test(value) ||
     /\d{4,}/.test(value)
   ) {
     return true;

@@ -284,8 +284,9 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         fieldOriginsRef.current.photo_source = 'user';
       }
       toast.success("Profile photo uploaded");
-    } catch (error: any) {
-      toast.error("Failed to upload photo: " + error.message);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "An error occurred";
+      toast.error("Failed to upload photo: " + msg);
     } finally {
       setUploadingPhoto(false);
     }
@@ -376,7 +377,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         post_office: data.post_office === "" ? null : data.post_office,
         original_language_name: data.original_language_name === "" ? null : data.original_language_name,
         country: "India",
-      } as any;
+      } as unknown as CustomerFormData;
 
       if (isEditing && initialData) {
         const result = await updateCustomer(initialData.id, cleanedData);
@@ -667,13 +668,10 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                   <Languages className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-200 uppercase tracking-wide mb-0.5">
-                      Native name found from document
+                      Native name found
                     </p>
                     <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100 font-mono break-all">
                       {importMeta.nativeNameCandidate.value}
-                    </p>
-                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">
-                      Source: {importMeta.nativeNameCandidate.provenance}
                     </p>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2 shrink-0">
