@@ -68,7 +68,7 @@ function _setCached(key: string, suggestions: GoogleBengaliSuggestion[]): void {
 const ENDPOINT = 'https://inputtools.google.com/request';
 const TRANSLITERATION_CODE = 'bn-t-i0-und';
 const MAX_SUGGESTIONS = 3;
-const TIMEOUT_MS = 5_000;
+const TIMEOUT_MS = 3_000;
 
 // ---------------------------------------------------------------------------
 // Response parser

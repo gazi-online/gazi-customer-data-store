@@ -11,10 +11,9 @@ import { hasMeaningfulNativeScript } from "@/lib/names/nameSafety";
 import { resolveRelationshipConflictPayload, resolveConflictTransition } from "../relationshipUtils";
 import { getPhotoIdentityKey, resolvePhotoConfirmationPayload, resolveUsePhotoAction, resolveRejectPhotoAction } from "../photoUtils";
 
-// Bengali suggestion fetched from Google Input Tools via /api/bengali-suggestions
-interface GoogleBengaliSuggestion {
+// Bengali suggestion item from hybrid transliteration provider
+interface BengaliSuggestionItem {
   value: string;
-  source: 'google_input_tools';
 }
 
 export function ReviewPanel({ 
@@ -40,11 +39,11 @@ export function ReviewPanel({
   const [pinRefData, setPinRefData] = useState<PincodeLookupResult | null>(null);
   const [pinStatus, setPinStatus] = useState<'idle' | 'loading' | 'verified' | 'mismatch' | 'failed'>('idle');
   const [suggestionAccepted, setSuggestionAccepted] = useState<boolean>(false);
-  // Bengali transliteration suggestion state (Google Input Tools — async)
+  // Bengali transliteration suggestion state (Hybrid provider — async)
   const [selectedBengaliIdx, setSelectedBengaliIdx] = useState<number | null>(null);
   const [bengaliSuggestionAccepted, setBengaliSuggestionAccepted] = useState<boolean>(false);
   const [bengaliSuggestionForName, setBengaliSuggestionForName] = useState<string | null>(null);
-  const [bengaliSuggestions, setBengaliSuggestions] = useState<GoogleBengaliSuggestion[]>([]);
+  const [bengaliSuggestions, setBengaliSuggestions] = useState<BengaliSuggestionItem[]>([]);
   const [bengaliSuggestionsLoading, setBengaliSuggestionsLoading] = useState<boolean>(false);
   const [bengaliSuggestionsUnavailable, setBengaliSuggestionsUnavailable] = useState<boolean>(false);
   // Monotone request counter — stale responses from old full_names are silently dropped
@@ -115,7 +114,7 @@ export function ReviewPanel({
     return () => { isCurrent = false; };
   }, [pincodeVal, resolvedData.state, resolvedData.district]);
 
-  // ── Bengali suggestion fetch (Google Input Tools) ──
+  // ── Bengali suggestion fetch (Hybrid Provider) ──
   // Triggered whenever full_name changes. AbortController + sequence-ID guard
   // prevent stale responses from an old name overwriting the current UI state.
   useEffect(() => {
@@ -141,14 +140,16 @@ export function ReviewPanel({
       signal: controller.signal,
     })
       .then(r => r.json())
-      .then((data: { suggestions?: GoogleBengaliSuggestion[]; unavailable?: boolean; skipped?: boolean }) => {
+      .then((data: { suggestions?: (string | { value: string })[]; items?: { value: string }[]; unavailable?: boolean; skipped?: boolean }) => {
         if (mySeq !== bengaliReqSeqRef.current) return; // stale — ignore
         setBengaliSuggestionsLoading(false);
         if (data.unavailable) {
           setBengaliSuggestionsUnavailable(true);
           return;
         }
-        setBengaliSuggestions(data.suggestions ?? []);
+        const raw = data.items || data.suggestions || [];
+        const normalized: BengaliSuggestionItem[] = raw.map(s => (typeof s === 'string' ? { value: s } : s));
+        setBengaliSuggestions(normalized);
       })
       .catch(err => {
         if (err?.name === 'AbortError') return; // component unmounted or full_name changed
@@ -685,13 +686,10 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
                     </span>
                   </div>
 
-                  <p className="text-xs text-violet-700 dark:text-violet-300 mb-1">
+                  <p className="text-xs text-violet-700 dark:text-violet-300 mb-3">
                     Suggested Bengali spellings for{' '}
                     <strong className="font-mono text-zinc-900 dark:text-zinc-100">{resolvedData.full_name}</strong>
                     {' '}— select one and click <em>Use Selected Bengali Name</em> to accept.
-                  </p>
-                  <p className="text-[10px] text-violet-500 dark:text-violet-400 mb-3">
-                    Suggested by Google Input Tools
                   </p>
 
                   <div className="space-y-2 mb-3">
@@ -719,9 +717,6 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
                         />
                         <div className="flex-1">
                           <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{sug.value}</span>
-                          <span className="ml-2 text-[10px] uppercase font-medium text-violet-400 dark:text-violet-500">
-                            Google Input Tools
-                          </span>
                         </div>
                         {bengaliSuggestionAccepted && selectedBengaliIdx === idx && (
                           <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />

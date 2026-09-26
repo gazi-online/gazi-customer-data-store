@@ -1,28 +1,30 @@
 /**
  * src/app/api/bengali-suggestions/route.ts
  *
- * POST-only internal GCDS route for Bengali name suggestions.
+ * POST-only internal GCDS route for Hybrid Bengali name suggestions.
  *
  * Architecture:
- *   ReviewPanel (client)
- *     → POST /api/bengali-suggestions  { full_name: "Reshma Khatun" }
- *     → GoogleInputToolsProvider (server)
- *     → HTTPS GET https://inputtools.google.com/request
- *     → Bengali suggestions → client
+ *   Client (CustomerForm / ReviewPanel)
+ *     → POST /api/bengali-suggestions  { first_name, middle_name, last_name, full_name, doc_candidate }
+ *     → constructCustomerCanonicalName (extracts ONLY customer name fields)
+ *     → NativeNameSuggestionProvider:
+ *         1. Google Input Tools (remote HTTPS request, 3s timeout)
+ *         2. LocalBengaliProvider (local dictionary + phonetic syllable engine fallback)
+ *         3. Safe document OCR candidate integration
+ *     → Client receives deduplicated Bengali suggestions (max 3)
  *
- * Privacy rationale:
- *   POST body is not recorded in browser URL history, access logs, or
- *   reverse-proxy analytics, unlike GET query parameters.
- *
- * Response shapes:
- *   200  { suggestions: GoogleBengaliSuggestion[] }
- *   200  { suggestions: [], skipped: true }     — Bengali/govt-header input
- *   200  { suggestions: [], unavailable: true } — Google timeout / HTTP error
- *   400  { error: "...", code: "..." }           — bad request
+ * Privacy / Security:
+ *   - Only minimum customer name text is sent to Google.
+ *   - NEVER accepts or sends father_name, guardian_name, mother_name, spouse_name,
+ *     address, phone, DOB, Aadhaar, PAN, or other sensitive identifiers.
+ *   - No persistent logging of customer names.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchBengaliSuggestions } from '@/lib/names/GoogleInputToolsProvider';
+import {
+  constructCustomerCanonicalName,
+  getBengaliNameSuggestions,
+} from '@/lib/names/NativeNameSuggestionProvider';
 import { isNonPersonNameCandidate } from '@/lib/names/nameSafety';
 
 export const runtime = 'nodejs';
@@ -48,49 +50,59 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { full_name } = body as Record<string, unknown>;
+  const payload = body as Record<string, unknown>;
 
-  // ── Validate full_name field ─────────────────────────────────────────────
-  if (typeof full_name !== 'string') {
+  // ── Construct canonical customer name (strictly customer name fields) ───
+  const canonicalName = constructCustomerCanonicalName({
+    first_name: typeof payload.first_name === 'string' ? payload.first_name : undefined,
+    middle_name: typeof payload.middle_name === 'string' ? payload.middle_name : undefined,
+    last_name: typeof payload.last_name === 'string' ? payload.last_name : undefined,
+    full_name: typeof payload.full_name === 'string' ? payload.full_name : undefined,
+  });
+
+  const docCandidate = typeof payload.doc_candidate === 'string' ? payload.doc_candidate : null;
+
+  if (!canonicalName) {
+    return NextResponse.json({
+      suggestions: [],
+      items: [],
+      usedFallback: false,
+      skipped: true,
+    });
+  }
+
+  if (canonicalName.length > MAX_NAME_LENGTH) {
     return NextResponse.json(
-      { error: 'full_name must be a string.', code: 'INVALID_FIELD' },
+      { error: `Customer name exceeds maximum length of ${MAX_NAME_LENGTH} characters.`, code: 'NAME_TOO_LONG' },
       { status: 400 }
     );
   }
 
-  const trimmed = full_name.trim();
-
-  if (!trimmed) {
-    return NextResponse.json(
-      { error: 'full_name must not be empty.', code: 'EMPTY_NAME' },
-      { status: 400 }
-    );
+  // ── Non-person safety check ──────────────────────────────────────────────
+  if (isNonPersonNameCandidate(canonicalName)) {
+    return NextResponse.json({
+      suggestions: [],
+      items: [],
+      usedFallback: false,
+      skipped: true,
+    });
   }
 
-  if (trimmed.length > MAX_NAME_LENGTH) {
-    return NextResponse.json(
-      { error: `full_name exceeds maximum length of ${MAX_NAME_LENGTH} characters.`, code: 'NAME_TOO_LONG' },
-      { status: 400 }
-    );
+  // ── Hybrid Suggestion Resolution ─────────────────────────────────────────
+  try {
+    const result = await getBengaliNameSuggestions(canonicalName, docCandidate);
+
+    return NextResponse.json({
+      suggestions: result.suggestions,
+      items: result.suggestions.map(s => ({ value: s })),
+      usedFallback: result.usedFallback,
+    });
+  } catch {
+    return NextResponse.json({
+      suggestions: [],
+      items: [],
+      usedFallback: true,
+      unavailable: true,
+    });
   }
-
-  // ── Safety pre-check (shared with OCR path) ─────────────────────────────
-  // isNonPersonNameCandidate is also checked inside GoogleInputToolsProvider,
-  // but we short-circuit early here to avoid unnecessary provider invocation.
-  if (isNonPersonNameCandidate(trimmed)) {
-    return NextResponse.json({ suggestions: [], skipped: true });
-  }
-
-  // ── Delegate to Google Input Tools provider ──────────────────────────────
-  const result = await fetchBengaliSuggestions(trimmed);
-
-  if (!result.ok) {
-    if (result.error === 'skipped') {
-      return NextResponse.json({ suggestions: [], skipped: true });
-    }
-    // 'unavailable' — Google timed out or returned an error
-    return NextResponse.json({ suggestions: [], unavailable: true });
-  }
-
-  return NextResponse.json({ suggestions: result.suggestions });
 }

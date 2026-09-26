@@ -18,6 +18,7 @@ import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { AiSmartImportEngine, SmartImportMetadata } from "../AiSmartImportEngine";
 import { IndiaPincodeProvider } from "@/lib/address/IndiaPincodeProvider";
 import { useRef, useMemo } from "react";
+import { constructCustomerCanonicalName } from "@/lib/names/NativeNameSuggestionProvider";
 import {
   FieldOrigins,
   initializeFieldOrigins,
@@ -73,6 +74,11 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   const [aiDataApplied, setAiDataApplied] = useState(false);
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
   const [nativeNameDismissed, setNativeNameDismissed] = useState(false);
+  const [bengaliSuggestions, setBengaliSuggestions] = useState<string[]>([]);
+  const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
+  const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
+  const [isFetchingBengali, setIsFetchingBengali] = useState(false);
+  const [bengaliFetchFailed, setBengaliFetchFailed] = useState(false);
   const isEditing = !!initialData;
 
   // UX Workflow state: 'smart_import' | 'manual' | 'review'
@@ -300,6 +306,40 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     setPreviewPhotoUrl(null);
   };
 
+  const fetchBengaliNameOptions = async (canonicalName: string, docCandidate?: string | null) => {
+    const trimmed = canonicalName.trim();
+    if (!trimmed) return;
+    setIsFetchingBengali(true);
+    setBengaliFetchFailed(false);
+    try {
+      const res = await fetch('/api/bengali-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: trimmed,
+          doc_candidate: docCandidate || undefined,
+        }),
+      });
+      const data = await res.json();
+      const sugs = (data.suggestions || []) as string[];
+      if (sugs.length > 0) {
+        setBengaliSuggestions(sugs);
+        setSelectedSuggestion(sugs[0]);
+        setSuggestionsDismissed(false);
+      } else {
+        setBengaliSuggestions([]);
+        setSelectedSuggestion(null);
+        setBengaliFetchFailed(true);
+      }
+    } catch {
+      setBengaliSuggestions([]);
+      setSelectedSuggestion(null);
+      setBengaliFetchFailed(true);
+    } finally {
+      setIsFetchingBengali(false);
+    }
+  };
+
   const handleAutoFill = (data: Record<string, unknown>, meta?: SmartImportMetadata) => {
     const currentValues = getValues();
     const origins = fieldOriginsRef.current!;
@@ -327,6 +367,20 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     if (meta) {
       setImportMeta(meta);
       setNativeNameDismissed(false); // reset for fresh import
+      setSuggestionsDismissed(false);
+    }
+
+    // Fetch Bengali suggestions strictly for the canonical customer name
+    const canonicalCustomerName = constructCustomerCanonicalName({
+      first_name: (fieldsToUpdate.first_name || currentValues.first_name) as string | undefined,
+      middle_name: (fieldsToUpdate.middle_name || currentValues.middle_name) as string | undefined,
+      last_name: (fieldsToUpdate.last_name || currentValues.last_name) as string | undefined,
+      full_name: data.full_name as string | undefined,
+    });
+
+    if (canonicalCustomerName && !getValues("original_language_name")) {
+      const docCandidate = meta?.nativeNameCandidate?.value || null;
+      fetchBengaliNameOptions(canonicalCustomerName, docCandidate);
     }
 
     if (skippedNotice) {
@@ -648,10 +702,33 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
             {/* Native / Bengali name — full-width row, clearly labeled */}
             <div className="space-y-2 md:col-span-3">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Name in Native Language
-                <span className="ml-1.5 text-[11px] font-normal text-zinc-400 dark:text-zinc-500">(বাংলা / हिंदी / অন্য ভাষায় নাম)</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Name in Native Language
+                  <span className="ml-1.5 text-[11px] font-normal text-zinc-400 dark:text-zinc-500">(বাংলা / हिंदी / অন্য ভাষায় নাম)</span>
+                </label>
+
+                {!getValues("original_language_name") && (
+                  <button
+                    type="button"
+                    id="suggest-bengali-name-btn"
+                    onClick={() => {
+                      const canonical = constructCustomerCanonicalName(getValues());
+                      if (!canonical) {
+                        toast.info("Please enter customer name (First & Last name) first.");
+                        return;
+                      }
+                      fetchBengaliNameOptions(canonical);
+                    }}
+                    disabled={isFetchingBengali}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  >
+                    <Languages className="h-3.5 w-3.5" />
+                    {isFetchingBengali ? "সাজেস্ট করা হচ্ছে..." : "বাংলা নাম সাজেস্ট করুন"}
+                  </button>
+                )}
+              </div>
+
               <input
                 {...register("original_language_name")}
                 className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow"
@@ -662,8 +739,86 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
               />
               <p className="text-xs text-zinc-400 dark:text-zinc-500">Optional — enter the customer&apos;s name as written in their local language or script.</p>
 
-              {/* Native name suggestion card: shown only when a candidate exists, field is empty, and not dismissed */}
-              {importMeta?.nativeNameCandidate && !nativeNameDismissed && !getValues("original_language_name") && (
+              {/* Hybrid Bengali Suggestions Picker */}
+              {!suggestionsDismissed && bengaliSuggestions.length > 0 && !getValues("original_language_name") && (
+                <div className="mt-2 p-3.5 rounded-xl bg-violet-50/70 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 animate-in fade-in slide-in-from-top-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-violet-900 dark:text-violet-200 flex items-center gap-1.5">
+                      <Languages className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                      বাংলা নাম বেছে নিন
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5 mb-3">
+                    {bengaliSuggestions.map((sug, idx) => (
+                      <label
+                        key={idx}
+                        className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                          selectedSuggestion === sug
+                            ? 'border-violet-500 bg-white dark:bg-zinc-800 shadow-2xs ring-1 ring-violet-500'
+                            : 'border-zinc-200/80 dark:border-zinc-700/80 bg-white/60 dark:bg-zinc-900/60 hover:bg-white dark:hover:bg-zinc-800'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="native_bengali_selection"
+                          checked={selectedSuggestion === sug}
+                          onChange={() => setSelectedSuggestion(sug)}
+                          className="text-violet-600 focus:ring-violet-500 shrink-0 h-4 w-4"
+                        />
+                        <span className="text-base font-semibold text-zinc-900 dark:text-zinc-100 font-mono">
+                          {sug}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      id="use-selected-native-name"
+                      disabled={!selectedSuggestion}
+                      onClick={() => {
+                        if (!selectedSuggestion) return;
+                        setValue("original_language_name", selectedSuggestion, { shouldValidate: true, shouldDirty: true });
+                        if (fieldOriginsRef.current) fieldOriginsRef.current.original_language_name = 'user';
+                        setSuggestionsDismissed(true);
+                      }}
+                      className="px-3.5 py-2 rounded-lg text-xs font-bold bg-violet-600 text-white hover:bg-violet-700 transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+                    >
+                      Use selected name
+                    </button>
+                    <button
+                      type="button"
+                      id="dismiss-native-name-suggestions"
+                      onClick={() => setSuggestionsDismissed(true)}
+                      className="px-3.5 py-2 rounded-lg text-xs font-medium bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+                    >
+                      নিজে লিখুন
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Gentle notice if suggestions unavailable */}
+              {bengaliFetchFailed && !suggestionsDismissed && !getValues("original_language_name") && (
+                <div className="mt-2 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3 text-xs text-zinc-600 dark:text-zinc-400">
+                  <div>
+                    <p className="font-medium text-zinc-800 dark:text-zinc-200">বাংলা নাম সাজেস্ট করা যায়নি</p>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">আপনি চাইলে নামটি নিজে লিখতে পারেন।</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setBengaliFetchFailed(false)}
+                    className="px-2.5 py-1 text-[11px] rounded bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 cursor-pointer"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
+              {/* Native name suggestion card for document candidate (backward compatibility) */}
+              {importMeta?.nativeNameCandidate && !nativeNameDismissed && !getValues("original_language_name") && bengaliSuggestions.length === 0 && !bengaliFetchFailed && (
                 <div className="mt-2 flex items-start gap-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 animate-in fade-in slide-in-from-top-1">
                   <Languages className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
@@ -684,7 +839,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                         if (fieldOriginsRef.current) fieldOriginsRef.current.original_language_name = 'user';
                         setNativeNameDismissed(true);
                       }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm whitespace-nowrap"
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm whitespace-nowrap cursor-pointer"
                     >
                       Use this name
                     </button>
@@ -692,7 +847,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                       type="button"
                       id="ignore-native-name-suggestion"
                       onClick={() => setNativeNameDismissed(true)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors whitespace-nowrap"
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors whitespace-nowrap cursor-pointer"
                     >
                       Ignore
                     </button>
