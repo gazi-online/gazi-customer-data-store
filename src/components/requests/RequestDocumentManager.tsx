@@ -11,6 +11,8 @@ import {
   AlertTriangle,
   Loader2,
   Tag,
+  Eye,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RequestDrawerDocument } from "@/app/(dashboard)/requests/types";
@@ -18,6 +20,7 @@ import {
   detachDocumentFromRequest,
   toggleDocumentVerification,
 } from "@/app/(dashboard)/requests/actions";
+import { getDocumentSignedUrl } from "@/app/(dashboard)/documents/actions";
 import { AttachRequestDocumentModal } from "./AttachRequestDocumentModal";
 
 interface RequestDocumentManagerProps {
@@ -59,7 +62,77 @@ export function RequestDocumentManager({
   const [isAttachModalOpen, setIsAttachModalOpen] = useState(false);
   const [detachTarget, setDetachTarget] = useState<RequestDrawerDocument | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [viewingDocId, setViewingDocId] = useState<string | null>(null);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [isDetaching, setIsDetaching] = useState(false);
+
+  // Preview Document Handler
+  const handlePreviewDoc = async (doc: RequestDrawerDocument) => {
+    const targetDocId = doc.documentId;
+    if (!targetDocId) {
+      toast.error("Document reference missing or unavailable");
+      return;
+    }
+
+    let newTab: Window | null = null;
+    try {
+      newTab = window.open("about:blank", "_blank");
+    } catch {
+      // Browser popup blocked; fallback to opening once signed URL is ready
+    }
+
+    setViewingDocId(doc.id);
+    try {
+      const result = await getDocumentSignedUrl(targetDocId, false);
+      if (result.error || !result.signedUrl) {
+        throw new Error(result.error || "Could not generate secure viewing link");
+      }
+      if (newTab) {
+        newTab.location.href = result.signedUrl;
+      } else {
+        window.open(result.signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (err: unknown) {
+      if (newTab) newTab.close();
+      const message = err instanceof Error ? err.message : "Failed to view document";
+      toast.error(message);
+    } finally {
+      setViewingDocId(null);
+    }
+  };
+
+  // Download Document Handler
+  const handleDownloadDoc = async (doc: RequestDrawerDocument) => {
+    const targetDocId = doc.documentId;
+    if (!targetDocId) {
+      toast.error("Document reference missing or unavailable");
+      return;
+    }
+
+    setDownloadingDocId(doc.id);
+    try {
+      const cleanDocName = doc.documentName.replace(/[/\\?%*:|"<>]/g, "_");
+      const targetFilename = cleanDocName || `${doc.documentType.replace(/\s+/g, "_")}_${doc.id.slice(0, 6)}`;
+
+      const result = await getDocumentSignedUrl(targetDocId, true, targetFilename);
+      if (result.error || !result.signedUrl) {
+        throw new Error(result.error || "Failed to generate download URL");
+      }
+
+      const link = document.createElement("a");
+      link.href = result.signedUrl;
+      link.download = targetFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Secure download started");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to download document";
+      toast.error(msg);
+    } finally {
+      setDownloadingDocId(null);
+    }
+  };
 
   // Toggle Verification (Compare-And-Set optimistic concurrency)
   const handleVerifyToggle = async (doc: RequestDrawerDocument) => {
@@ -177,6 +250,8 @@ export function RequestDocumentManager({
         <div className="space-y-2.5">
           {documents.map((doc) => {
             const isProcessingThis = verifyingId === doc.id;
+            const isViewingThis = viewingDocId === doc.id;
+            const isDownloadingThis = downloadingDocId === doc.id;
 
             return (
               <div
@@ -214,14 +289,48 @@ export function RequestDocumentManager({
                 </div>
 
                 {/* Actions & Verification Badge */}
-                <div className="shrink-0 flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/50 dark:border-zinc-800">
+                <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-between sm:justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/50 dark:border-zinc-800 flex-wrap">
+                  {/* Preview action */}
+                  <button
+                    type="button"
+                    onClick={() => handlePreviewDoc(doc)}
+                    disabled={isViewingThis || isDownloadingThis || isDetaching}
+                    title={`Preview ${doc.documentName}`}
+                    aria-label={`Preview ${doc.documentName}`}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 transition-colors disabled:opacity-50 cursor-pointer min-h-[32px]"
+                  >
+                    {isViewingThis ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5 text-slate-500 dark:text-zinc-400" />
+                    )}
+                    <span>Preview</span>
+                  </button>
+
+                  {/* Download action */}
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadDoc(doc)}
+                    disabled={isDownloadingThis || isViewingThis || isDetaching}
+                    title={`Download ${doc.documentName}`}
+                    aria-label={`Download ${doc.documentName}`}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 transition-colors disabled:opacity-50 cursor-pointer min-h-[32px]"
+                  >
+                    {isDownloadingThis ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5 text-slate-500 dark:text-zinc-400" />
+                    )}
+                    <span>Download</span>
+                  </button>
+
                   {/* Verification status toggle */}
                   <button
                     type="button"
                     onClick={() => handleVerifyToggle(doc)}
                     disabled={isProcessingThis || isDetaching}
                     title={doc.isVerified ? "Click to unverify" : "Click to verify"}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer min-h-[32px] ${
                       doc.isVerified
                         ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 dark:text-emerald-300 border border-emerald-300/40 dark:border-emerald-800"
                         : "bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-950/80 dark:hover:bg-amber-900 dark:text-amber-300 border border-amber-300/40 dark:border-amber-800"
@@ -243,7 +352,7 @@ export function RequestDocumentManager({
                     onClick={() => setDetachTarget(doc)}
                     disabled={isProcessingThis || isDetaching}
                     title="Detach from request"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50 min-h-[32px] min-w-[32px] flex items-center justify-center cursor-pointer"
                     aria-label={`Detach ${doc.documentName}`}
                   >
                     <Trash2 className="h-4 w-4" />
