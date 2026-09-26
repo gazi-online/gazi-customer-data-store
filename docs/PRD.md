@@ -138,7 +138,7 @@ The customer data model represents Indian citizen identity and operational recor
 | `middle_name` | `text` | Optional | Customer's middle name or paternal patronymic. |
 | `last_name` | `text` | **Required** | Customer's surname/family name. |
 | `original_language_name` | `text` | Optional | Customer's name written in native Indian script (e.g., বাংলা `রাহুল কুমার শর্মা` or हिंदी `राहुल कुमार शर्मा`). |
-| `phone` | `text` | **Required** | Primary 10-digit Indian mobile contact number. |
+| `phone` | `text` | **Required** | Primary contact phone number. Must start with an international calling code, followed by a hyphen, and at least 4 digits (e.g., `+91-9876543210`). |
 | `whatsapp` | `text` | Optional | WhatsApp contact number if different from primary phone. |
 | `email` | `text` | Optional | Customer email address for digital correspondence. |
 | `date_of_birth` | `date` | Optional | Date of birth (`YYYY-MM-DD`). |
@@ -158,8 +158,8 @@ The customer data model represents Indian citizen identity and operational recor
 | `state` | `text` | Optional | Indian State or Union Territory. |
 | `pincode` | `text` | Optional | 6-digit Indian Postal PIN Code. Triggers automated post office/district lookup. |
 | `country` | `text` | Default: India | Country of residence. |
-| `photo_url` | `text` | Optional | Storage reference or signed URL for customer profile picture. |
-| `photo_source` | `text` | Optional | Origin of photo (`upload`, `smart_import`). |
+| `photo_url` | `text` | Optional | Legacy image URL reference. Storage must persist canonical paths/references, never ephemeral signed URLs. |
+| `photo_source` | `text` | Optional | Canonical storage reference/path in private storage bucket from which transient signed URLs are generated on demand. |
 | `status` | `text` | **Required** | Enum: `active`, `inactive`, `lead`. Default: `active`. |
 
 ### 5.2 Explicit Clarification on Regional / Bengali Names
@@ -195,7 +195,7 @@ The user experience must remain clean, predictable, and operator-friendly:
 ```
 
 - **Stage 1 (Upload Documents)**: Operator drops 1-10 customer identity cards or documents. Operator assigns side metadata (`Front`, `Back`, `Both`, `Single`). Office documents default automatically to `Single`.
-- **Stage 2 (Analyze Documents)**: Operator clicks *"Analyze Documents with AI"*. Pipeline executes text extraction, classification, parsing, and normalization.
+- **Stage 2 (Analyze & Extract)**: Operator initiates data extraction. Pipeline executes text extraction, classification, parsing, and normalization.
 - **Stage 3 (Check Details / Review)**: Extracted fields populate `CustomerForm`. Form switches to *"Check Details"* mode with clear visual indicators:
   - *AI Data Applied* banner with dismiss action.
   - *Duplicate Warnings* banner if phone, Aadhaar, PAN, or Voter ID matches an existing customer in this business.
@@ -215,7 +215,7 @@ The user experience must remain clean, predictable, and operator-friendly:
 
 ## 8. Service Request Requirements
 
-1. **Deterministic Workflow FSM**: Service requests follow a strict Finite State Machine with eleven discrete statuses:
+1. **Deterministic Workflow FSM**: Service requests follow a strict Finite State Machine with eleven discrete statuses, governed by the transition matrix and authoritative database triggers (not a single linear chain):
    - `pending` (Initial state)
    - `documents_pending` (Awaiting customer documents)
    - `ready_to_submit` (All documents gathered and verified)
@@ -227,7 +227,7 @@ The user experience must remain clean, predictable, and operator-friendly:
    - `rejected` (Application officially rejected; **requires mandatory rejection reason**)
    - `cancelled` (Customer withdrew request)
    - `archived` (Terminal administrative archive)
-2. **Database Invariant**: FSM transitions are strictly validated by database triggers (`trg_validate_service_request_status_transition`). Invalid status jumps are rejected at the database level.
+2. **Database Invariants & Lifecycle Timestamps**: FSM transitions are strictly validated by database trigger (`trg_validate_service_request_status_transition`). Invalid status jumps are rejected at the database level. Lifecycle timestamps (`completed_at`, `delivered_at`, `archived_at`) are database-owned and stamped exclusively by PostgreSQL triggers, never client values.
 3. **Application Reference Tracking**: Requests record official government acknowledgement/tracking numbers (`application_reference`).
 
 ---
@@ -253,12 +253,13 @@ The user experience must remain clean, predictable, and operator-friendly:
 
 ---
 
-## 11. Security Requirements
+## 11. Security & Cache Requirements
 
-1. **Mandatory MFA (AAL2)**: Every operator and administrator must enroll a TOTP authenticator app. Access to any protected dashboard route or server action requires active AAL2 assurance.
+1. **Mandatory MFA (AAL2)**: Every operator and administrator must enroll a TOTP authenticator app. Access to any protected dashboard route or server action requires active AAL2 assurance. (Code guards are fully hardened; live production account enrollment/challenge smoke testing remains pending operational validation).
 2. **Fail-Closed Authentication**: Unauthenticated callers, expired sessions, or AAL1 sessions attempting protected mutations fail closed immediately.
 3. **Multi-Tenant Row Level Security**: All data access is bounded by `business_id`. Postgres RLS verifies membership through non-recursive helper `private.is_active_business_member()`.
 4. **Search Path Hardening**: All PostgreSQL functions declared `SECURITY DEFINER` enforce `SET search_path = ''` to prevent search path hijacking.
+5. **Strict Cache & Storage Boundaries**: The following authoritative and sensitive states must never be persisted or treated as client/TanStack Query cache authority: financial state, invoices/payments/ledger/billing summaries, active transactional service state, request FSM/authoritative status, KYC/customer profiles, and signed URLs. Server/database remains authoritative.
 
 ---
 
@@ -298,9 +299,10 @@ The user experience must remain clean, predictable, and operator-friendly:
 
 ---
 
-## 16. Current Production Status
+## 16. Baseline & Production Status
 
-- **Codebase Baseline**: Production release under active branch `main` at commit `4a3d3fc`.
-- **Security Posture**: S3A (Server Action AAL2 Enforcement) and S3B (Privileged Financial RPC Role Hardening) fully implemented and verified.
+- **Application Baseline**: Documented against verified application code baseline at commit `4a3d3fce4679c617a0b1137c7719d089a341116f`.
+- **Documentation Revision**: Canonical documentation maintained in local commits (initial baseline `c23fd680e174cb3f14eb54cba56a97ebf3c1d6a3`, updated in subsequent correction passes). Not claimed as deployed to remote unless explicitly verified.
+- **Security Posture**: S3A (Server Action AAL2 Enforcement) and S3B (Privileged Financial RPC Role Hardening) implemented and verified in code; live production operational verification of authenticator device enrollment is pending staging/production acceptance.
 - **Smart Import Posture**: Milestone 13.2 operational with multi-format support (PDF, DOCX, XLSX, Images), document side pairing, and field origin tracking.
 - **Customer Form Posture**: Structured First/Middle/Last names with native script input (`original_language_name`) and PIN code address lookup fully operational.

@@ -18,9 +18,10 @@
 ## 2. Current Baseline
 
 - **Active Branch**: `main`
-- **Current HEAD Commit**: `4a3d3fce4679c617a0b1137c7719d089a341116f`
+- **Application Baseline**: Documented against verified application code baseline at commit `4a3d3fce4679c617a0b1137c7719d089a341116f`.
+- **Documentation Revision**: Canonical documentation tracked in local commits (initial baseline `c23fd680e174cb3f14eb54cba56a97ebf3c1d6a3`, updated in subsequent correction passes). Not claimed as deployed to remote unless explicitly verified.
 - **Platform Stack**: Next.js 16.3.0 (App Router), React 19.2.8, Tailwind CSS v4, TypeScript 5, Supabase (PostgreSQL with RLS), TanStack React Query 5.103.1.
-- **Production Status**: Production-hardened with active TOTP MFA, Server Action AAL2 guards, privileged financial RPC role checks, and Smart Import v13.2.
+- **Production Status**: Production-ready, code-hardened application baseline with mandatory TOTP MFA route policy, Server Action requireAal2 guards, privileged financial RPC role checks, and Smart Import v13.2. (Live production operational acceptance on physical authenticator devices across iOS/Android remains pending verification).
 
 ---
 
@@ -36,6 +37,7 @@
 - **SECURITY DEFINER Hardening**: All privileged PostgreSQL functions declare `SET search_path = ''` to prevent search path hijacking. Objects are schema-qualified (`pg_catalog.*`, `public.*`).
 - **Zero service_role Bypass**: Privileged financial operations (`void_payment_atomic`, `refund_payment_atomic`, `set_request_payment_waiver`, `unallocate_payment_atomic`) revoke execution from `PUBLIC`, `anon`, and `service_role`. They are granted strictly to `authenticated` and verify active `owner`/`admin` membership.
 - **Non-Recursive RLS Helper**: Table RLS policies use `private.is_active_business_member(business_id)` residing in a separate `private` schema to avoid infinite recursion.
+- **MFA Operational Verification Pending**: Route enforcement and Server Action guards are code-hardened (109 tests passing); live production account enrollment/challenge smoke testing on physical devices remains pending operational validation.
 
 ### 3.2 Smart Import Pipeline
 - **Tiered Processing**:
@@ -51,8 +53,9 @@
 - **Rule on Regional Columns**: **Never invent language-specific database columns** (e.g., `bengali_name`, `bangla_name`). The single generic column `original_language_name` is canonical.
 
 ### 3.4 Service Request Workflow
-- **11-State FSM**: Governed strictly by PostgreSQL trigger `trg_validate_service_request_status_transition`:
-  `pending` -> `documents_pending` -> `ready_to_submit` -> `submitted` -> `in_process` -> `action_required` -> `completed` -> `delivered` -> `rejected` (requires reason) -> `cancelled` -> `archived` (terminal).
+- **11-State FSM**: Governed strictly by PostgreSQL trigger `trg_validate_service_request_status_transition` and the canonical transition matrix (non-linear; not a simple linear chain).
+- **Mandatory Rejection Reason**: Transitions to `rejected` strictly require an operator-provided non-empty `rejection_reason`.
+- **Database-Owned Timestamps**: Lifecycle milestones (`completed_at`, `delivered_at`, `archived_at`) are stamped exclusively by database triggers, ignoring client inputs.
 - **Audit Logging**: Status transitions automatically generate append-only records in `service_request_status_history`.
 
 ### 3.5 Billing & Financial Ledger
@@ -61,8 +64,16 @@
 - **Atomic Stored Procedures**: Payment creation, allocation, voiding, and refunds execute through atomic database transactions.
 
 ### 3.6 Ephemeral Signed URLs
-- Supabase Storage signed URLs expire in 900 seconds (15 minutes).
-- Database tables store only canonical storage paths (`${customerId}/${documentId}_${filename}`). Signed URLs are generated dynamically on demand and never persisted.
+- Persistent storage contains only canonical storage paths/references (such as in `customer_documents` or customer profile `photo_source`).
+- Supabase Storage signed URLs expire in 900 seconds (15 minutes). Signed URLs are generated dynamically on demand and never persisted to database tables or client caches.
+
+### 3.7 Strict Cache Boundary
+- Authoritative and sensitive state must **never** be client-cached or treated as TanStack Query cache authority:
+  - Financial state, ledger balances, invoices, payments, and billing summaries.
+  - Active transactional service state and request FSM status.
+  - KYC documents, customer identity identifiers, and full customer profiles.
+  - Ephemeral signed URLs.
+- Display-only/non-authoritative data may use caching only where existing implementation explicitly permits it. Server/database remains authoritative.
 
 ---
 
@@ -92,6 +103,8 @@
 5. **Do not assume arbitrary request status updates will succeed**: The database trigger validates every transition. Skipping intermediate states throws an unhandled database exception.
 6. **Do not assume signed URLs can be saved to the database**: Storing signed URLs causes broken links after 15 minutes. Store storage paths only.
 7. **Do not use destructive git commands**: Commands such as `git reset --hard` or `git clean -fd` are strictly prohibited.
+8. **Do not treat client caches as authoritative**: TanStack Query / client storage must never be treated as the source of truth for financial balances, request FSM status, KYC data, or signed URLs.
+9. **Do not treat customer phone numbers as generic 10-digit strings**: Phone numbers must start with an international calling code, followed by a hyphen, and at least 4 digits (e.g., `+91-9876543210`).
 
 ---
 

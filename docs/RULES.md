@@ -33,6 +33,7 @@
 - Every protected Server Action in the `(dashboard)` route hierarchy must call `await requireAal2(supabase)`.
 - The 4-state authentication route policy in middleware must be preserved: unauthenticated -> `/login`, AAL1 no factor -> `/settings/security/mfa`, AAL1 with factor -> `/mfa/verify`, AAL2 -> protected app.
 - Never grant dashboard access based on password validation alone.
+- Note: MFA route policy, Server Action requireAal2 guards, and database role checks are implemented and code-hardened; live production operational verification across physical authenticator devices remains pending.
 
 ## Rule 7 — Financial Integrity & Idempotency
 **Financial mutations must remain authoritative, atomic, and idempotent.**
@@ -41,10 +42,10 @@
 - Never perform multi-step financial calculations in client-side React code.
 
 ## Rule 8 — Canonical Request Workflow FSM
-**Never bypass canonical service request status transitions.**
-- All status changes must obey the 11-state transition matrix enforced by `trg_validate_service_request_status_transition`.
-- Transitions to `rejected` strictly require an operator-provided `rejection_reason`.
-- Lifecycle timestamps (`completed_at`, `delivered_at`, `archived_at`) are owned and stamped exclusively by PostgreSQL triggers.
+**Never bypass canonical service request status transitions or assume a simple linear pipeline.**
+- All status changes must obey the 11-state transition matrix enforced by `trg_validate_service_request_status_transition`. Allowed transitions are defined non-linearly by the matrix.
+- Transitions to `rejected` strictly require an operator-provided non-empty `rejection_reason`.
+- Lifecycle timestamps (`completed_at`, `delivered_at`, `archived_at`) are owned and stamped exclusively by PostgreSQL triggers, ignoring client-supplied values.
 
 ## Rule 9 — Smart Import Data Preservation
 **Do not silently overwrite manually reviewed customer data.**
@@ -54,18 +55,23 @@
 
 ## Rule 10 — Non-Persistent Signed URLs
 **Do not persist signed URLs to database tables or client caches.**
+- Persistent storage must contain only canonical storage paths or references (e.g., `${customerId}/${documentId}_${filename}` or customer `photo_source`).
 - Supabase storage signed URLs expire in 900 seconds (15 minutes).
-- Store only canonical storage paths (`${customerId}/${documentId}_${filename}`) in the database.
-- Generate signed URLs dynamically on demand for viewing or downloading.
+- Generate signed URLs dynamically on demand for viewing or downloading; never store or cache them across sessions.
 
 ## Rule 11 — Client Storage Security
 **No sensitive customer information in insecure browser storage.**
 - Never persist customer identity documents, Aadhaar numbers, PANs, phone numbers, or authentication tokens to `localStorage` or `sessionStorage`.
 - Temporary upload previews must revoke Object URLs upon component unmount to prevent browser memory leaks.
 
-## Rule 12 — Caching Discipline
-**Do not client-cache transactional or authoritative state without invalidation.**
-- Never rely on stale client cache for financial balances, request FSM status, or MFA factor lists.
+## Rule 12 — Strict Cache Boundary
+**Do NOT treat client/TanStack Query cache as authoritative for sensitive or transactional state.**
+- The following authoritative states must **never** be client-cached as source of truth:
+  - Financial state, ledger balances, invoices, payments, and billing summaries.
+  - Active transactional service state and request FSM status.
+  - KYC documents, customer identity identifiers, and full customer profiles.
+  - Ephemeral signed URLs.
+- Display-only/non-authoritative data may use caching only where existing implementation explicitly permits it. Server/database remains authoritative.
 - Server Actions must invoke `revalidatePath()` on modified views.
 
 ## Rule 13 — Database Schema Changes
@@ -125,3 +131,8 @@
 **Revoke execution of privileged financial functions from service_role, anon, and PUBLIC.**
 - Functions modifying balances, waivers, voids, or refunds must be granted strictly to `authenticated`.
 - PostgREST requests must present valid user authentication and active owner/admin membership.
+
+## Rule 23 — Canonical Phone Validation Rule
+**Customer phone numbers must follow the canonical international format.**
+- Phone numbers must start with an international calling code, followed by a hyphen, and at least 4 digits (e.g., `+91-9876543210`).
+- Do not document or treat phone numbers as simple unqualified 10-digit strings.

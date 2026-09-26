@@ -8,8 +8,9 @@
 ## 1. Production Baseline
 
 - **Active Branch**: `main`
-- **Current HEAD SHA**: `4a3d3fce4679c617a0b1137c7719d089a341116f`
-- **Production Status**: Production-ready, hardened baseline with active multi-factor authentication, privileged financial RPC role checks, and Smart Import v13.2.
+- **Application Baseline**: Documented against verified application code baseline at commit `4a3d3fce4679c617a0b1137c7719d089a341116f`.
+- **Documentation Revision**: Canonical documentation tracked in local commits (initial baseline `c23fd680e174cb3f14eb54cba56a97ebf3c1d6a3`, updated in subsequent correction passes). Not claimed as deployed to remote unless explicitly verified.
+- **Production Status**: Production-ready, code-hardened application baseline with mandatory multi-factor authentication route policy, server action AAL2 guards, privileged financial RPC role checks, and Smart Import v13.2. (Live production operational acceptance remains pending on items detailed in Section 3).
 
 ---
 
@@ -58,7 +59,9 @@ Summarized from real repository commit history and migration records:
 ## 3. Verification Pending (Live Operational Testing)
 
 The following capabilities are implemented and unit/regression tested in code, but require periodic operational validation in live staging/production environments:
-- [ ] End-to-end production TOTP enrollment with Google Authenticator and Microsoft Authenticator on iOS and Android.
+- [ ] Real production account enrollment and second-factor challenge smoke testing on physical authenticator devices (Google Authenticator, Microsoft Authenticator) across iOS and Android.
+- [ ] Authenticator-device validation across diverse counter hardware where not yet evidenced.
+- [ ] Required production environment variables, redirect paths, and administrative MFA reset configuration where repository evidence cannot prove deployment configuration.
 - [ ] Live print testing of invoice output (`/invoices/[id]/print`) on standard thermal and A4 kiosk printers.
 - [ ] High-latency mobile network testing (2G/3G conditions) for multi-file Smart Import uploads.
 - [ ] Live WhatsApp Web deep-link handoff testing on mobile Chrome/Edge browsers.

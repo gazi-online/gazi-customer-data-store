@@ -22,7 +22,7 @@ The primary user is a citizen service kiosk attendant, cyber cafe operator, or d
 - The operator may have moderate technical proficiency and works in a busy counter environment.
 - The UI must minimize data re-entry through automated OCR and address lookups.
 - Errors must be caught early with plain-language inline alerts, not technical stack traces.
-- Every frequent workflow (Add Customer, Check Request Status, Record Payment, Attach Document) must be executable in three clicks or fewer.
+- Core workflows (Add Customer, Check Request Status, Record Payment, Attach Document) aspire to minimal interactions (targeting three clicks or fewer where practical), prioritizing low cognitive load, operator-first speed, and progressive disclosure.
 
 ---
 
@@ -140,7 +140,7 @@ Implemented in `src/components/forms/CustomerForm.tsx`:
 3. **Address & Contact Details**:
    - Street Address / Premise details.
    - Indian Pincode input with automated postal lookup: auto-fills Post Office, District, and State.
-   - Phone Number (mandatory 10 digits) and optional WhatsApp Number.
+   - Phone Number (starts with international calling code, hyphen, at least 4 digits, e.g., +91-9876543210) and optional WhatsApp Number.
    - Email Address.
    - Customer Status (`active`, `inactive`, `lead`).
 
@@ -158,7 +158,7 @@ Implemented in `src/components/AiSmartImportEngine/`:
 - Drag-and-drop zone with animated marching ants border, supporting up to 10 files.
 - Each staged item allows explicit side selection: `Front`, `Back`, `Both`, `Single`.
 - Office files (`.docx`, `.xlsx`) display dedicated icons and are locked automatically to `Single`.
-- Primary CTA: *"Analyze Documents with AI"* with spinner and descriptive extraction message.
+- Staged document extraction trigger with progress spinner and descriptive extraction messaging.
 - Upon completion, the view transitions automatically to the populated `CustomerForm` with the `✓ Check Details` stage badge active.
 
 ### 7.2 Visual Feedback Banners

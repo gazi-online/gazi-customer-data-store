@@ -183,9 +183,13 @@ export async function someProtectedAction() {
 }
 ```
 
+### 4.3 Implementation Status vs Operational Acceptance
+- **Code-Hardened Implementation**: The 4-state authentication route evaluator (`src/lib/auth/mfaEnforcement.ts`), middleware route gates, `requireAal2` server-action guards across all protected mutations, and database-level privileged financial RPC role checks are fully implemented and verified via automated test suites (`test-server-actions-aal2.ts` with 109 assertions).
+- **Pending Operational Acceptance**: Live operational smoke testing on physical authenticator devices (Google Authenticator, Microsoft Authenticator across iOS/Android) and production environment configuration verification remain pending live staging/production deployment testing.
+
 If the session lacks valid `aal2` assurance or active verified factors, `requireAal2()` throws an authentication error, failing closed before reading or modifying tenant data.
 
-### 4.3 Safe Redirection
+### 4.4 Safe Redirection
 All login and post-auth redirect paths pass through `getSafeNextPath()` (`src/lib/auth/safeRedirect.ts`) to prevent open redirect vulnerabilities.
 
 ---
@@ -235,6 +239,7 @@ Permissions on `private.is_active_business_member` are revoked from `PUBLIC` and
 3. **Pincode Lookup Provider**: The `IndiaPincodeProvider` module queries local Postal Index Number data to auto-fill post office, district, and state upon 6-digit PIN entry.
 4. **Field Origins Policy**: When auto-filling forms from Smart Import or Pincode lookups, the client tracks field provenance (`'user' | 'ai' | 'lookup'`). User-edited fields are protected from automatic overwrite.
 5. **Duplicate Prevention**: Automated duplicate detection evaluates phone, Aadhaar, PAN, and Voter ID against existing tenant records, issuing non-blocking warnings to the operator.
+6. **Canonical Phone Validation**: Phone numbers must start with an international calling code, followed by a hyphen, and at least 4 digits (e.g., `+91-9876543210`).
 
 ---
 
@@ -242,7 +247,7 @@ Permissions on `private.is_active_business_member` are revoked from `PUBLIC` and
 
 1. **Storage Buckets**: Documents are uploaded to private bucket `customer_documents` (with automated fallback to `customer-profiles`).
 2. **Path Convention**: Files are partitioned by customer: `${customerId}/${documentId}_${sanitizedFilename}`.
-3. **Transient Signed URLs**: GCDS **never** stores signed URLs in database tables. Signed URLs are ephemeral (valid for 900 seconds / 15 minutes) and generated dynamically upon user request (`createSignedUrlSafe`).
+3. **Transient Signed URLs**: GCDS **never** stores signed URLs in database tables or client caches. Persistent storage contains only canonical storage paths/references (such as in `customer_documents` or customer profile `photo_source`). Signed URLs are ephemeral (valid for 900 seconds / 15 minutes), generated dynamically on demand, and never persisted.
 4. **File Constraints**: Maximum 10MB per file; strictly enforced MIME types (`image/jpeg`, `image/png`, `image/webp`, `application/pdf`).
 5. **Side Tracking**: The `customer_documents` table records document side (`front`, `back`, `both`, `single`) to facilitate official multi-sided identity printing.
 
@@ -307,7 +312,7 @@ Smart Import implements a resilient, multi-tiered document intelligence pipeline
 
 ## 9. Service Request Architecture & FSM
 
-Service requests follow a deterministic Finite State Machine (FSM) enforced by PostgreSQL database trigger `trg_validate_service_request_status_transition`.
+Service requests follow a deterministic Finite State Machine (FSM) enforced by PostgreSQL database trigger `trg_validate_service_request_status_transition`. Allowed transitions are strictly determined by the canonical transition matrix; transitions do not form a single mandatory linear chain.
 
 ```
   [ pending ] ──▶ [ documents_pending ] ──▶ [ ready_to_submit ]
@@ -393,7 +398,13 @@ High-consequence financial operations run via hardened PostgreSQL `SECURITY DEFI
 
 To guarantee financial and security integrity:
 1. **Server Authority**: User authentication status, AAL level, business membership, invoice balances, and request FSM states are strictly server-authoritative.
-2. **No Authoritative Client Caching**: Financial balances, customer identity proofs, and MFA factors must never be stored in browser `localStorage` or `sessionStorage`.
+2. **Strict Client Storage & Cache Boundary**: The following authoritative and sensitive states must **never** be persisted in browser `localStorage`/`sessionStorage` or treated as client/TanStack Query cache authority:
+   - Financial state, ledger transactions, and invoice/payment summaries.
+   - Active transactional service states.
+   - Request FSM status and authoritative transitions.
+   - KYC documents, customer identity identifiers, and full customer profiles.
+   - Ephemeral signed URLs.
+   Display-only and non-authoritative data may use caching only where the existing implementation explicitly permits it. Server/database remains authoritative.
 3. **React Query Invalidation**: Mutations in Server Actions trigger targeted React Query cache invalidation using deterministic query keys defined in `src/lib/queryKeys.ts`.
 
 ---
