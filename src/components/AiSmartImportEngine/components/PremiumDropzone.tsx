@@ -13,8 +13,7 @@ import {
   Sparkles, 
   Bot, 
   Loader2, 
-  Layers,
-  FileCheck
+  Layers
 } from "lucide-react";
 import { 
   UPLOAD_CONSTANTS, 
@@ -136,10 +135,10 @@ export function PremiumDropzone({
           }
         }}
         onKeyDown={handleDropzoneKeyDown}
-        className={`relative overflow-hidden rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
+        className={`relative overflow-hidden rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
           isDragOver
-            ? "bg-indigo-500/10 dark:bg-indigo-500/15 scale-[1.008] shadow-lg shadow-indigo-500/10"
-            : "bg-white/80 dark:bg-zinc-900/80 hover:bg-indigo-50/40 dark:hover:bg-zinc-800/60 shadow-sm"
+            ? "bg-blue-50/60 dark:bg-blue-950/20 scale-[1.005]"
+            : "bg-zinc-50/50 dark:bg-zinc-900/50 hover:bg-blue-50/20 dark:hover:bg-zinc-800/40"
         }`}
       >
         {/* Animated marching ants border SVG overlay */}
@@ -156,45 +155,39 @@ export function PremiumDropzone({
             ry="14"
             fill="none"
             strokeWidth="2"
-            stroke={isDragOver ? "#6366f1" : "currentColor"}
+            stroke={isDragOver ? "#2563eb" : "currentColor"}
             className={
               isDragOver
-                ? "text-indigo-600 dark:text-indigo-400 animate-marching-ants"
-                : "text-indigo-200 dark:text-indigo-800/60 [stroke-dasharray:6,6]"
+                ? "text-blue-600 dark:text-blue-400 animate-marching-ants"
+                : "text-zinc-200 dark:text-zinc-700/60 [stroke-dasharray:6,6]"
             }
           />
         </svg>
 
         {/* Inner Content */}
         <div className="relative z-10 flex flex-col items-center justify-center pointer-events-none">
-          {/* Glowing Icon Container */}
+          {/* Quiet Icon Container */}
           <div
-            className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 transition-transform duration-300 ${
+            className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-colors ${
               isDragOver
-                ? "bg-indigo-600 text-white scale-110 shadow-lg shadow-indigo-300 dark:shadow-none animate-pulse-glow"
-                : "bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400"
+                ? "bg-blue-600 text-white"
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
             }`}
           >
-            <UploadCloud className="w-7 h-7 transition-transform duration-300" />
+            <UploadCloud className="w-6 h-6" />
           </div>
 
-          <h3 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
-            {isDragOver ? "Drop documents here to upload" : "Drag & drop customer documents here"}
+          <h3 className="text-base sm:text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+            {isDragOver ? "Drop documents here to upload" : "Upload customer documents"}
           </h3>
 
           <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1 max-w-md mx-auto">
             {isDragOver ? (
-              <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
-                Release to stage documents for AI analysis
+              <span className="text-blue-600 dark:text-blue-400 font-medium">
+                Release to stage documents
               </span>
             ) : (
-              <>
-                or click to browse from your device. Supported:{" "}
-                <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-                  {UPLOAD_CONSTANTS.SUPPORTED_FORMATS_LABEL}
-                </span>{" "}
-                (Max {UPLOAD_CONSTANTS.MAX_FILE_SIZE_LABEL} per file, up to {UPLOAD_CONSTANTS.MAX_FILES_PER_BATCH} files).
-              </>
+              "Aadhaar, PAN, Voter ID or other customer documents"
             )}
           </p>
 
@@ -207,12 +200,17 @@ export function PremiumDropzone({
                 e.stopPropagation();
                 fileInputRef.current?.click();
               }}
-              className="inline-flex items-center px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-98 rounded-xl shadow-md shadow-indigo-200 dark:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="inline-flex items-center px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-98 rounded-xl shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 min-h-[40px]"
             >
               <Plus className="w-4 h-4 mr-1.5" />
               Browse Files
             </button>
           </div>
+
+          {/* Subtle format helper */}
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-2.5">
+            PDF, DOCX, XLSX, JPG, PNG, WEBP • Max 10 MB each
+          </p>
         </div>
       </div>
 
@@ -267,7 +265,7 @@ export function PremiumDropzone({
       )}
 
       {/* Staged File Cards Queue */}
-      {stagedFiles.length > 0 ? (
+      {stagedFiles.length > 0 && (
         <div className="bg-indigo-50/60 dark:bg-indigo-950/30 rounded-2xl p-4 sm:p-5 border border-indigo-100 dark:border-indigo-800/50">
           {/* Header with counts and quick actions */}
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -449,13 +447,6 @@ export function PremiumDropzone({
               )}
             </button>
           </div>
-        </div>
-      ) : (
-        <div className="p-3.5 rounded-xl border border-indigo-100/80 bg-indigo-50/40 dark:bg-indigo-950/20 text-center">
-          <p className="text-xs font-medium text-indigo-900/80 dark:text-indigo-300/80 flex items-center justify-center">
-            <FileCheck className="w-3.5 h-3.5 mr-1.5 text-indigo-500" />
-            No documents staged. Drag and drop or browse customer documents above to begin.
-          </p>
         </div>
       )}
     </div>

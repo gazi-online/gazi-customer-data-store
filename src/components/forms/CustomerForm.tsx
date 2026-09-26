@@ -429,7 +429,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                 : workflowMode === 'review'
                   ? "Review and correct the details, then save the customer."
                   : workflowMode === 'smart_import'
-                    ? "Upload documents or enter details manually."
+                    ? "Upload documents or enter customer details manually."
                     : "Fill in the customer's details."}
             </p>
           </div>
@@ -590,6 +590,22 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-8 shadow-sm space-y-8 relative"
       >
         
+        {/* Secondary path return to upload */}
+        {!isEditing && workflowMode === 'manual' && (
+          <div className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs">
+            <span className="text-zinc-600 dark:text-zinc-400">
+              Entering customer details manually. Have ID documents?
+            </span>
+            <button
+              type="button"
+              onClick={() => setWorkflowMode('smart_import')}
+              className="font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+            >
+              ← Upload documents instead
+            </button>
+          </div>
+        )}
+
         {/* ── SECTION: Name & Basic Details ── */}
         <div>
           <div className="flex items-center justify-between mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-2">
