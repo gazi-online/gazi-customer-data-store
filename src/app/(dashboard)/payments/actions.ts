@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { PaymentMethod } from "@/types/billing";
 import { BillingEngine } from "@/lib/billing/BillingEngine";
 import { requireAal2 } from "@/lib/auth/mfaEnforcement";
+import QRCode from "qrcode";
+import { getCanonicalAppUrl } from "@/lib/auth/safeRedirect";
 
 export interface PaymentListItem {
   id: string;
@@ -436,5 +438,169 @@ export async function getPaymentFormOptions(): Promise<{
   return {
     customers: custRes.data || [],
     openInvoices: invRes.data || [],
+  };
+}
+
+export interface PaymentReceiptData {
+  payment: {
+    id: string;
+    payment_number: string;
+    payment_date: string;
+    amount: number;
+    payment_method: PaymentMethod;
+    reference_number: string | null;
+    status: string;
+    notes: string | null;
+    created_at: string;
+    voided_at?: string | null;
+    void_reason?: string | null;
+    refunded_at?: string | null;
+    refund_reason?: string | null;
+    customer: {
+      id: string;
+      first_name: string;
+      middle_name: string | null;
+      last_name: string;
+      customer_code: string | null;
+      phone: string | null;
+      email: string | null;
+      address: string | null;
+      city: string | null;
+      district: string | null;
+      state: string | null;
+      pincode: string | null;
+    } | null;
+    allocations: Array<{
+      id: string;
+      amount: number;
+      invoice: {
+        id: string;
+        invoice_number: string;
+        total_amount?: number;
+        due_amount?: number;
+      } | null;
+    }>;
+  };
+  business: {
+    business_name: string;
+    legal_name?: string | null;
+    address_line1?: string | null;
+    address_line2?: string | null;
+    city?: string | null;
+    district?: string | null;
+    state?: string | null;
+    pincode?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    gstin?: string | null;
+    invoice_footer?: string | null;
+  } | null;
+  qrCodeSvg?: string | null;
+}
+
+export async function getPaymentReceiptData(id: string): Promise<PaymentReceiptData | null> {
+  const supabase = await createClient();
+  await requireAal2(supabase);
+
+  if (!id) return null;
+
+  const [payRes, bizRes] = await Promise.all([
+    supabase
+      .from("payments")
+      .select(`
+        id,
+        payment_number,
+        payment_date,
+        amount,
+        payment_method,
+        reference_number,
+        status,
+        notes,
+        created_at,
+        voided_at,
+        void_reason,
+        refunded_at,
+        refund_reason,
+        customer:customers(
+          id,
+          first_name,
+          middle_name,
+          last_name,
+          customer_code,
+          phone,
+          email,
+          address,
+          city,
+          district,
+          state,
+          pincode
+        ),
+        allocations:payment_allocations(
+          id,
+          amount,
+          invoice:invoices(
+            id,
+            invoice_number,
+            total_amount,
+            due_amount
+          )
+        )
+      `)
+      .eq("id", id)
+      .single(),
+    supabase
+      .from("business_settings")
+      .select("business_name, legal_name, address_line1, address_line2, city, district, state, pincode, phone, email, gstin, invoice_footer")
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (payRes.error || !payRes.data) {
+    console.error("Error fetching payment receipt data:", payRes.error?.message);
+    return null;
+  }
+
+  // Generate server-side QR SVG for secure receipt verification navigation
+  let qrCodeSvg: string | null = null;
+  try {
+    let baseUrl = getCanonicalAppUrl();
+    if (!baseUrl && process.env.NEXT_PUBLIC_APP_URL) {
+      try {
+        const parsed = new URL(process.env.NEXT_PUBLIC_APP_URL);
+        baseUrl = parsed.origin;
+      } catch {
+        // ignore malformed custom URL
+      }
+    }
+    if (!baseUrl && process.env.VERCEL_URL) {
+      baseUrl = `https://${process.env.VERCEL_URL}`;
+    }
+    if (!baseUrl && process.env.NODE_ENV !== "production") {
+      baseUrl = "http://localhost:3000";
+    }
+
+    if (baseUrl) {
+      // Safe navigation payload: ONLY the authoritative payment ID route
+      const receiptNavUrl = `${baseUrl}/payments/${payRes.data.id}/receipt`;
+      qrCodeSvg = await QRCode.toString(receiptNavUrl, {
+        type: "svg",
+        margin: 1,
+        errorCorrectionLevel: "M",
+        color: {
+          dark: "#000000",
+          light: "#ffffff",
+        },
+      });
+    }
+  } catch (qrErr) {
+    // Fail-safe: QR failure must not prevent viewing or printing the receipt
+    console.error("Failed to generate payment receipt QR code:", qrErr);
+    qrCodeSvg = null;
+  }
+
+  return {
+    payment: payRes.data as unknown as PaymentReceiptData["payment"],
+    business: bizRes.data || null,
+    qrCodeSvg,
   };
 }

@@ -100,10 +100,28 @@ export function RecordPaymentModal({
         return;
       }
 
+      const createdPaymentId = res.data?.id;
+
       if (res.replayed) {
-        toast.info("Payment already recorded (idempotent replay).");
+        toast.info("Payment already recorded (idempotent replay).", {
+          action: createdPaymentId
+            ? {
+                label: "Print Receipt",
+                onClick: () => window.open(`/payments/${createdPaymentId}/receipt`, "_blank"),
+              }
+            : undefined,
+          duration: 8000,
+        });
       } else {
-        toast.success("Payment recorded successfully!");
+        toast.success("Payment recorded successfully!", {
+          action: createdPaymentId
+            ? {
+                label: "Print Receipt",
+                onClick: () => window.open(`/payments/${createdPaymentId}/receipt`, "_blank"),
+              }
+            : undefined,
+          duration: 8000,
+        });
       }
 
       // Prepare fresh key for future submissions

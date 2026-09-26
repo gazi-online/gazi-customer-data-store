@@ -8,7 +8,8 @@ import {
   Search, 
   Filter, 
   AlertTriangle,
-  X
+  X,
+  Printer
 } from "lucide-react";
 import { RecordPaymentModal } from "./RecordPaymentModal";
 import { voidPayment, refundPayment, getPaymentFormOptions, PaymentListItem, PaymentFormCustomerOption, PaymentFormInvoiceOption } from "@/app/(dashboard)/payments/actions";
@@ -306,36 +307,47 @@ export function PaymentsView({
                           )}
                         </td>
                         <td className="py-4 px-4 text-right">
-                          {isRecorded ? (
-                            <div className="flex items-center justify-end space-x-2">
-                              <button
-                                onClick={() => setConfirmModal({
-                                  type: 'void_payment',
-                                  id: pay.id,
-                                  title: `Void Payment #${pay.payment_number}`,
-                                  description: `Are you sure you want to VOID payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
-                                })}
-                                disabled={isActionPending}
-                                className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/30 dark:hover:bg-red-900/50 rounded-lg text-xs font-semibold transition-colors"
-                              >
-                                Void
-                              </button>
-                              <button
-                                onClick={() => setConfirmModal({
-                                  type: 'refund_payment',
-                                  id: pay.id,
-                                  title: `Refund Payment #${pay.payment_number}`,
-                                  description: `Are you sure you want to REFUND payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
-                                })}
-                                disabled={isActionPending}
-                                className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 rounded-lg text-xs font-semibold transition-colors"
-                              >
-                                Refund
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-zinc-400 italic">Locked</span>
-                          )}
+                          <div className="flex items-center justify-end space-x-2">
+                            <Link
+                              href={`/payments/${pay.id}/receipt`}
+                              title={`Print receipt for payment #${pay.payment_number}`}
+                              aria-label={`Print receipt for payment #${pay.payment_number}`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 rounded-lg text-xs font-semibold transition-colors min-h-[30px]"
+                            >
+                              <Printer className="h-3.5 w-3.5" />
+                              <span>Receipt</span>
+                            </Link>
+                            {isRecorded ? (
+                              <>
+                                <button
+                                  onClick={() => setConfirmModal({
+                                    type: 'void_payment',
+                                    id: pay.id,
+                                    title: `Void Payment #${pay.payment_number}`,
+                                    description: `Are you sure you want to VOID payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
+                                  })}
+                                  disabled={isActionPending}
+                                  className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/30 dark:hover:bg-red-900/50 rounded-lg text-xs font-semibold transition-colors"
+                                >
+                                  Void
+                                </button>
+                                <button
+                                  onClick={() => setConfirmModal({
+                                    type: 'refund_payment',
+                                    id: pay.id,
+                                    title: `Refund Payment #${pay.payment_number}`,
+                                    description: `Are you sure you want to REFUND payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
+                                  })}
+                                  disabled={isActionPending}
+                                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 rounded-lg text-xs font-semibold transition-colors"
+                                >
+                                  Refund
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-xs text-zinc-400 italic">Locked</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -421,34 +433,45 @@ export function PaymentsView({
                       )}
                     </div>
 
-                    {isRecorded && (
-                      <div className="pt-2 border-t border-slate-100 dark:border-zinc-800/60 flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setConfirmModal({
-                            type: 'void_payment',
-                            id: pay.id,
-                            title: `Void Payment #${pay.payment_number}`,
-                            description: `Are you sure you want to VOID payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
-                          })}
-                          disabled={isActionPending}
-                          className="px-3 py-2 min-h-[44px] bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/30 dark:hover:bg-red-900/50 rounded-lg text-xs font-semibold transition-colors"
-                        >
-                          Void
-                        </button>
-                        <button
-                          onClick={() => setConfirmModal({
-                            type: 'refund_payment',
-                            id: pay.id,
-                            title: `Refund Payment #${pay.payment_number}`,
-                            description: `Are you sure you want to REFUND payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
-                          })}
-                          disabled={isActionPending}
-                          className="px-3 py-2 min-h-[44px] bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 rounded-lg text-xs font-semibold transition-colors"
-                        >
-                          Refund
-                        </button>
-                      </div>
-                    )}
+                    <div className="pt-2 border-t border-slate-100 dark:border-zinc-800/60 flex items-center justify-end gap-2 flex-wrap">
+                      <Link
+                        href={`/payments/${pay.id}/receipt`}
+                        title={`Print receipt for payment #${pay.payment_number}`}
+                        aria-label={`Print receipt for payment #${pay.payment_number}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 rounded-lg text-xs font-semibold transition-colors"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        <span>Print Receipt</span>
+                      </Link>
+                      {isRecorded && (
+                        <>
+                          <button
+                            onClick={() => setConfirmModal({
+                              type: 'void_payment',
+                              id: pay.id,
+                              title: `Void Payment #${pay.payment_number}`,
+                              description: `Are you sure you want to VOID payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
+                            })}
+                            disabled={isActionPending}
+                            className="px-3 py-2 min-h-[44px] bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/30 dark:hover:bg-red-900/50 rounded-lg text-xs font-semibold transition-colors"
+                          >
+                            Void
+                          </button>
+                          <button
+                            onClick={() => setConfirmModal({
+                              type: 'refund_payment',
+                              id: pay.id,
+                              title: `Refund Payment #${pay.payment_number}`,
+                              description: `Are you sure you want to REFUND payment #${pay.payment_number}? All associated invoice allocations will be recalculated.`,
+                            })}
+                            disabled={isActionPending}
+                            className="px-3 py-2 min-h-[44px] bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 rounded-lg text-xs font-semibold transition-colors"
+                          >
+                            Refund
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 );
               })}
