@@ -435,36 +435,12 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           </div>
         </div>
 
-        {/* Stage indicator — operator-readable */}
-        {!isEditing && (
-          <div className="flex items-center bg-zinc-100 dark:bg-zinc-800/80 p-1 rounded-xl self-start sm:self-auto border border-zinc-200/60 dark:border-zinc-700/60">
-            <button
-              type="button"
-              onClick={() => setWorkflowMode('smart_import')}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
-                workflowMode === 'smart_import'
-                  ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-sm'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-              }`}
-            >
-              <span>📄 Upload Documents</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setWorkflowMode('manual')}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                workflowMode === 'manual'
-                  ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-              }`}
-            >
-              ✍️ Enter Manually
-            </button>
-            {workflowMode === 'review' && (
-              <span className="px-3.5 py-1.5 text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded-lg">
-                ✓ Check Details
-              </span>
-            )}
+        {/* Stage indicator — shown during review */}
+        {!isEditing && workflowMode === 'review' && (
+          <div className="flex items-center self-start sm:self-auto">
+            <span className="px-3.5 py-1.5 text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded-lg">
+              ✓ Check Details
+            </span>
           </div>
         )}
       </div>

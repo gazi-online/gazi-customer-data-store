@@ -405,17 +405,17 @@ const globalsCss = fs.readFileSync(
   "utf8"
 );
 
-// 24. Main AI action text is "Analyze Documents with AI"
+// 24. Main action text is "Read Documents"
 assert(
-  dropzoneCode.includes("Analyze Documents with AI"),
-  "24. CTA button contains 'Analyze Documents with AI'"
+  dropzoneCode.includes("Read Documents"),
+  "24. CTA button contains 'Read Documents'"
 );
 
-// 25. Processing state text is "Analyzing documents..." and "Extracting structured customer information"
+// 25. Processing state text is "Reading documents..." and "Reading customer details"
 assert(
-  dropzoneCode.includes("Analyzing documents...") &&
-  dropzoneCode.includes("Extracting structured customer information"),
-  "25. Processing state includes 'Analyzing documents...' and helper 'Extracting structured customer information'"
+  dropzoneCode.includes("Reading documents...") &&
+  dropzoneCode.includes("Reading customer details"),
+  "25. Processing state includes 'Reading documents...' and helper 'Reading customer details'"
 );
 
 // 26. Marching ants animated dashed border in globals.css

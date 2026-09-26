@@ -275,7 +275,7 @@ export function PremiumDropzone({
               </span>
               <h4 className="text-xs sm:text-sm font-bold text-indigo-950 dark:text-indigo-200 uppercase tracking-wider flex items-center">
                 <Sparkles className="h-3.5 w-3.5 mr-1.5 text-indigo-500" />
-                Documents Ready for AI Analysis
+                Documents Ready
               </h4>
             </div>
 
@@ -419,11 +419,11 @@ export function PremiumDropzone({
               {isExtracting ? (
                 <span className="text-indigo-600 dark:text-indigo-400 font-medium flex items-center justify-center sm:justify-start">
                   <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin shrink-0" />
-                  Extracting structured customer information
+                  Reading customer details
                 </span>
               ) : (
                 <span>
-                  {stagedFiles.length} {stagedFiles.length === 1 ? "document" : "documents"} ready to extract customer data
+                  {stagedFiles.length} {stagedFiles.length === 1 ? "document" : "documents"} ready
                 </span>
               )}
             </div>
@@ -437,12 +437,12 @@ export function PremiumDropzone({
               {isExtracting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Analyzing documents...
+                  Reading documents...
                 </>
               ) : (
                 <>
                   <Bot className="w-4 h-4 mr-2" />
-                  Analyze Documents with AI
+                  Read Documents
                 </>
               )}
             </button>
