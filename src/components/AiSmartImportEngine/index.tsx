@@ -37,15 +37,17 @@ export interface SmartImportMetadata {
 }
 
 export interface AiSmartImportEngineProps {
-  onAutoFill: (data: Record<string, unknown>, meta?: SmartImportMetadata) => void;
+  onAutoFill: (data: Record<string, unknown>, meta?: SmartImportMetadata, sessionToken?: number) => void;
   onSwitchToManual?: () => void;
   autoAdvance?: boolean;
+  sessionToken?: number;
 }
 
 export function AiSmartImportEngine({ 
   onAutoFill, 
   onSwitchToManual, 
-  autoAdvance = true 
+  autoAdvance = true,
+  sessionToken
 }: AiSmartImportEngineProps) {
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [mergedResult, setMergedResult] = useState<MergedResult | null>(null);
@@ -308,7 +310,7 @@ export function AiSmartImportEngine({
           mergedResult: merged,
           nameSuggestion: nameSug,
           nativeNameCandidate
-        });
+        }, sessionToken);
         toast.success("Customer details ready for review");
       } else {
         toast.success(`Customer JSON parsed & ready for review`);
@@ -330,6 +332,7 @@ export function AiSmartImportEngine({
       return toast.error(sideError);
     }
 
+    const currentSession = sessionToken;
     setIsExtracting(true);
     const toastId = toast.loading("Reading documents & preparing details...");
 
@@ -342,6 +345,11 @@ export function AiSmartImportEngine({
       const res = await extractDataFromDocuments(formData) as 
         | { success: true; data: Record<string, unknown>; perfSummary?: ImportJob['perfSummary']; code?: string; warning?: string }
         | { success: false; error?: string; code?: string };
+
+      if (sessionToken !== undefined && currentSession !== undefined && sessionToken !== currentSession) {
+        return; // Session changed while extraction was running — discard!
+      }
+
       if (!res.success) {
         throw new Error(res.error || "Document extraction failed.");
       }
@@ -464,7 +472,7 @@ export function AiSmartImportEngine({
           candidatePhotoStoragePath: merged.data.profile_photo?.storage_path,
           nameSuggestion: nameSug,
           nativeNameCandidate
-        });
+        }, currentSession);
 
         if (res.warning) {
           toast.info(res.warning, { id: toastId });
@@ -498,7 +506,7 @@ export function AiSmartImportEngine({
 
 
   const handleConfirmReview = (finalData: Record<string, unknown>) => {
-    onAutoFill(finalData);
+    onAutoFill(finalData, undefined, sessionToken);
     toast.success("Form Auto-Filled Successfully");
   };
 

@@ -1,5 +1,42 @@
+import { CustomerFormData } from "@/types/customer";
+
 export type FieldOrigin = 'initial' | 'user' | 'import' | 'lookup';
 export type FieldOrigins = Record<string, FieldOrigin>;
+
+export const CANONICAL_EMPTY_CUSTOMER: CustomerFormData = {
+  customer_code: "",
+  first_name: "",
+  middle_name: "",
+  last_name: "",
+  phone: "",
+  whatsapp: "",
+  email: "",
+  date_of_birth: "",
+  gender: "",
+  father_name: "",
+  mother_name: "",
+  marital_status: "",
+  spouse_name: "",
+  aadhaar_number: "",
+  pan_number: "",
+  gst_number: "",
+  voter_id_number: "",
+  address: "",
+  city: "",
+  district: "",
+  state: "",
+  pincode: "",
+  post_office: "",
+  country: "India",
+  photo_url: undefined,
+  photo_source: undefined,
+  original_language_name: "",
+  status: "lead",
+};
+
+export function createCanonicalEmptyCustomer(): CustomerFormData {
+  return { ...CANONICAL_EMPTY_CUSTOMER };
+}
 
 export const VALID_FORM_FIELDS = new Set<string>([
   'customer_code',
@@ -431,4 +468,42 @@ export function checkLookupFreshness(
   if (currentReqId !== activeReqId) return false;
   const cleanLivePin = (livePin || '').replace(/\D/g, '').trim();
   return cleanLivePin === reqPin;
+}
+
+/**
+ * Resolves extraction payload for a fresh new customer intake session.
+ * Always resolves against CANONICAL_EMPTY_CUSTOMER to ensure no stale fields survive.
+ */
+export function resolveAutoFillPayloadForNewIntake(
+  incomingData: Record<string, unknown>
+): AutoFillResolutionResult & { nextFormValues: CustomerFormData } {
+  const emptyCustomer = createCanonicalEmptyCustomer();
+  const emptyOrigins = initializeFieldOrigins(emptyCustomer as unknown as Record<string, unknown>, false);
+
+  const resolution = resolveAutoFillPayload(
+    emptyCustomer as unknown as Record<string, unknown>,
+    incomingData,
+    emptyOrigins
+  );
+
+  const nextFormValues: CustomerFormData = {
+    ...emptyCustomer,
+    ...(resolution.fieldsToUpdate as unknown as Partial<CustomerFormData>),
+  };
+
+  return {
+    ...resolution,
+    nextFormValues,
+  };
+}
+
+/**
+ * Checks whether an asynchronous response corresponds to the active session generation.
+ */
+export function isSessionFresh(
+  resultSessionToken: number | undefined,
+  activeSessionToken: number
+): boolean {
+  if (resultSessionToken === undefined) return true;
+  return resultSessionToken === activeSessionToken;
 }

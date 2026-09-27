@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -17,7 +17,6 @@ import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { AiSmartImportEngine, SmartImportMetadata } from "../AiSmartImportEngine";
 import { IndiaPincodeProvider } from "@/lib/address/IndiaPincodeProvider";
-import { useRef, useMemo } from "react";
 import { constructCustomerCanonicalName } from "@/lib/names/NativeNameSuggestionProvider";
 import {
   FieldOrigins,
@@ -26,6 +25,9 @@ import {
   resolveAutoFillPayload,
   checkLookupFreshness,
   VALID_FORM_FIELDS,
+  CANONICAL_EMPTY_CUSTOMER,
+  createCanonicalEmptyCustomer,
+  resolveAutoFillPayloadForNewIntake,
 } from "./customerFormUpdatePolicy";
 
 const customerSchema = z.object({
@@ -80,6 +82,9 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   const [isFetchingBengali, setIsFetchingBengali] = useState(false);
   const [bengaliFetchFailed, setBengaliFetchFailed] = useState(false);
   const isEditing = !!initialData;
+  const sessionGenerationRef = useRef(1);
+  const isChangeDocumentsRef = useRef(false);
+  const [smartImportKey, setSmartImportKey] = useState(1);
 
   // UX Workflow state: 'smart_import' | 'manual' | 'review'
   const [workflowMode, setWorkflowMode] = useState<'smart_import' | 'manual' | 'review'>(
@@ -119,17 +124,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       photo_url: initialData.photo_url || undefined,
       photo_source: initialData.photo_source || undefined,
       original_language_name: initialData.original_language_name || "",
-    } : {
-      first_name: "",
-      middle_name: "",
-      last_name: "",
-      phone: "",
-      address: "",
-      country: "India",
-      status: "lead",
-      gender: "",
-      original_language_name: "",
-    };
+    } : createCanonicalEmptyCustomer();
   }, [initialData]);
 
   const fieldOriginsRef = useRef<FieldOrigins | null>(null);
@@ -137,10 +132,86 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     fieldOriginsRef.current = initializeFieldOrigins(defaultValues as unknown as Record<string, unknown>, isEditing);
   }
 
-  const { register, handleSubmit, setValue, watch, getValues, formState: { errors } } = useForm<CustomerFormData>({
+  const { register, handleSubmit, setValue, watch, getValues, reset, formState: { errors } } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues,
   });
+
+  const resetCustomerIntakeSession = useCallback(() => {
+    if (isEditing) return;
+
+    // 1. Advance session generation to invalidate any in-flight async extractions/lookups
+    sessionGenerationRef.current += 1;
+    lookupReqIdRef.current += 1;
+
+    // 2. Clear change-documents flag
+    isChangeDocumentsRef.current = false;
+
+    // 3. Reset React Hook Form to canonical empty defaults
+    reset(createCanonicalEmptyCustomer(), {
+      keepDefaultValues: false,
+      keepValues: false,
+      keepDirty: false,
+      keepTouched: false,
+      keepErrors: false,
+      keepIsSubmitted: false,
+      keepSubmitCount: false,
+    });
+
+    // 4. Reset field origins to clean unowned defaults
+    fieldOriginsRef.current = initializeFieldOrigins(
+      CANONICAL_EMPTY_CUSTOMER as unknown as Record<string, unknown>,
+      false
+    );
+
+    // 5. Reset workflow mode to smart_import
+    setWorkflowMode('smart_import');
+
+    // 6. Reset import metadata & AI applied flags
+    setImportMeta(null);
+    setAiDataApplied(false);
+    setDuplicateWarnings([]);
+
+    // 7. Reset native name & Bengali suggestion state
+    setNativeNameDismissed(false);
+    setBengaliSuggestions([]);
+    setSelectedSuggestion(null);
+    setSuggestionsDismissed(false);
+    setIsFetchingBengali(false);
+    setBengaliFetchFailed(false);
+
+    // 8. Reset photo state
+    setPreviewPhotoUrl(null);
+    setUploadingPhoto(false);
+
+    // 9. Reset address & PIN lookup state
+    setIsPincodeLoading(false);
+    setPincodeError(null);
+    setIsManualAddressEdit(false);
+    isManualAddressEditRef.current = false;
+    setPostOfficeOptions([]);
+    setLocalityOptions([]);
+    setPinRef(null);
+
+    // 10. Re-mount SmartImportEngine completely fresh
+    setSmartImportKey(prev => prev + 1);
+  }, [isEditing, reset]);
+
+  // Ensure browser back / bfcache restorations start from a fresh intake session
+  useEffect(() => {
+    if (isEditing) return;
+
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        resetCustomerIntakeSession();
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, [isEditing, resetCustomerIntakeSession]);
 
   const maritalStatus = watch("marital_status");
   const photoSource = watch("photo_source");
@@ -306,9 +377,14 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     setPreviewPhotoUrl(null);
   };
 
-  const fetchBengaliNameOptions = async (canonicalName: string, docCandidate?: string | null) => {
+  const fetchBengaliNameOptions = async (
+    canonicalName: string,
+    docCandidate?: string | null,
+    sessionToken?: number
+  ) => {
     const trimmed = canonicalName.trim();
     if (!trimmed) return;
+    const reqSession = sessionToken ?? sessionGenerationRef.current;
     setIsFetchingBengali(true);
     setBengaliFetchFailed(false);
     try {
@@ -321,6 +397,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         }),
       });
       const data = await res.json();
+      if (reqSession !== sessionGenerationRef.current) return;
       const sugs = (data.suggestions || []) as string[];
       if (sugs.length > 0) {
         setBengaliSuggestions(sugs);
@@ -332,64 +409,140 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         setBengaliFetchFailed(true);
       }
     } catch {
+      if (reqSession !== sessionGenerationRef.current) return;
       setBengaliSuggestions([]);
       setSelectedSuggestion(null);
       setBengaliFetchFailed(true);
     } finally {
-      setIsFetchingBengali(false);
+      if (reqSession === sessionGenerationRef.current) {
+        setIsFetchingBengali(false);
+      }
     }
   };
 
-  const handleAutoFill = (data: Record<string, unknown>, meta?: SmartImportMetadata) => {
-    const currentValues = getValues();
-    const origins = fieldOriginsRef.current!;
-
-    const {
-      fieldsToUpdate,
-      fieldOriginsToUpdate,
-      skippedNotice,
-    } = resolveAutoFillPayload(currentValues as unknown as Record<string, unknown>, data, origins);
-
-    for (const [field, value] of Object.entries(fieldsToUpdate)) {
-      setValue(field as keyof CustomerFormData, value as never, { shouldValidate: true, shouldDirty: true });
+  const handleAutoFill = (
+    data: Record<string, unknown>,
+    meta?: SmartImportMetadata,
+    sessionToken?: number
+  ) => {
+    // Stale async race check
+    if (sessionToken !== undefined && sessionToken !== sessionGenerationRef.current) {
+      return;
     }
 
-    for (const [field, origin] of Object.entries(fieldOriginsToUpdate)) {
-      origins[field] = origin;
-    }
+    const isChangeDoc = isChangeDocumentsRef.current;
+    isChangeDocumentsRef.current = false; // consume flag
 
-    // Set candidate photo storage path if provided
-    if (meta?.candidatePhotoStoragePath && !getValues("photo_source")) {
-      setValue("photo_source", meta.candidatePhotoStoragePath, { shouldValidate: true, shouldDirty: true });
-      origins.photo_source = "import";
-    }
+    if (isChangeDoc) {
+      // SAME-customer "Change Documents" flow:
+      // Preserves reviewed/manual fields per customerFormUpdatePolicy
+      const currentValues = getValues();
+      const origins = fieldOriginsRef.current!;
 
-    if (meta) {
-      setImportMeta(meta);
-      setNativeNameDismissed(false); // reset for fresh import
+      const {
+        fieldsToUpdate,
+        fieldOriginsToUpdate,
+        skippedNotice,
+      } = resolveAutoFillPayload(currentValues as unknown as Record<string, unknown>, data, origins);
+
+      for (const [field, value] of Object.entries(fieldsToUpdate)) {
+        setValue(field as keyof CustomerFormData, value as never, { shouldValidate: true, shouldDirty: true });
+      }
+
+      for (const [field, origin] of Object.entries(fieldOriginsToUpdate)) {
+        origins[field] = origin;
+      }
+
+      if (meta?.candidatePhotoStoragePath && !getValues("photo_source")) {
+        setValue("photo_source", meta.candidatePhotoStoragePath, { shouldValidate: true, shouldDirty: true });
+        origins.photo_source = "import";
+      }
+
+      if (meta) {
+        setImportMeta(meta);
+        setNativeNameDismissed(false);
+        setSuggestionsDismissed(false);
+      }
+
+      const canonicalCustomerName = constructCustomerCanonicalName({
+        first_name: (fieldsToUpdate.first_name || currentValues.first_name) as string | undefined,
+        middle_name: (fieldsToUpdate.middle_name || currentValues.middle_name) as string | undefined,
+        last_name: (fieldsToUpdate.last_name || currentValues.last_name) as string | undefined,
+        full_name: data.full_name as string | undefined,
+      });
+
+      if (canonicalCustomerName && !getValues("original_language_name")) {
+        const docCandidate = meta?.nativeNameCandidate?.value || null;
+        fetchBengaliNameOptions(canonicalCustomerName, docCandidate, sessionGenerationRef.current);
+      }
+
+      if (skippedNotice) {
+        toast.warning(skippedNotice);
+      }
+
+      setAiDataApplied(true);
+      setWorkflowMode("review");
+      toast.success("Details extracted — Please review and save customer.");
+    } else {
+      // NEW CUSTOMER INTAKE FLOW:
+      // Canonical reset before applying Customer B extracted values.
+      // EMPTY CUSTOMER -> Customer B extraction -> Check Customer Details
+      const {
+        nextFormValues,
+        fieldOriginsToUpdate,
+        skippedNotice,
+      } = resolveAutoFillPayloadForNewIntake(data);
+
+      if (meta?.candidatePhotoStoragePath) {
+        nextFormValues.photo_source = meta.candidatePhotoStoragePath;
+        fieldOriginsToUpdate.photo_source = "import";
+      }
+
+      reset(nextFormValues, {
+        keepDefaultValues: false,
+        keepValues: false,
+        keepDirty: false,
+        keepTouched: false,
+        keepErrors: false,
+        keepIsSubmitted: false,
+        keepSubmitCount: false,
+      });
+
+      fieldOriginsRef.current = {
+        ...initializeFieldOrigins(CANONICAL_EMPTY_CUSTOMER as unknown as Record<string, unknown>, false),
+        ...fieldOriginsToUpdate,
+      };
+
+      setPreviewPhotoUrl(null);
+      setBengaliSuggestions([]);
+      setSelectedSuggestion(null);
       setSuggestionsDismissed(false);
+      setNativeNameDismissed(false);
+
+      if (meta) {
+        setImportMeta(meta);
+      }
+
+      const canonicalCustomerName = constructCustomerCanonicalName({
+        first_name: nextFormValues.first_name,
+        middle_name: nextFormValues.middle_name,
+        last_name: nextFormValues.last_name,
+        full_name: data.full_name as string | undefined,
+      });
+
+      if (canonicalCustomerName && !nextFormValues.original_language_name) {
+        const docCandidate = meta?.nativeNameCandidate?.value || null;
+        fetchBengaliNameOptions(canonicalCustomerName, docCandidate, sessionGenerationRef.current);
+      }
+
+      if (skippedNotice) {
+        toast.warning(skippedNotice);
+      }
+
+      setAiDataApplied(true);
+      setWorkflowMode("review");
+      toast.success("Details extracted — Please review and save customer.");
     }
-
-    // Fetch Bengali suggestions strictly for the canonical customer name
-    const canonicalCustomerName = constructCustomerCanonicalName({
-      first_name: (fieldsToUpdate.first_name || currentValues.first_name) as string | undefined,
-      middle_name: (fieldsToUpdate.middle_name || currentValues.middle_name) as string | undefined,
-      last_name: (fieldsToUpdate.last_name || currentValues.last_name) as string | undefined,
-      full_name: data.full_name as string | undefined,
-    });
-
-    if (canonicalCustomerName && !getValues("original_language_name")) {
-      const docCandidate = meta?.nativeNameCandidate?.value || null;
-      fetchBengaliNameOptions(canonicalCustomerName, docCandidate);
-    }
-
-    if (skippedNotice) {
-      toast.warning(skippedNotice);
-    }
-
-    setAiDataApplied(true);
-    setWorkflowMode("review");
-    toast.success("Details extracted — Please review and save customer.");
   };
 
   const onSubmit = async (data: CustomerFormData) => {
@@ -441,6 +594,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         const result = await createCustomer(cleanedData);
         if (result.error) throw new Error(result.error);
         toast.success("Customer added successfully");
+        resetCustomerIntakeSession();
       }
       await queryClient.invalidateQueries({
         queryKey: queryKeys.customers.lists(DASHBOARD_MEMORY_SCOPE),
@@ -462,13 +616,13 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             type="button"
             onClick={() => {
               if (workflowMode === 'review') {
-                setWorkflowMode('smart_import');
+                resetCustomerIntakeSession();
               } else {
                 router.back();
               }
             }} 
             className="mr-3 p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
-            title={workflowMode === 'review' ? "Back to Document Upload" : "Go back"}
+            title={workflowMode === 'review' ? "Start New Customer" : "Go back"}
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -505,8 +659,13 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       {/* Smart Import Upload Stage */}
       {!isEditing && workflowMode === 'smart_import' && (
         <AiSmartImportEngine 
+          key={smartImportKey}
+          sessionToken={sessionGenerationRef.current}
           onAutoFill={handleAutoFill} 
-          onSwitchToManual={() => setWorkflowMode('manual')}
+          onSwitchToManual={() => {
+            resetCustomerIntakeSession();
+            setWorkflowMode('manual');
+          }}
           autoAdvance={true}
         />
       )}
@@ -535,13 +694,27 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
               </div>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => setWorkflowMode('smart_import')}
-            className="text-xs font-semibold text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 self-start sm:self-auto px-3.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-zinc-800 hover:bg-blue-50/50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
-          >
-            Change Documents
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              id="change-documents-btn"
+              onClick={() => {
+                isChangeDocumentsRef.current = true;
+                setWorkflowMode('smart_import');
+              }}
+              className="text-xs font-semibold text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 px-3.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-zinc-800 hover:bg-blue-50/50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs cursor-pointer"
+            >
+              Change Documents
+            </button>
+            <button
+              type="button"
+              id="start-new-customer-btn"
+              onClick={resetCustomerIntakeSession}
+              className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 px-3.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs cursor-pointer"
+            >
+              New Customer
+            </button>
+          </div>
         </div>
       )}
 
@@ -631,7 +804,10 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             </span>
             <button
               type="button"
-              onClick={() => setWorkflowMode('smart_import')}
+              onClick={() => {
+                resetCustomerIntakeSession();
+                setWorkflowMode('smart_import');
+              }}
               className="font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
             >
               ← Upload documents instead
