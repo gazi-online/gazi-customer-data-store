@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Bot, CheckCircle2, Copy, Sparkles, ChevronDown } from "lucide-react";
+import { Bot, CheckCircle2, Copy, Sparkles, ChevronDown, UserPlus } from "lucide-react";
 import { ImportJob, MergedResult, AiProvider, Conflict, ConflictField } from "./types";
 import { DataNormalizer } from "./DataNormalizer";
 import { MergeEngine } from "./MergeEngine";
@@ -511,16 +511,16 @@ export function AiSmartImportEngine({
   };
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xs overflow-hidden mb-6 transition-all">
+    <div className="bg-white dark:bg-zinc-900 border border-zinc-200/90 dark:border-zinc-800 rounded-2xl shadow-xs overflow-hidden mb-6 transition-all">
 
       {/* Reading Documents progress */}
       {isExtracting && (
-        <div className="px-6 py-4 bg-blue-50/50 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/40">
+        <div className="px-5 sm:px-6 py-3.5 bg-blue-50/60 dark:bg-blue-950/30 border-b border-blue-100 dark:border-blue-900/40 animate-in fade-in duration-200">
           <div className="flex items-center space-x-3">
             <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
-            <div className="flex-1">
-              <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">Reading Documents...</p>
-              <p className="text-[11px] text-blue-700 dark:text-blue-300">Identifying customer details from the uploaded files.</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-blue-950 dark:text-blue-200">Reading customer details...</p>
+              <p className="text-[11px] text-blue-700/90 dark:text-blue-300/90 truncate">GCDS is reading the documents and preparing the customer details for you.</p>
             </div>
           </div>
         </div>
@@ -528,7 +528,7 @@ export function AiSmartImportEngine({
 
       {/* Primary Document Upload Surface */}
       {inputMethod === 'file' && (
-        <div className="p-5 sm:p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           <PremiumDropzone
             stagedFiles={stagedFiles}
             onFilesAdded={handleFilesAdded}
@@ -543,22 +543,23 @@ export function AiSmartImportEngine({
           />
 
           {/* Secondary Action: Manual Entry & Progressive Disclosure */}
-          <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="pt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs border-t border-zinc-100 dark:border-zinc-800/80">
             {onSwitchToManual ? (
               <button
                 type="button"
                 onClick={onSwitchToManual}
-                className="font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 min-h-[36px]"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 font-semibold text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 transition-all shadow-2xs hover:border-zinc-300 dark:hover:border-zinc-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 min-h-[38px]"
               >
-                Enter details manually
+                <UserPlus className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
+                <span>Enter details manually</span>
               </button>
             ) : <div />}
 
-            <div className="flex flex-col items-center sm:items-end">
+            <div className="relative flex flex-col items-center sm:items-end">
               <button
                 type="button"
                 onClick={() => setShowMoreOptions(prev => !prev)}
-                className="text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                className="text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 font-medium"
                 aria-expanded={showMoreOptions}
               >
                 <span>More options</span>
@@ -566,17 +567,20 @@ export function AiSmartImportEngine({
               </button>
 
               {showMoreOptions && (
-                <div className="mt-1 animate-in fade-in duration-150">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInputMethod('json');
-                      setShowMoreOptions(false);
-                    }}
-                    className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 py-1 px-2 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-                  >
-                    Paste JSON data
-                  </button>
+                <div className="mt-1.5 sm:absolute sm:right-0 sm:top-full z-20 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-md p-1 min-w-[150px]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInputMethod('json');
+                        setShowMoreOptions(false);
+                      }}
+                      className="w-full text-left text-xs text-zinc-600 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 px-2.5 rounded-lg hover:bg-blue-50 dark:hover:bg-zinc-700/60 transition-colors font-medium flex items-center gap-1.5"
+                    >
+                      <Sparkles className="w-3 h-3 text-blue-500" />
+                      Paste JSON data
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

@@ -611,7 +611,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-150 space-y-6 pb-20 sm:pb-12">
       {/* Header and Step Context */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center">
+        <div className="flex items-center gap-3">
           <button 
             type="button"
             onClick={() => {
@@ -621,20 +621,21 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                 router.back();
               }
             }} 
-            className="mr-3 p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shrink-0"
             title={workflowMode === 'review' ? "Start New Customer" : "Go back"}
+            aria-label={workflowMode === 'review' ? "Start New Customer" : "Go back"}
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
               {isEditing
                 ? "Edit Customer"
                 : workflowMode === 'review'
                   ? "Check Customer Details"
                   : "Add New Customer"}
             </h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+            <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
               {isEditing
                 ? "Update customer details."
                 : workflowMode === 'review'
