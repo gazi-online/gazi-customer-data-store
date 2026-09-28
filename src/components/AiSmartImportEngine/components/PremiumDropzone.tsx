@@ -158,29 +158,29 @@ export function PremiumDropzone({
               className={
                 isDragOver
                   ? "text-blue-600 dark:text-blue-400 animate-marching-ants"
-                  : "text-zinc-200 dark:text-zinc-700/60 [stroke-dasharray:6,6]"
+                  : "text-zinc-200 dark:text-zinc-700/60 group-hover:text-blue-300 dark:group-hover:text-blue-800 transition-colors [stroke-dasharray:6,6]"
               }
             />
           </svg>
 
           {/* Inner Content */}
-          <div className="relative z-10 flex flex-col items-center justify-center pointer-events-none">
+          <div className="relative z-10 flex flex-col items-center justify-center">
             {/* Upload Icon Container */}
             <div
-              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center mb-3 sm:mb-3.5 transition-all duration-200 ${
+              className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center mb-2 sm:mb-2.5 transition-all duration-200 ${
                 isDragOver
                   ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 scale-105"
-                  : "bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-100/80 dark:border-blue-900/40"
+                  : "bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-100/80 dark:border-blue-900/40 group-hover:bg-blue-100/80 dark:group-hover:bg-blue-900/60 group-hover:scale-105"
               }`}
             >
-              <UploadCloud className="w-6 h-6" />
+              <UploadCloud className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
 
-            <h3 className="text-base sm:text-lg font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
+            <h3 className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight">
               {isDragOver ? "Drop documents here to upload" : "Upload customer documents"}
             </h3>
 
-            <p className="text-xs sm:text-sm font-medium text-zinc-600 dark:text-zinc-300 mt-1 max-w-md mx-auto">
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mt-1 max-w-md mx-auto">
               {isDragOver ? (
                 <span className="text-blue-600 dark:text-blue-400 font-semibold">
                   Release to stage documents
@@ -190,21 +190,8 @@ export function PremiumDropzone({
               )}
             </p>
 
-            <p className="text-[11px] sm:text-xs text-zinc-400 dark:text-zinc-500 mt-0.5 max-w-sm mx-auto">
-              We&apos;ll read the documents and prepare the customer details for you.
-            </p>
-
-            {/* Subtle workflow chip */}
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-100/80 dark:bg-zinc-800/60 border border-zinc-200/50 dark:border-zinc-700/50 text-[10px] font-medium text-zinc-500 dark:text-zinc-400 mt-2.5">
-              <span>Upload</span>
-              <span className="text-zinc-300 dark:text-zinc-600">→</span>
-              <span>Check details</span>
-              <span className="text-zinc-300 dark:text-zinc-600">→</span>
-              <span>Save</span>
-            </div>
-
             {/* Browse Files CTA */}
-            <div className="mt-4 pointer-events-auto">
+            <div className="mt-3.5">
               <button
                 type="button"
                 disabled={isExtracting || isAtLimit}
@@ -212,21 +199,21 @@ export function PremiumDropzone({
                   e.stopPropagation();
                   fileInputRef.current?.click();
                 }}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-98 rounded-xl shadow-xs hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 min-h-[40px] cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 px-5 h-[42px] text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] rounded-xl shadow-xs hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
+                <UploadCloud className="w-4 h-4" />
                 <span>Browse Files</span>
               </button>
             </div>
 
-            {/* Desktop Drag and drop helper */}
-            <p className="hidden sm:block text-xs text-zinc-400 dark:text-zinc-500 mt-2">
-              or drag &amp; drop files here
+            {/* Drag & drop or click helper */}
+            <p className="text-[11px] sm:text-xs text-zinc-400 dark:text-zinc-500 mt-2">
+              Drop files here or click to browse
             </p>
 
-            {/* Subtle format helper */}
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-2 sm:mt-1.5">
-              PDF, DOCX, XLSX, JPG, PNG, WEBP • Max 10 MB each
+            {/* File format helper */}
+            <p className="text-[10px] sm:text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">
+              PDF, DOCX, XLSX, JPG, PNG, WEBP · Max 10 MB
             </p>
           </div>
         </div>
@@ -248,7 +235,7 @@ export function PremiumDropzone({
               <button
                 type="button"
                 onClick={onDismissAllErrors}
-                className="text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 underline"
+                className="text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 underline cursor-pointer"
               >
                 Dismiss all
               </button>
@@ -271,7 +258,7 @@ export function PremiumDropzone({
               <button
                 type="button"
                 onClick={() => onDismissError(err.id)}
-                className="text-rose-400 hover:text-rose-700 dark:hover:text-rose-200 p-1 shrink-0 rounded transition-colors"
+                className="text-rose-400 hover:text-rose-700 dark:hover:text-rose-200 p-1 shrink-0 rounded transition-colors cursor-pointer"
                 title="Dismiss error"
                 aria-label={`Dismiss error for ${err.fileName}`}
               >
@@ -282,241 +269,211 @@ export function PremiumDropzone({
         </div>
       )}
 
-      {/* Staged File Cards Queue & Compact Add Strip */}
+      {/* Staged File Cards Queue & Document Review */}
       {stagedFiles.length > 0 && (
-        <div className="space-y-3">
-          {/* Compact Drop & Add Strip */}
-          <div
-            ref={dropzoneRef}
-            role="button"
-            tabIndex={0}
-            aria-label="Add more documents. Drag and drop files or press Enter to browse."
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onClick={() => {
-              if (!isExtracting && !isAtLimit) {
-                fileInputRef.current?.click();
-              }
-            }}
-            onKeyDown={handleDropzoneKeyDown}
-            className={`p-3 sm:p-3.5 rounded-xl border border-dashed transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-between gap-2.5 ${
-              isDragOver
-                ? "bg-blue-50/70 border-blue-500 dark:bg-blue-950/40"
-                : "bg-zinc-50/60 dark:bg-zinc-800/30 border-zinc-200 dark:border-zinc-700/60 hover:bg-blue-50/20 hover:border-blue-300 dark:hover:border-zinc-600"
-            }`}
-          >
-            <div className="flex items-center gap-2.5 text-xs text-zinc-600 dark:text-zinc-300">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                isDragOver
-                  ? "bg-blue-600 text-white"
-                  : "bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400"
-              }`}>
-                <UploadCloud className="w-4 h-4" />
-              </div>
-              <div className="text-center sm:text-left">
-                <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                  {isDragOver ? "Drop to add documents" : "Add more documents"}
-                </span>
-                <span className="hidden sm:inline text-zinc-400 dark:text-zinc-500 text-[11px] ml-1.5">
-                  — drag &amp; drop or click to browse (up to {UPLOAD_CONSTANTS.MAX_FILES_PER_BATCH} files)
-                </span>
-              </div>
+        <div
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          className={`relative rounded-2xl p-4 sm:p-5 border transition-all ${
+            isDragOver
+              ? "bg-blue-50/70 border-blue-500 dark:bg-blue-950/40"
+              : "bg-zinc-50/60 dark:bg-zinc-800/30 border-zinc-200/90 dark:border-zinc-700/60"
+          }`}
+        >
+          {/* Header Row: Documents added on left, + Add more and Clear all on right */}
+          <div className="flex items-center justify-between gap-3 mb-3.5">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-bold">
+                {stagedFiles.length}
+              </span>
+              <h4 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100 tracking-tight flex items-center">
+                <FileText className="h-4 w-4 mr-1.5 text-blue-600 dark:text-blue-400" />
+                Documents added
+              </h4>
             </div>
 
-            {!isAtLimit && !isExtracting && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  fileInputRef.current?.click();
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-800 border border-blue-200/80 dark:border-blue-900/60 rounded-lg hover:bg-blue-50 dark:hover:bg-zinc-700 transition-colors shadow-2xs shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Browse Files
-              </button>
-            )}
-          </div>
-
-          {/* Staged Cards Workspace Container */}
-          <div className="bg-zinc-50/60 dark:bg-zinc-800/40 rounded-xl p-4 sm:p-5 border border-zinc-200/80 dark:border-zinc-700/60">
-            {/* Header with counts and clear action */}
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <div className="flex items-center space-x-2">
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold">
-                  {stagedFiles.length}
-                </span>
-                <h4 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100 tracking-tight flex items-center">
-                  <FileText className="h-3.5 w-3.5 mr-1.5 text-blue-600 dark:text-blue-400" />
-                  Documents Ready
-                </h4>
-              </div>
-
+            <div className="flex items-center gap-2 shrink-0">
+              {!isAtLimit && !isExtracting && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-800 border border-blue-200/80 dark:border-blue-900/60 rounded-lg hover:bg-blue-50 dark:hover:bg-zinc-700 transition-colors shadow-2xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add more</span>
+                </button>
+              )}
               {!isExtracting && (
                 <button
                   type="button"
                   onClick={onClearAll}
-                  className="inline-flex items-center px-2 py-1 text-xs font-medium text-zinc-500 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-400 transition-colors"
+                  className="px-2 py-1 text-xs font-medium text-zinc-500 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-400 transition-colors cursor-pointer"
                 >
-                  Clear All
+                  Clear all
                 </button>
               )}
             </div>
+          </div>
 
-            {/* Grid of File Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {stagedFiles.map((sf) => {
-                const ext = sf.file.name.split('.').pop()?.toUpperCase() || 'FILE';
-                const sizeMb = (sf.file.size / (1024 * 1024)).toFixed(2);
-                const isOffice = isOfficeDocument(sf.file.name);
+          {/* Grid of File Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {stagedFiles.map((sf) => {
+              const ext = sf.file.name.split('.').pop()?.toUpperCase() || 'FILE';
+              const sizeMb = (sf.file.size / (1024 * 1024)).toFixed(2);
+              const isOffice = isOfficeDocument(sf.file.name);
 
-                return (
-                  <div
-                    key={sf.id}
-                    className="flex flex-col justify-between bg-white dark:bg-zinc-900 p-3.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 shadow-2xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-all gap-2"
-                  >
-                    {/* Top row: Thumbnail / Ext + Name / Size + Delete */}
-                    <div className="flex items-center justify-between gap-2 min-w-0">
-                      <div className="flex items-center space-x-3 min-w-0 truncate">
-                        {sf.previewUrl ? (
-                          <img
-                            src={sf.previewUrl}
-                            alt={sf.file.name}
-                            className="h-10 w-10 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 shadow-2xs"
-                          />
-                        ) : (
-                          <div className={`h-10 w-10 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 border ${
-                            ext === 'PDF'
-                              ? "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-900/40"
-                              : ext === 'DOCX'
-                                ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/40"
-                                : ext === 'XLSX'
-                                  ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40"
-                                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
-                          }`}>
-                            {ext === 'PDF' ? (
-                              <FileText className="w-5 h-5 text-rose-600 dark:text-rose-400" />
-                            ) : ext === 'DOCX' ? (
-                              <FileType className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                            ) : ext === 'XLSX' ? (
-                              <Sheet className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                            ) : (
-                              ext
-                            )}
-                          </div>
-                        )}
-                        <div className="min-w-0 truncate">
-                          <p
-                            className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate"
-                            title={sf.file.name}
-                          >
-                            {sf.file.name}
-                          </p>
-                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                            {ext} • {sizeMb} MB
-                          </p>
+              return (
+                <div
+                  key={sf.id}
+                  className="flex flex-col justify-between bg-white dark:bg-zinc-900 p-3 sm:p-3.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 shadow-2xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-all gap-2.5"
+                >
+                  {/* Top row: Thumbnail / Ext + Name / Size + Delete */}
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <div className="flex items-center space-x-3 min-w-0 truncate">
+                      {sf.previewUrl ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={sf.previewUrl}
+                          alt={sf.file.name}
+                          className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700 shrink-0 shadow-2xs"
+                        />
+                      ) : (
+                        <div className={`h-9 w-9 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 border ${
+                          ext === 'PDF'
+                            ? "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-900/40"
+                            : ext === 'DOCX'
+                              ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/40"
+                              : ext === 'XLSX'
+                                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40"
+                                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+                        }`}>
+                          {ext === 'PDF' ? (
+                            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-rose-600 dark:text-rose-400" />
+                          ) : ext === 'DOCX' ? (
+                            <FileType className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />
+                          ) : ext === 'XLSX' ? (
+                            <Sheet className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400" />
+                          ) : (
+                            ext
+                          )}
                         </div>
+                      )}
+                      <div className="min-w-0 truncate">
+                        <p
+                          className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate"
+                          title={sf.file.name}
+                        >
+                          {sf.file.name}
+                        </p>
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                          {ext} · {sizeMb} MB
+                        </p>
                       </div>
-
-                      <button
-                        type="button"
-                        disabled={isExtracting}
-                        onClick={() => onFileRemoved(sf.id)}
-                        className="p-1.5 text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0 disabled:opacity-40"
-                        title="Remove file"
-                        aria-label={`Remove ${sf.file.name}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
                     </div>
 
-                    {/* Bottom row: Compact Side Selector or Office Notice */}
-                    {isOffice ? (
-                      <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between gap-2">
-                        <span className="text-[10px] sm:text-[11px] text-zinc-500 dark:text-zinc-400 italic truncate" title="Office documents are processed as a single document.">
-                          Office documents are processed as a single document.
-                        </span>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-bold text-[10px] border border-blue-200/60 dark:border-blue-800/60 shrink-0">
-                          Single
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 flex items-center shrink-0">
-                          <Layers className="w-3 h-3 mr-1 text-blue-500" />
-                          Document Side:
-                        </span>
-
-                        {/* Compact Segmented Pill Controls */}
-                        <div
-                          role="radiogroup"
-                          aria-label={`Select side for ${sf.file.name}`}
-                          className="inline-flex bg-zinc-100 dark:bg-zinc-800/80 p-0.5 rounded-lg text-[10px] font-semibold"
-                        >
-                          {UPLOAD_CONSTANTS.SIDE_OPTIONS.map((side) => {
-                            const isSelected = sf.side === side;
-                            return (
-                              <button
-                                key={side}
-                                type="button"
-                                role="radio"
-                                aria-checked={isSelected}
-                                disabled={isExtracting}
-                                onClick={() => onSideChanged(sf.id, side)}
-                                className={`px-2 py-0.5 rounded-md transition-all ${
-                                  isSelected
-                                    ? "bg-white dark:bg-blue-600 text-blue-700 dark:text-white shadow-2xs font-bold"
-                                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-                                } disabled:opacity-50`}
-                              >
-                                {side}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    <button
+                      type="button"
+                      disabled={isExtracting}
+                      onClick={() => onFileRemoved(sf.id)}
+                      className="p-1.5 min-w-[32px] min-h-[32px] flex items-center justify-center text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0 disabled:opacity-40 cursor-pointer"
+                      title="Remove file"
+                      aria-label={`Remove ${sf.file.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
-                );
-              })}
-            </div>
 
-            {/* Bottom Extraction Action Bar */}
-            <div className="mt-4 pt-3.5 border-t border-zinc-200/80 dark:border-zinc-700/60 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="text-xs text-zinc-500 dark:text-zinc-400 text-center sm:text-left">
-                {isExtracting ? (
+                  {/* Bottom row: Compact Side Selector or Office Notice */}
+                  {isOffice ? (
+                    <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between gap-2">
+                      <span className="text-[10px] sm:text-[11px] text-zinc-500 dark:text-zinc-400 italic truncate" title="Office documents are processed as a single document.">
+                        Office documents are processed as a single document.
+                      </span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-bold text-[10px] border border-blue-200/60 dark:border-blue-800/60 shrink-0">
+                        Single
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 flex items-center shrink-0">
+                        <Layers className="w-3 h-3 mr-1 text-blue-500" />
+                        Document Side:
+                      </span>
+
+                      {/* Compact Segmented Pill Controls */}
+                      <div
+                        role="radiogroup"
+                        aria-label={`Select side for ${sf.file.name}`}
+                        className="inline-flex bg-zinc-100 dark:bg-zinc-800/80 p-0.5 rounded-lg text-[10px] font-semibold"
+                      >
+                        {UPLOAD_CONSTANTS.SIDE_OPTIONS.map((side) => {
+                          const isSelected = sf.side === side;
+                          return (
+                            <button
+                              key={side}
+                              type="button"
+                              role="radio"
+                              aria-checked={isSelected}
+                              disabled={isExtracting}
+                              onClick={() => onSideChanged(sf.id, side)}
+                              className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                                isSelected
+                                  ? "bg-white dark:bg-blue-600 text-blue-700 dark:text-white shadow-2xs font-bold"
+                                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                              } disabled:opacity-50`}
+                            >
+                              {side}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Bottom Extraction Action Bar */}
+          <div className="mt-4 pt-3.5 border-t border-zinc-200/80 dark:border-zinc-700/60 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="text-xs text-zinc-500 dark:text-zinc-400 text-center sm:text-left">
+              {isExtracting ? (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                   <span className="text-blue-600 dark:text-blue-400 font-semibold flex items-center justify-center sm:justify-start">
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin shrink-0" />
-                    Reading customer details...
+                    Reading documents...
                   </span>
-                ) : (
-                  <span className="font-medium">
-                    {stagedFiles.length} {stagedFiles.length === 1 ? "document" : "documents"} ready to read
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                    (Reading customer details)
                   </span>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={onAnalyze}
-                disabled={isExtracting || stagedFiles.length === 0}
-                className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl transition-all font-semibold text-sm shadow-xs flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                {isExtracting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Reading customer details...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="w-4 h-4 mr-2" />
-                    Read Documents
-                  </>
-                )}
-              </button>
+                </div>
+              ) : (
+                <span className="font-medium">
+                  {stagedFiles.length} {stagedFiles.length === 1 ? "document" : "documents"} ready to read
+                </span>
+              )}
             </div>
+
+            <button
+              type="button"
+              onClick={onAnalyze}
+              disabled={isExtracting || stagedFiles.length === 0}
+              className="w-full sm:w-auto px-6 h-[42px] bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white rounded-xl transition-all font-semibold text-xs sm:text-sm shadow-xs flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
+            >
+              {isExtracting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Reading customer details...
+                </>
+              ) : (
+                <>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Read Documents
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}
