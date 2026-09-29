@@ -32,6 +32,7 @@ function shouldShowTick(
   const touched = !!state.touchedFields[field];
   const hasError = !!state.errors[field];
   const value = (state.values[field] ?? "").trim();
+  if (field === "phone" && value === "+91-") return false;
   return touched && !hasError && value.length > 0;
 }
 
@@ -135,6 +136,12 @@ assert(tick(state(true, "700001", undefined)), "17. PIN valid → tick");
 // =========================================================================
 console.log("\n== SECTION 5: Optional invalid → no tick ==");
 
+assert(!tick(state(true, "+91-", "Use country code and number, e.g. +91-9876543210")),
+  "18a. Phone prefix +91- alone with error → no tick");
+assert(!shouldShowTick("phone", { touchedFields: { phone: true }, errors: {}, values: { phone: "+91-" } }),
+  "18b. Phone prefix +91- alone without error → no tick (convenience prefix guard)");
+assert(!shouldShowTick("phone", { touchedFields: {}, errors: {}, values: { phone: "+91-" } }),
+  "18c. Phone prefix +91- untouched → no tick");
 assert(!tick(state(true, "9876543210", "Use country code and number, e.g. +91-9876543210")),
   "18. Phone invalid (no country code) → no tick");
 assert(!tick(state(true, "12345678901", "Aadhaar number must contain 12 digits")),
@@ -225,7 +232,7 @@ console.log("\n== SECTION 10: Mobile layout logic ==");
 const freshForm = {
   touchedFields: {} as Record<string, boolean>,
   errors: {} as Record<string, { message: string }>,
-  values: {} as Record<string, string>,
+  values: { phone: "+91-" } as Record<string, string>,
 };
 const fields = ["first_name","last_name","phone","address","pincode","email","aadhaar_number","pan_number","gst_number","voter_id_number","whatsapp","father_name","mother_name","spouse_name","original_language_name"];
 let anyTickOnFreshForm = false;

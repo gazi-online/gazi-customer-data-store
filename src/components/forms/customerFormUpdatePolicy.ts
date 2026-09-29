@@ -3,12 +3,14 @@ import { CustomerFormData } from "@/types/customer";
 export type FieldOrigin = 'initial' | 'user' | 'import' | 'lookup';
 export type FieldOrigins = Record<string, FieldOrigin>;
 
+export const DEFAULT_PHONE_PREFIX = "+91-";
+
 export const CANONICAL_EMPTY_CUSTOMER: CustomerFormData = {
   customer_code: "",
   first_name: "",
   middle_name: "",
   last_name: "",
-  phone: "",
+  phone: DEFAULT_PHONE_PREFIX,
   whatsapp: "",
   email: "",
   date_of_birth: "",
@@ -130,9 +132,12 @@ export function canImportOverwriteField(
     return false;
   }
 
-  // IMPORTANT PHONE CORRECTION: Any existing non-empty phone remains protected regardless of origin.
-  if (field === 'phone' && currentVal && String(currentVal).trim().length > 0) {
-    return false;
+  // IMPORTANT PHONE CORRECTION: Any existing non-empty phone (that is not merely the default prefix "+91-") remains protected regardless of origin.
+  if (field === 'phone' && currentVal) {
+    const trimmed = String(currentVal).trim();
+    if (trimmed.length > 0 && trimmed !== DEFAULT_PHONE_PREFIX) {
+      return false;
+    }
   }
 
   // Manual values and deliberate clears ("") are strictly protected
@@ -419,21 +424,21 @@ export function resolveAutoFillPayload(
   const isWhatsappEmpty = postResolutionWhatsapp.length === 0;
 
   // Determine final active primary phone:
-  // ANY existing non-empty phone is protected regardless of origin.
+  // ANY existing non-empty phone (excluding default prefix "+91-") is protected regardless of origin.
   // A rejected incoming phone MUST NOT influence finalPrimaryPhone.
   const currentPhone = currentValues.phone ? String(currentValues.phone).trim() : '';
   let finalPrimaryPhone = '';
 
-  if (currentPhone.length > 0) {
+  if (currentPhone.length > 0 && currentPhone !== DEFAULT_PHONE_PREFIX) {
     finalPrimaryPhone = currentPhone;
   } else if (phoneWasAccepted && fieldsToUpdate.phone) {
     finalPrimaryPhone = String(fieldsToUpdate.phone).trim();
   }
 
   // Derive WhatsApp ONLY when post-resolution WhatsApp remains empty,
-  // final primary phone exists, and WhatsApp ownership permits the write (e.g. not user-cleared).
+  // final primary phone exists (and is not just the default prefix), and WhatsApp ownership permits the write (e.g. not user-cleared).
   let shouldLinkWhatsapp = false;
-  if (isWhatsappEmpty && finalPrimaryPhone.length > 0) {
+  if (isWhatsappEmpty && finalPrimaryPhone.length > 0 && finalPrimaryPhone !== DEFAULT_PHONE_PREFIX) {
     const canDeriveWhatsapp = canImportOverwriteField(
       'whatsapp',
       finalPrimaryPhone,

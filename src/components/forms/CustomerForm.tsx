@@ -28,6 +28,7 @@ import {
   CANONICAL_EMPTY_CUSTOMER,
   createCanonicalEmptyCustomer,
   resolveAutoFillPayloadForNewIntake,
+  DEFAULT_PHONE_PREFIX,
 } from "./customerFormUpdatePolicy";
 
 // ---------------------------------------------------------------------------
@@ -1462,7 +1463,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                   }`}
                   placeholder="e.g. +91-9876543210"
                 />
-                <ValidFieldTick show={!!touchedFields.phone && !errors.phone && !!getValues("phone")?.trim()} />
+                <ValidFieldTick show={!!touchedFields.phone && !errors.phone && !!getValues("phone")?.trim() && getValues("phone")?.trim() !== DEFAULT_PHONE_PREFIX} />
               </div>
               {errors.phone && <p id="phone-error" className="text-sm text-red-500">{errors.phone.message}</p>}
             </div>

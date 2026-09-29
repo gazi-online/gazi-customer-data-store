@@ -1,4 +1,4 @@
-﻿/**
+/**
  * REGRESSION TEST SUITE: CUSTOMER DETAILS VALIDATION
  *
  * Covers the strengthened customerSchema validation rules introduced in
@@ -133,7 +133,7 @@ console.log("\n== SECTION 4: Phone validation ==");
 for (const ph of ["+91-9876543210","+1-4155552671","+44-7700900999","+880-1712345678"]) {
   assert(parse({ ...BASE, phone: ph }).success, "Valid phone: " + ph);
 }
-for (const ph of ["9876543210","+919876543210","+91 9876543210","+91-987","91-9876543210"]) {
+for (const ph of ["+91-", "9876543210", "+919876543210", "+91 9876543210", "+91-987", "91-9876543210"]) {
   const r = parse({ ...BASE, phone: ph });
   assert(!r.success, "Invalid phone rejected: " + ph);
   if (!r.success) {
@@ -247,6 +247,12 @@ console.log("\n== SECTION 12: Add Customer canonical empty blocked ==");
   assert(failing.includes("last_name"), "last_name in failing fields");
   assert(failing.includes("phone"), "phone in failing fields");
   assert(failing.includes("address"), "address in failing fields");
+  const emptyWithPrefix: Record<string, unknown> = { ...empty, phone: "+91-" };
+  const r2 = parse(emptyWithPrefix);
+  assert(!r2.success, "Canonical empty customer with +91- prefix blocked — save correctly prevented");
+  const failing2 = r2.error?.issues.map(i => i.path[0]) ?? [];
+  assert(failing2.includes("phone"), "phone with +91- prefix alone is in failing fields");
+  assert(failing2.includes("address"), "address in failing fields for emptyWithPrefix");
 }
 
 // ---- S13: Edit Customer — historical records openable ----

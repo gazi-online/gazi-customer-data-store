@@ -136,7 +136,8 @@ const customerB_Extracted = {
   const { nextFormValues } = resolveAutoFillPayloadForNewIntake(customerB_Extracted);
   assert(nextFormValues.email === "", "7a: Customer B email is strictly empty");
   assert(nextFormValues.email !== customerA_Extracted.email, "7b: Customer A email does not survive");
-  assert(nextFormValues.phone === "", "7c: Customer B phone is empty when not in B doc");
+  assert(nextFormValues.phone === "+91-", "7c: Customer B phone resets to '+91-' default when not in B doc");
+  assert(nextFormValues.phone !== customerA_Extracted.phone, "7c2: Customer A phone does not survive into B");
   assert(nextFormValues.whatsapp === "", "7d: Customer B whatsapp is empty when not in B doc");
 }
 
@@ -282,7 +283,8 @@ const customerB_Extracted = {
   assert(nextFormValues.first_name === "Salma", "18a: Customer B first name set");
   assert(nextFormValues.email === "", "18b: Manual A email does not leak into B");
   assert(nextFormValues.pan_number === "", "18c: Manual A PAN does not leak into B");
-  assert(nextFormValues.phone === "", "18d: Manual A phone does not leak into B");
+  assert(nextFormValues.phone === "+91-", "18d: Customer B phone resets to '+91-' default");
+  assert(nextFormValues.phone !== manualFormA.phone, "18d2: Manual A phone does not leak into B");
 }
 
 // --- 19. Smart Import A → manual B clean ---
@@ -304,6 +306,7 @@ const customerB_Extracted = {
   assert(manualFormB.original_language_name === "", "19e: Manual B native name is empty");
   assert(manualFormB.status === "lead", "19f: Manual B status defaults to 'lead'");
   assert(manualFormB.country === "India", "19g: Manual B country defaults to 'India'");
+  assert(manualFormB.phone === "+91-", "19h: Manual B phone defaults to '+91-'");
 }
 
 // --- 20. Smart Import A → Smart Import B clean ---
@@ -332,6 +335,7 @@ const customerB_Extracted = {
 
   assert(freshIntakeCustomer.first_name === "", "21b: In-memory customer first_name reset");
   assert(freshIntakeCustomer.pan_number === "", "21c: In-memory customer PAN reset");
+  assert(freshIntakeCustomer.phone === "+91-", "21e: In-memory customer phone reset to '+91-'");
   assert(Object.keys(freshOrigins).length === 0, "21d: In-memory field origins reset to empty");
 }
 
