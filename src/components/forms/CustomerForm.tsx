@@ -30,37 +30,180 @@ import {
   resolveAutoFillPayloadForNewIntake,
 } from "./customerFormUpdatePolicy";
 
+// ---------------------------------------------------------------------------
+// CUSTOMER VALIDATION SCHEMA
+// Field-level rules with operator-friendly error messages.
+// Required fields: first_name, last_name, phone, address, status
+// Optional fields are only validated when a value is actually provided.
+// ---------------------------------------------------------------------------
+
+/** Canonical phone rule: +<code>-<digits>  e.g. +91-9876543210 */
+const PHONE_REGEX = /^\+[1-9]\d{0,3}-[0-9]{4,15}$/;
+
+/** Canonical PAN rule: 5 letters, 4 digits, 1 letter — e.g. ABCDE1234F */
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+
+/** EPIC / Voter ID — allow 3-4 letters + 6-7 digits (modern format) or any non-empty trimmed value per existing app acceptance */
+const EPIC_REGEX = /^[A-Z]{3,4}[0-9]{6,7}$/;
+
+/** GST — 15-char Indian GST format */
+const GST_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
+/** Today's ISO date string for DOB future-date check */
+function todayISO(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
 const customerSchema = z.object({
+  // ── Optional utility field ──────────────────────────────────────────────
   customer_code: z.string().optional().or(z.literal("")),
-  first_name: z.string().min(1, "First name is required"),
+
+  // ── Required name fields ────────────────────────────────────────────────
+  first_name: z
+    .string()
+    .transform(v => v.trim())
+    .pipe(z.string().min(1, "First name is required")),
+
   middle_name: z.string().optional().or(z.literal("")),
-  last_name: z.string().min(1, "Last name is required"),
-  phone: z.string().min(1, "Phone number is required"),
-  whatsapp: z.string().optional().or(z.literal("")),
-  email: z.string().email("Invalid email").optional().or(z.literal("")),
-  date_of_birth: z.string().optional().or(z.literal("")),
+
+  last_name: z
+    .string()
+    .transform(v => v.trim())
+    .pipe(z.string().min(1, "Last name is required")),
+
+  // ── Required contact ────────────────────────────────────────────────────
+  phone: z
+    .string()
+    .transform(v => v.trim())
+    .pipe(
+      z
+        .string()
+        .min(1, "Phone number is required")
+        .regex(PHONE_REGEX, "Use country code and number, e.g. +91-9876543210")
+    ),
+
+  // ── Optional contact ────────────────────────────────────────────────────
+  whatsapp: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .transform(v => (v ? v.trim() : v))
+    .refine(
+      v => !v || v === "" || PHONE_REGEX.test(v),
+      { message: "Use country code and number, e.g. +91-9876543210" }
+    ),
+
+  email: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .refine(
+      v => !v || v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()),
+      { message: "Enter a valid email address" }
+    ),
+
+  // ── Date of birth ────────────────────────────────────────────────────────
+  date_of_birth: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .refine(
+      v => {
+        if (!v || v === "") return true;
+        // Must be a valid calendar date and not in the future
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+        const d = new Date(v);
+        if (isNaN(d.getTime())) return false;
+        return v <= todayISO();
+      },
+      { message: "Date of birth must be a valid past date" }
+    ),
+
   gender: z.enum(["male", "female", "other", ""]).optional(),
+
+  // ── Optional relationship fields (no format restriction) ─────────────────
   father_name: z.string().optional().or(z.literal("")),
   mother_name: z.string().optional().or(z.literal("")),
   marital_status: z.string().optional().or(z.literal("")),
   spouse_name: z.string().optional().or(z.literal("")),
-  
-  aadhaar_number: z.string().optional().or(z.literal("")),
-  pan_number: z.string().optional().or(z.literal("")),
-  gst_number: z.string().optional().or(z.literal("")),
-  voter_id_number: z.string().optional().or(z.literal("")),
-  
-  address: z.string().min(1, "Address is required"),
+
+  // ── Identity / Tax IDs (all optional; validated when non-empty) ──────────
+  aadhaar_number: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .refine(
+      v => {
+        if (!v || v === "") return true;
+        const digits = v.replace(/[\s-]/g, "");
+        return /^[0-9]{12}$/.test(digits);
+      },
+      { message: "Aadhaar number must contain 12 digits" }
+    ),
+
+  pan_number: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .transform(v => (v ? v.trim().toUpperCase() : v))
+    .refine(
+      v => !v || v === "" || PAN_REGEX.test(v),
+      { message: "Enter a valid PAN, e.g. ABCDE1234F" }
+    ),
+
+  gst_number: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .transform(v => (v ? v.trim().toUpperCase() : v))
+    .refine(
+      v => !v || v === "" || GST_REGEX.test(v),
+      { message: "Enter a valid 15-character GST number, e.g. 22AAAAA0000A1Z5" }
+    ),
+
+  voter_id_number: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .transform(v => (v ? v.trim().toUpperCase() : v))
+    .refine(
+      v => !v || v === "" || EPIC_REGEX.test(v),
+      { message: "Enter a valid Voter ID / EPIC number, e.g. ABC1234567" }
+    ),
+
+  // ── Required address ─────────────────────────────────────────────────────
+  address: z
+    .string()
+    .transform(v => v.trim())
+    .pipe(z.string().min(1, "Address is required")),
+
   city: z.string().optional().or(z.literal("")),
   district: z.string().optional().or(z.literal("")),
   state: z.string().optional().or(z.literal("")),
-  pincode: z.string().optional().or(z.literal("")),
+
+  // ── PIN code ─────────────────────────────────────────────────────────────
+  pincode: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .refine(
+      v => {
+        if (!v || v === "") return true;
+        const digits = v.replace(/\D/g, "");
+        return digits.length === 6;
+      },
+      { message: "PIN code must contain 6 digits" }
+    ),
+
   post_office: z.string().optional().or(z.literal("")),
   country: z.string().optional().or(z.literal("")),
   photo_url: z.string().optional(),
   photo_source: z.string().optional(),
+
+  // ── Native language name — unrestricted (supports all scripts) ───────────
   original_language_name: z.string().optional().or(z.literal("")),
-  
+
+  // ── System ───────────────────────────────────────────────────────────────
   status: z.enum(["active", "inactive", "lead"]),
 });
 
@@ -132,10 +275,32 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     fieldOriginsRef.current = initializeFieldOrigins(defaultValues as unknown as Record<string, unknown>, isEditing);
   }
 
+  const formRef = useRef<HTMLFormElement>(null);
+
   const { register, handleSubmit, setValue, watch, getValues, reset, formState: { errors } } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues,
+    mode: 'onBlur',       // validate on blur; re-validate on change once field is touched
+    reValidateMode: 'onChange',
   });
+
+  /**
+   * Called when handleSubmit finds validation errors.
+   * Scrolls to + focuses the first invalid field and shows ONE toast.
+   */
+  const onInvalidSubmit = useCallback(() => {
+    toast.error("Please check the highlighted fields.", { id: "validation-error" });
+    // Defer to let the DOM reflect aria-invalid before querying
+    setTimeout(() => {
+      const form = formRef.current;
+      if (!form) return;
+      const firstInvalid = form.querySelector<HTMLElement>('[aria-invalid="true"]');
+      if (firstInvalid) {
+        firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstInvalid.focus({ preventScroll: true });
+      }
+    }, 50);
+  }, []);
 
   const resetCustomerIntakeSession = useCallback(() => {
     if (isEditing) return;
@@ -781,7 +946,8 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       {(isEditing || workflowMode === 'manual' || workflowMode === 'review') && (
 
       <form
-        onSubmit={handleSubmit(onSubmit)}
+        ref={formRef}
+        onSubmit={handleSubmit(onSubmit, onInvalidSubmit)}
         onInput={(e) => {
           const target = e.target as unknown as { name?: string };
           if (target?.name && VALID_FORM_FIELDS.has(target.name) && fieldOriginsRef.current) {
@@ -795,6 +961,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           }
         }}
         className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-8 shadow-sm space-y-8 relative"
+        noValidate
       >
         
         {/* Secondary path return to upload */}
@@ -856,25 +1023,57 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             {/* Customer Code — full-width on its own row so names stand out */}
             <div className="space-y-2 md:col-span-3 md:max-w-xs">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Customer Code <span className="text-xs font-normal text-zinc-400">(optional)</span></label>
-              <input {...register("customer_code")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. CUST-001" />
+              <input
+                {...register("customer_code")}
+                className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow"
+                placeholder="e.g. CUST-001"
+              />
             </div>
 
             {/* Name trio — clearly grouped, equal columns on desktop */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">First Name <span className="text-red-500">*</span></label>
-              <input {...register("first_name")} autoFocus={!isEditing} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Rahul" />
-              {errors.first_name && <p className="text-sm text-red-500">{errors.first_name.message}</p>}
+              <label htmlFor="first_name" className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">First Name <span className="text-red-500" aria-hidden="true">*</span></label>
+              <input
+                id="first_name"
+                {...register("first_name")}
+                autoFocus={!isEditing}
+                aria-invalid={!!errors.first_name}
+                aria-describedby={errors.first_name ? "first_name-error" : undefined}
+                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
+                  errors.first_name
+                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                }`}
+                placeholder="e.g. Rahul"
+              />
+              {errors.first_name && <p id="first_name-error" className="text-sm text-red-500">{errors.first_name.message}</p>}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Middle Name <span className="text-xs font-normal text-zinc-400">(optional)</span></label>
-              <input {...register("middle_name")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Kumar" />
+              <label htmlFor="middle_name" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Middle Name <span className="text-xs font-normal text-zinc-400">(optional)</span></label>
+              <input
+                id="middle_name"
+                {...register("middle_name")}
+                className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow"
+                placeholder="e.g. Kumar"
+              />
             </div>
             
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Last Name <span className="text-red-500">*</span></label>
-              <input {...register("last_name")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Sharma" />
-              {errors.last_name && <p className="text-sm text-red-500">{errors.last_name.message}</p>}
+              <label htmlFor="last_name" className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Last Name <span className="text-red-500" aria-hidden="true">*</span></label>
+              <input
+                id="last_name"
+                {...register("last_name")}
+                aria-invalid={!!errors.last_name}
+                aria-describedby={errors.last_name ? "last_name-error" : undefined}
+                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
+                  errors.last_name
+                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                }`}
+                placeholder="e.g. Sharma"
+              />
+              {errors.last_name && <p id="last_name-error" className="text-sm text-red-500">{errors.last_name.message}</p>}
             </div>
 
             {/* Native / Bengali name — full-width row, clearly labeled */}
@@ -1035,8 +1234,21 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
             {/* Date of birth and gender — secondary row */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Date of Birth</label>
-              <input {...register("date_of_birth")} type="date" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" />
+              <label htmlFor="date_of_birth" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Date of Birth</label>
+              <input
+                id="date_of_birth"
+                {...register("date_of_birth")}
+                type="date"
+                max={new Date().toISOString().split('T')[0]}
+                aria-invalid={!!errors.date_of_birth}
+                aria-describedby={errors.date_of_birth ? "date_of_birth-error" : undefined}
+                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
+                  errors.date_of_birth
+                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                }`}
+              />
+              {errors.date_of_birth && <p id="date_of_birth-error" className="text-sm text-red-500">{errors.date_of_birth.message}</p>}
             </div>
 
             <div className="space-y-2">
@@ -1086,23 +1298,72 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-2">Identity & Tax Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Aadhaar Number</label>
-              <input {...register("aadhaar_number")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. 1234 5678 9012" />
+              <label htmlFor="aadhaar_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Aadhaar Number</label>
+              <input
+                id="aadhaar_number"
+                {...register("aadhaar_number")}
+                inputMode="numeric"
+                aria-invalid={!!errors.aadhaar_number}
+                aria-describedby={errors.aadhaar_number ? "aadhaar-error" : undefined}
+                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono ${
+                  errors.aadhaar_number
+                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                }`}
+                placeholder="e.g. 1234 5678 9012"
+              />
+              {errors.aadhaar_number && <p id="aadhaar-error" className="text-sm text-red-500">{errors.aadhaar_number.message}</p>}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">PAN Number</label>
-              <input {...register("pan_number")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow uppercase" placeholder="e.g. ABCDE1234F" />
+              <label htmlFor="pan_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">PAN Number</label>
+              <input
+                id="pan_number"
+                {...register("pan_number")}
+                aria-invalid={!!errors.pan_number}
+                aria-describedby={errors.pan_number ? "pan-error" : undefined}
+                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow uppercase font-mono ${
+                  errors.pan_number
+                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                }`}
+                placeholder="e.g. ABCDE1234F"
+              />
+              {errors.pan_number && <p id="pan-error" className="text-sm text-red-500">{errors.pan_number.message}</p>}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">GST Number</label>
-              <input {...register("gst_number")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow uppercase" placeholder="e.g. 22AAAAA0000A1Z5" />
+              <label htmlFor="gst_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">GST Number</label>
+              <input
+                id="gst_number"
+                {...register("gst_number")}
+                aria-invalid={!!errors.gst_number}
+                aria-describedby={errors.gst_number ? "gst-error" : undefined}
+                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow uppercase font-mono ${
+                  errors.gst_number
+                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                }`}
+                placeholder="e.g. 22AAAAA0000A1Z5"
+              />
+              {errors.gst_number && <p id="gst-error" className="text-sm text-red-500">{errors.gst_number.message}</p>}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Voter ID / EPIC Number</label>
-              <input {...register("voter_id_number")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow uppercase" placeholder="e.g. ABC1234567" />
+              <label htmlFor="voter_id_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Voter ID / EPIC Number</label>
+              <input
+                id="voter_id_number"
+                {...register("voter_id_number")}
+                aria-invalid={!!errors.voter_id_number}
+                aria-describedby={errors.voter_id_number ? "voter-error" : undefined}
+                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow uppercase font-mono ${
+                  errors.voter_id_number
+                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                }`}
+                placeholder="e.g. ABC1234567"
+              />
+              {errors.voter_id_number && <p id="voter-error" className="text-sm text-red-500">{errors.voter_id_number.message}</p>}
             </div>
           </div>
         </div>
@@ -1112,20 +1373,61 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-2">Contact Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Phone Number <span className="text-red-500">*</span></label>
-              <input {...register("phone")} type="tel" inputMode="tel" autoComplete="tel" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow font-mono" placeholder="e.g. +91 98765 43210" />
-              {errors.phone && <p className="text-sm text-red-500">{errors.phone.message}</p>}
+              <label htmlFor="phone" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Phone Number <span className="text-red-500" aria-hidden="true">*</span></label>
+              <input
+                id="phone"
+                {...register("phone")}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                aria-invalid={!!errors.phone}
+                aria-describedby={errors.phone ? "phone-error" : undefined}
+                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono ${
+                  errors.phone
+                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                }`}
+                placeholder="e.g. +91-9876543210"
+              />
+              {errors.phone && <p id="phone-error" className="text-sm text-red-500">{errors.phone.message}</p>}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">WhatsApp</label>
-              <input {...register("whatsapp")} type="tel" inputMode="tel" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow font-mono" placeholder="e.g. +91 98765 43210" />
+              <label htmlFor="whatsapp" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">WhatsApp</label>
+              <input
+                id="whatsapp"
+                {...register("whatsapp")}
+                type="tel"
+                inputMode="tel"
+                aria-invalid={!!errors.whatsapp}
+                aria-describedby={errors.whatsapp ? "whatsapp-error" : undefined}
+                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono ${
+                  errors.whatsapp
+                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                }`}
+                placeholder="e.g. +91-9876543210"
+              />
+              {errors.whatsapp && <p id="whatsapp-error" className="text-sm text-red-500">{errors.whatsapp.message}</p>}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Email Address</label>
-              <input {...register("email")} type="email" autoComplete="email" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. rahul@example.com" />
-              {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
+              <label htmlFor="email" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Email Address</label>
+              <input
+                id="email"
+                {...register("email")}
+                type="email"
+                autoComplete="email"
+                aria-invalid={!!errors.email}
+                aria-describedby={errors.email ? "email-error" : undefined}
+                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
+                  errors.email
+                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                }`}
+                placeholder="e.g. rahul@example.com"
+              />
+              {errors.email && <p id="email-error" className="text-sm text-red-500">{errors.email.message}</p>}
             </div>
           </div>
         </div>
@@ -1147,18 +1449,45 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2 md:col-span-3">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Full Address <span className="text-red-500">*</span></label>
-              <textarea {...register("address")} rows={2} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="House / Flat No., Road, Landmark, Village details" />
-              {errors.address && <p className="text-sm text-red-500">{errors.address.message}</p>}
+              <label htmlFor="address" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Full Address <span className="text-red-500" aria-hidden="true">*</span></label>
+              <textarea
+                id="address"
+                {...register("address")}
+                rows={2}
+                aria-invalid={!!errors.address}
+                aria-describedby={errors.address ? "address-error" : undefined}
+                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
+                  errors.address
+                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                }`}
+                placeholder="House / Flat No., Road, Landmark, Village details"
+              />
+              {errors.address && <p id="address-error" className="text-sm text-red-500">{errors.address.message}</p>}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
+              <label htmlFor="pincode" className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
                 <span>Pincode</span>
                 {isPincodeLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />}
               </label>
-              <input {...register("pincode")} maxLength={6} inputMode="numeric" autoComplete="postal-code" className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow font-mono" placeholder="e.g. 700001" />
-              {pincodeError && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{pincodeError}</p>}
+              <input
+                id="pincode"
+                {...register("pincode")}
+                maxLength={6}
+                inputMode="numeric"
+                autoComplete="postal-code"
+                aria-invalid={!!errors.pincode}
+                aria-describedby={errors.pincode ? "pincode-error" : undefined}
+                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono ${
+                  errors.pincode
+                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                }`}
+                placeholder="e.g. 700001"
+              />
+              {errors.pincode && <p id="pincode-error" className="text-sm text-red-500">{errors.pincode.message}</p>}
+              {!errors.pincode && pincodeError && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{pincodeError}</p>}
             </div>
 
             <div className="space-y-2">
@@ -1275,7 +1604,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           </button>
           <button
             type="button"
-            onClick={handleSubmit(onSubmit)}
+            onClick={handleSubmit(onSubmit, onInvalidSubmit)}
             disabled={isLoading}
             className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-xs flex items-center justify-center gap-2 transition-all"
           >
