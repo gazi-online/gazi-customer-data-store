@@ -277,12 +277,48 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
   const formRef = useRef<HTMLFormElement>(null);
 
-  const { register, handleSubmit, setValue, watch, getValues, reset, formState: { errors } } = useForm<CustomerFormData>({
+  const { register, handleSubmit, setValue, watch, getValues, reset, formState: { errors, touchedFields } } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues,
     mode: 'onBlur',       // validate on blur; re-validate on change once field is touched
     reValidateMode: 'onChange',
   });
+
+  // ---------------------------------------------------------------------------
+  // VALID FIELD TICK — shows a subtle green ✓ after the operator has interacted
+  // with a field AND it currently passes validation. Format-only — NOT identity
+  // verification. Tick disappears the moment the field becomes invalid.
+  //
+  // Props:
+  //   show   – boolean: render the tick?
+  //   inTextarea – position tick inside a textarea (offset from top)
+  // ---------------------------------------------------------------------------
+  const ValidFieldTick = ({ show, inTextarea = false }: { show: boolean; inTextarea?: boolean }) => {
+    if (!show) return null;
+    return (
+      <span
+        aria-hidden="true"
+        title="Valid field"
+        className={`pointer-events-none absolute right-2.5 ${
+          inTextarea ? 'top-3' : 'top-1/2 -translate-y-1/2'
+        } flex items-center text-emerald-500 dark:text-emerald-400`}
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-4 w-4"
+          aria-hidden="true"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      </span>
+    );
+  };
 
   /**
    * Called when handleSubmit finds validation errors.
@@ -1033,46 +1069,55 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             {/* Name trio — clearly grouped, equal columns on desktop */}
             <div className="space-y-2">
               <label htmlFor="first_name" className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">First Name <span className="text-red-500" aria-hidden="true">*</span></label>
-              <input
-                id="first_name"
-                {...register("first_name")}
-                autoFocus={!isEditing}
-                aria-invalid={!!errors.first_name}
-                aria-describedby={errors.first_name ? "first_name-error" : undefined}
-                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
-                  errors.first_name
-                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
-                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
-                }`}
-                placeholder="e.g. Rahul"
-              />
+              <div className="relative">
+                <input
+                  id="first_name"
+                  {...register("first_name")}
+                  autoFocus={!isEditing}
+                  aria-invalid={!!errors.first_name}
+                  aria-describedby={errors.first_name ? "first_name-error" : undefined}
+                  className={`w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
+                    errors.first_name
+                      ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                      : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                  }`}
+                  placeholder="e.g. Rahul"
+                />
+                <ValidFieldTick show={!!touchedFields.first_name && !errors.first_name && !!getValues("first_name")?.trim()} />
+              </div>
               {errors.first_name && <p id="first_name-error" className="text-sm text-red-500">{errors.first_name.message}</p>}
             </div>
 
             <div className="space-y-2">
               <label htmlFor="middle_name" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Middle Name <span className="text-xs font-normal text-zinc-400">(optional)</span></label>
-              <input
-                id="middle_name"
-                {...register("middle_name")}
-                className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow"
-                placeholder="e.g. Kumar"
-              />
+              <div className="relative">
+                <input
+                  id="middle_name"
+                  {...register("middle_name")}
+                  className="w-full p-2.5 pr-9 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow"
+                  placeholder="e.g. Kumar"
+                />
+                <ValidFieldTick show={!!touchedFields.middle_name && !errors.middle_name && !!getValues("middle_name")?.trim()} />
+              </div>
             </div>
             
             <div className="space-y-2">
               <label htmlFor="last_name" className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Last Name <span className="text-red-500" aria-hidden="true">*</span></label>
-              <input
-                id="last_name"
-                {...register("last_name")}
-                aria-invalid={!!errors.last_name}
-                aria-describedby={errors.last_name ? "last_name-error" : undefined}
-                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
-                  errors.last_name
-                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
-                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
-                }`}
-                placeholder="e.g. Sharma"
-              />
+              <div className="relative">
+                <input
+                  id="last_name"
+                  {...register("last_name")}
+                  aria-invalid={!!errors.last_name}
+                  aria-describedby={errors.last_name ? "last_name-error" : undefined}
+                  className={`w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
+                    errors.last_name
+                      ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                      : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                  }`}
+                  placeholder="e.g. Sharma"
+                />
+                <ValidFieldTick show={!!touchedFields.last_name && !errors.last_name && !!getValues("last_name")?.trim()} />
+              </div>
               {errors.last_name && <p id="last_name-error" className="text-sm text-red-500">{errors.last_name.message}</p>}
             </div>
 
@@ -1105,14 +1150,17 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                 )}
               </div>
 
-              <input
-                {...register("original_language_name")}
-                className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow"
-                placeholder="e.g. রাহুল কুমার শর্মা"
-                lang="bn"
-                autoComplete="off"
-                spellCheck={false}
-              />
+              <div className="relative">
+                <input
+                  {...register("original_language_name")}
+                  className="w-full p-2.5 pr-9 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow"
+                  placeholder="e.g. রাহুল কুমার শর্মা"
+                  lang="bn"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <ValidFieldTick show={!!touchedFields.original_language_name && !errors.original_language_name && !!getValues("original_language_name")?.trim()} />
+              </div>
               <p className="text-xs text-zinc-400 dark:text-zinc-500">Optional — enter the customer&apos;s name as written in their local language or script.</p>
 
               {/* Hybrid Bengali Suggestions Picker */}
@@ -1235,6 +1283,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             {/* Date of birth and gender — secondary row */}
             <div className="space-y-2">
               <label htmlFor="date_of_birth" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Date of Birth</label>
+              {/* date input: browser picker occupies the right side; tick goes to left of it via ring color only */}
               <input
                 id="date_of_birth"
                 {...register("date_of_birth")}
@@ -1245,7 +1294,9 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                 className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
                   errors.date_of_birth
                     ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
-                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                    : touchedFields.date_of_birth && !errors.date_of_birth && !!getValues("date_of_birth")
+                      ? 'border-emerald-400 dark:border-emerald-500 focus:ring-emerald-400'
+                      : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
                 }`}
               />
               {errors.date_of_birth && <p id="date_of_birth-error" className="text-sm text-red-500">{errors.date_of_birth.message}</p>}
@@ -1263,12 +1314,18 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Father / Guardian Name</label>
-              <input {...register("father_name")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Anil Sharma" />
+              <div className="relative">
+                <input {...register("father_name")} className="w-full p-2.5 pr-9 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Anil Sharma" />
+                <ValidFieldTick show={!!touchedFields.father_name && !errors.father_name && !!getValues("father_name")?.trim()} />
+              </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Mother Name</label>
-              <input {...register("mother_name")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Sunita Sharma" />
+              <div className="relative">
+                <input {...register("mother_name")} className="w-full p-2.5 pr-9 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Sunita Sharma" />
+                <ValidFieldTick show={!!touchedFields.mother_name && !errors.mother_name && !!getValues("mother_name")?.trim()} />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -1287,7 +1344,10 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             {maritalStatus === "Married" && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Spouse / Husband Name</label>
-                <input {...register("spouse_name")} className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Suresh Kumar" />
+                <div className="relative">
+                  <input {...register("spouse_name")} className="w-full p-2.5 pr-9 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Suresh Kumar" />
+                  <ValidFieldTick show={!!touchedFields.spouse_name && !errors.spouse_name && !!getValues("spouse_name")?.trim()} />
+                </div>
               </div>
             )}
           </div>
@@ -1299,70 +1359,82 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-2">
               <label htmlFor="aadhaar_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Aadhaar Number</label>
-              <input
-                id="aadhaar_number"
-                {...register("aadhaar_number")}
-                inputMode="numeric"
-                aria-invalid={!!errors.aadhaar_number}
-                aria-describedby={errors.aadhaar_number ? "aadhaar-error" : undefined}
-                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono ${
-                  errors.aadhaar_number
-                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
-                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
-                }`}
-                placeholder="e.g. 1234 5678 9012"
-              />
+              <div className="relative">
+                <input
+                  id="aadhaar_number"
+                  {...register("aadhaar_number")}
+                  inputMode="numeric"
+                  aria-invalid={!!errors.aadhaar_number}
+                  aria-describedby={errors.aadhaar_number ? "aadhaar-error" : undefined}
+                  className={`w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono ${
+                    errors.aadhaar_number
+                      ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                      : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                  }`}
+                  placeholder="e.g. 1234 5678 9012"
+                />
+                <ValidFieldTick show={!!touchedFields.aadhaar_number && !errors.aadhaar_number && !!getValues("aadhaar_number")?.trim()} />
+              </div>
               {errors.aadhaar_number && <p id="aadhaar-error" className="text-sm text-red-500">{errors.aadhaar_number.message}</p>}
             </div>
 
             <div className="space-y-2">
               <label htmlFor="pan_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">PAN Number</label>
-              <input
-                id="pan_number"
-                {...register("pan_number")}
-                aria-invalid={!!errors.pan_number}
-                aria-describedby={errors.pan_number ? "pan-error" : undefined}
-                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow uppercase font-mono ${
-                  errors.pan_number
-                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
-                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
-                }`}
-                placeholder="e.g. ABCDE1234F"
-              />
+              <div className="relative">
+                <input
+                  id="pan_number"
+                  {...register("pan_number")}
+                  aria-invalid={!!errors.pan_number}
+                  aria-describedby={errors.pan_number ? "pan-error" : undefined}
+                  className={`w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow uppercase font-mono ${
+                    errors.pan_number
+                      ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                      : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                  }`}
+                  placeholder="e.g. ABCDE1234F"
+                />
+                <ValidFieldTick show={!!touchedFields.pan_number && !errors.pan_number && !!getValues("pan_number")?.trim()} />
+              </div>
               {errors.pan_number && <p id="pan-error" className="text-sm text-red-500">{errors.pan_number.message}</p>}
             </div>
 
             <div className="space-y-2">
               <label htmlFor="gst_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">GST Number</label>
-              <input
-                id="gst_number"
-                {...register("gst_number")}
-                aria-invalid={!!errors.gst_number}
-                aria-describedby={errors.gst_number ? "gst-error" : undefined}
-                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow uppercase font-mono ${
-                  errors.gst_number
-                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
-                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
-                }`}
-                placeholder="e.g. 22AAAAA0000A1Z5"
-              />
+              <div className="relative">
+                <input
+                  id="gst_number"
+                  {...register("gst_number")}
+                  aria-invalid={!!errors.gst_number}
+                  aria-describedby={errors.gst_number ? "gst-error" : undefined}
+                  className={`w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow uppercase font-mono ${
+                    errors.gst_number
+                      ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                      : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                  }`}
+                  placeholder="e.g. 22AAAAA0000A1Z5"
+                />
+                <ValidFieldTick show={!!touchedFields.gst_number && !errors.gst_number && !!getValues("gst_number")?.trim()} />
+              </div>
               {errors.gst_number && <p id="gst-error" className="text-sm text-red-500">{errors.gst_number.message}</p>}
             </div>
 
             <div className="space-y-2">
               <label htmlFor="voter_id_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Voter ID / EPIC Number</label>
-              <input
-                id="voter_id_number"
-                {...register("voter_id_number")}
-                aria-invalid={!!errors.voter_id_number}
-                aria-describedby={errors.voter_id_number ? "voter-error" : undefined}
-                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow uppercase font-mono ${
-                  errors.voter_id_number
-                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
-                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
-                }`}
-                placeholder="e.g. ABC1234567"
-              />
+              <div className="relative">
+                <input
+                  id="voter_id_number"
+                  {...register("voter_id_number")}
+                  aria-invalid={!!errors.voter_id_number}
+                  aria-describedby={errors.voter_id_number ? "voter-error" : undefined}
+                  className={`w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow uppercase font-mono ${
+                    errors.voter_id_number
+                      ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                      : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                  }`}
+                  placeholder="e.g. ABC1234567"
+                />
+                <ValidFieldTick show={!!touchedFields.voter_id_number && !errors.voter_id_number && !!getValues("voter_id_number")?.trim()} />
+              </div>
               {errors.voter_id_number && <p id="voter-error" className="text-sm text-red-500">{errors.voter_id_number.message}</p>}
             </div>
           </div>
@@ -1374,59 +1446,68 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <label htmlFor="phone" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Phone Number <span className="text-red-500" aria-hidden="true">*</span></label>
-              <input
-                id="phone"
-                {...register("phone")}
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                aria-invalid={!!errors.phone}
-                aria-describedby={errors.phone ? "phone-error" : undefined}
-                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono ${
-                  errors.phone
-                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
-                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
-                }`}
-                placeholder="e.g. +91-9876543210"
-              />
+              <div className="relative">
+                <input
+                  id="phone"
+                  {...register("phone")}
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  aria-invalid={!!errors.phone}
+                  aria-describedby={errors.phone ? "phone-error" : undefined}
+                  className={`w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono ${
+                    errors.phone
+                      ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                      : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                  }`}
+                  placeholder="e.g. +91-9876543210"
+                />
+                <ValidFieldTick show={!!touchedFields.phone && !errors.phone && !!getValues("phone")?.trim()} />
+              </div>
               {errors.phone && <p id="phone-error" className="text-sm text-red-500">{errors.phone.message}</p>}
             </div>
 
             <div className="space-y-2">
               <label htmlFor="whatsapp" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">WhatsApp</label>
-              <input
-                id="whatsapp"
-                {...register("whatsapp")}
-                type="tel"
-                inputMode="tel"
-                aria-invalid={!!errors.whatsapp}
-                aria-describedby={errors.whatsapp ? "whatsapp-error" : undefined}
-                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono ${
-                  errors.whatsapp
-                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
-                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
-                }`}
-                placeholder="e.g. +91-9876543210"
-              />
+              <div className="relative">
+                <input
+                  id="whatsapp"
+                  {...register("whatsapp")}
+                  type="tel"
+                  inputMode="tel"
+                  aria-invalid={!!errors.whatsapp}
+                  aria-describedby={errors.whatsapp ? "whatsapp-error" : undefined}
+                  className={`w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono ${
+                    errors.whatsapp
+                      ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                      : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                  }`}
+                  placeholder="e.g. +91-9876543210"
+                />
+                <ValidFieldTick show={!!touchedFields.whatsapp && !errors.whatsapp && !!getValues("whatsapp")?.trim()} />
+              </div>
               {errors.whatsapp && <p id="whatsapp-error" className="text-sm text-red-500">{errors.whatsapp.message}</p>}
             </div>
 
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Email Address</label>
-              <input
-                id="email"
-                {...register("email")}
-                type="email"
-                autoComplete="email"
-                aria-invalid={!!errors.email}
-                aria-describedby={errors.email ? "email-error" : undefined}
-                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
-                  errors.email
-                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
-                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
-                }`}
-                placeholder="e.g. rahul@example.com"
-              />
+              <div className="relative">
+                <input
+                  id="email"
+                  {...register("email")}
+                  type="email"
+                  autoComplete="email"
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? "email-error" : undefined}
+                  className={`w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
+                    errors.email
+                      ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                      : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                  }`}
+                  placeholder="e.g. rahul@example.com"
+                />
+                <ValidFieldTick show={!!touchedFields.email && !errors.email && !!getValues("email")?.trim()} />
+              </div>
               {errors.email && <p id="email-error" className="text-sm text-red-500">{errors.email.message}</p>}
             </div>
           </div>
@@ -1450,19 +1531,22 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2 md:col-span-3">
               <label htmlFor="address" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Full Address <span className="text-red-500" aria-hidden="true">*</span></label>
-              <textarea
-                id="address"
-                {...register("address")}
-                rows={2}
-                aria-invalid={!!errors.address}
-                aria-describedby={errors.address ? "address-error" : undefined}
-                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
-                  errors.address
-                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
-                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
-                }`}
-                placeholder="House / Flat No., Road, Landmark, Village details"
-              />
+              <div className="relative">
+                <textarea
+                  id="address"
+                  {...register("address")}
+                  rows={2}
+                  aria-invalid={!!errors.address}
+                  aria-describedby={errors.address ? "address-error" : undefined}
+                  className={`w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow ${
+                    errors.address
+                      ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                      : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                  }`}
+                  placeholder="House / Flat No., Road, Landmark, Village details"
+                />
+                <ValidFieldTick show={!!touchedFields.address && !errors.address && !!getValues("address")?.trim()} inTextarea />
+              </div>
               {errors.address && <p id="address-error" className="text-sm text-red-500">{errors.address.message}</p>}
             </div>
 
@@ -1471,21 +1555,24 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                 <span>Pincode</span>
                 {isPincodeLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />}
               </label>
-              <input
-                id="pincode"
-                {...register("pincode")}
-                maxLength={6}
-                inputMode="numeric"
-                autoComplete="postal-code"
-                aria-invalid={!!errors.pincode}
-                aria-describedby={errors.pincode ? "pincode-error" : undefined}
-                className={`w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono ${
-                  errors.pincode
-                    ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
-                    : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
-                }`}
-                placeholder="e.g. 700001"
-              />
+              <div className="relative">
+                <input
+                  id="pincode"
+                  {...register("pincode")}
+                  maxLength={6}
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  aria-invalid={!!errors.pincode}
+                  aria-describedby={errors.pincode ? "pincode-error" : undefined}
+                  className={`w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono ${
+                    errors.pincode
+                      ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                      : 'border-zinc-300 dark:border-zinc-700 focus:ring-blue-500'
+                  }`}
+                  placeholder="e.g. 700001"
+                />
+                <ValidFieldTick show={!!touchedFields.pincode && !errors.pincode && !!getValues("pincode")?.trim()} />
+              </div>
               {errors.pincode && <p id="pincode-error" className="text-sm text-red-500">{errors.pincode.message}</p>}
               {!errors.pincode && pincodeError && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{pincodeError}</p>}
             </div>
