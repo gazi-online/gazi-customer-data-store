@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:extension-form-fill": "node --test tests/formFillCustomer.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.16.0",
