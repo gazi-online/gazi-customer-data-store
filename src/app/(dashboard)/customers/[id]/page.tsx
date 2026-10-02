@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getCustomerById } from "../actions";
 import { getCustomerDocuments, getCustomerAiImports } from "@/app/(dashboard)/documents/actions";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Edit, Calendar, Hash, ShieldCheck, Phone, MessageCircle, Mail, Users, MapPin, Receipt, ClipboardList, CalendarClock } from "lucide-react";
+import { ArrowLeft, Edit, Calendar, Hash, ShieldCheck, Phone, MessageCircle, Mail, Users, MapPin, Receipt, ClipboardList, CalendarClock, Vote } from "lucide-react";
 import { DocumentUploadForm } from "@/components/forms/DocumentUploadForm";
 import { getProfilePhotoSignedUrl } from "@/app/(dashboard)/customers/ai-actions";
 import { CustomerProfileTabs } from "@/components/customers/CustomerProfileTabs";
@@ -226,6 +226,14 @@ export default async function CustomerProfilePage({
                   </p>
                 </div>
               )}
+              {customer.voter_id_number && (
+                <div>
+                  <p className="text-xs font-medium text-zinc-500">Voter ID / EPIC Number</p>
+                  <p className="text-zinc-900 dark:text-zinc-100 font-medium font-mono uppercase text-xs sm:text-sm break-all">
+                    {customer.voter_id_number}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -342,6 +350,69 @@ export default async function CustomerProfilePage({
                 <p className="text-xs sm:text-sm font-medium text-zinc-500 flex items-center">Gender</p>
                 <p className="text-zinc-900 dark:text-zinc-100 font-medium text-sm capitalize">
                   {customer.gender || <span className="text-zinc-400 italic">-</span>}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Electoral Details Card */}
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 sm:p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4 sm:mb-6 border-b border-zinc-100 dark:border-zinc-800 pb-2">
+              <h2 className="text-base sm:text-lg font-semibold text-zinc-900 dark:text-white flex items-center">
+                <Vote className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                Electoral Details
+              </h2>
+              {/* Restrained verification status badge */}
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                customer.electoral_verification_status === "officially_verified"
+                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                  : customer.electoral_verification_status === "customer_confirmed"
+                  ? "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                  : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700"
+              }`}>
+                {customer.electoral_verification_status === "officially_verified"
+                  ? "Officially Verified"
+                  : customer.electoral_verification_status === "customer_confirmed"
+                  ? "Customer Confirmed"
+                  : "Unverified"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 sm:gap-y-6 gap-x-6 sm:gap-x-8">
+              <div className="space-y-1">
+                <p className="text-xs sm:text-sm font-medium text-zinc-500">Assembly Constituency</p>
+                <p className="text-zinc-900 dark:text-zinc-100 font-medium text-sm break-words">
+                  {customer.assembly_constituency || <span className="text-zinc-400 italic">Not provided</span>}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs sm:text-sm font-medium text-zinc-500">AC Number</p>
+                <p className="text-zinc-900 dark:text-zinc-100 font-medium font-mono text-sm">
+                  {customer.assembly_constituency_number || <span className="text-zinc-400 italic">—</span>}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs sm:text-sm font-medium text-zinc-500">Parliamentary Constituency</p>
+                <p className="text-zinc-900 dark:text-zinc-100 font-medium text-sm break-words">
+                  {customer.parliamentary_constituency || <span className="text-zinc-400 italic">Not provided</span>}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs sm:text-sm font-medium text-zinc-500">PC Number</p>
+                <p className="text-zinc-900 dark:text-zinc-100 font-medium font-mono text-sm">
+                  {customer.parliamentary_constituency_number || <span className="text-zinc-400 italic">—</span>}
+                </p>
+              </div>
+
+              <div className="space-y-1 sm:col-span-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+                <p className="text-xs sm:text-sm font-medium text-zinc-500">Verification Timestamp</p>
+                <p className="text-zinc-900 dark:text-zinc-100 font-mono text-xs sm:text-sm">
+                  {customer.electoral_verified_at
+                    ? new Date(customer.electoral_verified_at).toLocaleString()
+                    : <span className="text-zinc-400 italic">Not verified</span>}
                 </p>
               </div>
             </div>

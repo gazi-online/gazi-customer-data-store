@@ -36,6 +36,10 @@ export interface NormalizedData {
   pan_number?: AiField<string>;
   gst_number?: AiField<string>;
   voter_id_number?: AiField<string>;
+  assembly_constituency?: AiField<string>;
+  assembly_constituency_number?: AiField<string>;
+  parliamentary_constituency?: AiField<string>;
+  parliamentary_constituency_number?: AiField<string>;
   date_of_birth?: AiField<string>; // YYYY-MM-DD
   gender?: AiField<'male' | 'female' | 'other'>;
   address?: AiField<string>;

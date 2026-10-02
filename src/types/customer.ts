@@ -1,6 +1,8 @@
 export type CustomerStatus = 'active' | 'inactive' | 'lead';
 export type Gender = 'male' | 'female' | 'other';
 
+export type ElectoralVerificationStatus = 'unverified' | 'customer_confirmed' | 'officially_verified';
+
 export interface Customer {
   id: string;
   business_id?: string;
@@ -24,6 +26,14 @@ export interface Customer {
   gst_number: string | null;
   voter_id_number?: string | null;
   
+  // Electoral Details
+  assembly_constituency?: string | null;
+  assembly_constituency_number?: string | null;
+  parliamentary_constituency?: string | null;
+  parliamentary_constituency_number?: string | null;
+  electoral_verification_status?: ElectoralVerificationStatus;
+  electoral_verified_at?: string | null;
+
   // Address
   address: string;
   city: string | null;
@@ -86,6 +96,14 @@ export interface CustomerFormData {
   gst_number?: string;
   voter_id_number?: string;
   
+  // Electoral Details
+  assembly_constituency?: string;
+  assembly_constituency_number?: string;
+  parliamentary_constituency?: string;
+  parliamentary_constituency_number?: string;
+  electoral_verification_status?: ElectoralVerificationStatus;
+  electoral_verified_at?: string | null;
+
   address: string;
   city?: string;
   district?: string;

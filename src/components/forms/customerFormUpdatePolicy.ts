@@ -23,6 +23,12 @@ export const CANONICAL_EMPTY_CUSTOMER: CustomerFormData = {
   pan_number: "",
   gst_number: "",
   voter_id_number: "",
+  assembly_constituency: "",
+  assembly_constituency_number: "",
+  parliamentary_constituency: "",
+  parliamentary_constituency_number: "",
+  electoral_verification_status: "unverified",
+  electoral_verified_at: null,
   address: "",
   city: "",
   district: "",
@@ -59,6 +65,12 @@ export const VALID_FORM_FIELDS = new Set<string>([
   'pan_number',
   'gst_number',
   'voter_id_number',
+  'assembly_constituency',
+  'assembly_constituency_number',
+  'parliamentary_constituency',
+  'parliamentary_constituency_number',
+  'electoral_verification_status',
+  'electoral_verified_at',
   'address',
   'city',
   'district',
@@ -129,6 +141,11 @@ export function canImportOverwriteField(
     currentVal &&
     String(currentVal).trim().length > 0
   ) {
+    return false;
+  }
+
+  // Domain protection: Electoral verification status & verified_at must NEVER be set by Smart Import
+  if (field === 'electoral_verification_status' || field === 'electoral_verified_at') {
     return false;
   }
 

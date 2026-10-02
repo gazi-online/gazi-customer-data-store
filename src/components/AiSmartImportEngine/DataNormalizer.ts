@@ -195,6 +195,41 @@ export class DataNormalizer {
       normalized.voter_id_number = toAiField(cleanVoterId, conf.voter_id_number || conf.voter_id || (typeof voterId === 'object' ? voterId : undefined), 0.9);
     }
 
+    // Electoral details (Assembly & Parliamentary Constituencies)
+    const electoralObj = rawData.electoral || customer.electoral || {};
+
+    const acName = electoralObj.assembly_constituency || electoralObj.ac_name || rawData.assembly_constituency || customer.assembly_constituency || rawData.assemblyConstituency || customer.assemblyConstituency || rawData.ac_name;
+    if (acName) {
+      const cleanAc = typeof acName === 'string' ? acName.trim() : (acName.value ? String(acName.value).trim() : '');
+      if (cleanAc) {
+        normalized.assembly_constituency = toAiField(cleanAc, conf.assembly_constituency || (typeof acName === 'object' ? acName : undefined), 0.9);
+      }
+    }
+
+    const acNo = electoralObj.assembly_constituency_number || electoralObj.ac_number || rawData.assembly_constituency_number || customer.assembly_constituency_number || rawData.assemblyConstituencyNumber || customer.assemblyConstituencyNumber || rawData.ac_number || rawData.ac_no;
+    if (acNo !== undefined && acNo !== null && acNo !== '') {
+      const cleanAcNo = typeof acNo === 'string' ? acNo.trim() : (acNo.value !== undefined ? String(acNo.value).trim() : String(acNo).trim());
+      if (cleanAcNo) {
+        normalized.assembly_constituency_number = toAiField(cleanAcNo, conf.assembly_constituency_number || (typeof acNo === 'object' ? acNo : undefined), 0.9);
+      }
+    }
+
+    const pcName = electoralObj.parliamentary_constituency || electoralObj.pc_name || rawData.parliamentary_constituency || customer.parliamentary_constituency || rawData.parliamentaryConstituency || customer.parliamentaryConstituency || rawData.pc_name;
+    if (pcName) {
+      const cleanPc = typeof pcName === 'string' ? pcName.trim() : (pcName.value ? String(pcName.value).trim() : '');
+      if (cleanPc) {
+        normalized.parliamentary_constituency = toAiField(cleanPc, conf.parliamentary_constituency || (typeof pcName === 'object' ? pcName : undefined), 0.9);
+      }
+    }
+
+    const pcNo = electoralObj.parliamentary_constituency_number || electoralObj.pc_number || rawData.parliamentary_constituency_number || customer.parliamentary_constituency_number || rawData.parliamentaryConstituencyNumber || customer.parliamentaryConstituencyNumber || rawData.pc_number || rawData.pc_no;
+    if (pcNo !== undefined && pcNo !== null && pcNo !== '') {
+      const cleanPcNo = typeof pcNo === 'string' ? pcNo.trim() : (pcNo.value !== undefined ? String(pcNo.value).trim() : String(pcNo).trim());
+      if (cleanPcNo) {
+        normalized.parliamentary_constituency_number = toAiField(cleanPcNo, conf.parliamentary_constituency_number || (typeof pcNo === 'object' ? pcNo : undefined), 0.9);
+      }
+    }
+
     // Date of Birth
     const dob = customer.dob || customer.date_of_birth || customer.dateOfBirth;
     if (dob) {

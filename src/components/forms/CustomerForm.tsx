@@ -204,6 +204,14 @@ const customerSchema = z.object({
   // ── Native language name — unrestricted (supports all scripts) ───────────
   original_language_name: z.string().optional().or(z.literal("")),
 
+  // ── Electoral Details ────────────────────────────────────────────────────
+  assembly_constituency: z.string().optional().or(z.literal("")).transform(v => (v ? v.trim() : "")),
+  assembly_constituency_number: z.string().optional().or(z.literal("")).transform(v => (v ? v.trim() : "")),
+  parliamentary_constituency: z.string().optional().or(z.literal("")).transform(v => (v ? v.trim() : "")),
+  parliamentary_constituency_number: z.string().optional().or(z.literal("")).transform(v => (v ? v.trim() : "")),
+  electoral_verification_status: z.enum(["unverified", "customer_confirmed", "officially_verified"]).default("unverified"),
+  electoral_verified_at: z.string().nullable().optional(),
+
   // ── System ───────────────────────────────────────────────────────────────
   status: z.enum(["active", "inactive", "lead"]),
 });
@@ -265,6 +273,12 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       pincode: initialData.pincode || "",
       post_office: initialData.post_office || "",
       country: "India",
+      assembly_constituency: initialData.assembly_constituency || "",
+      assembly_constituency_number: initialData.assembly_constituency_number || "",
+      parliamentary_constituency: initialData.parliamentary_constituency || "",
+      parliamentary_constituency_number: initialData.parliamentary_constituency_number || "",
+      electoral_verification_status: initialData.electoral_verification_status || "unverified",
+      electoral_verified_at: initialData.electoral_verified_at || null,
       photo_url: initialData.photo_url || undefined,
       photo_source: initialData.photo_source || undefined,
       original_language_name: initialData.original_language_name || "",
@@ -783,6 +797,14 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         pan_number: data.pan_number === "" ? null : data.pan_number,
         gst_number: data.gst_number === "" ? null : data.gst_number,
         voter_id_number: data.voter_id_number === "" ? null : data.voter_id_number,
+        assembly_constituency: data.assembly_constituency?.trim() || null,
+        assembly_constituency_number: data.assembly_constituency_number?.trim() || null,
+        parliamentary_constituency: data.parliamentary_constituency?.trim() || null,
+        parliamentary_constituency_number: data.parliamentary_constituency_number?.trim() || null,
+        electoral_verification_status: data.electoral_verification_status || "unverified",
+        electoral_verified_at: data.electoral_verification_status === "unverified"
+          ? null
+          : (data.electoral_verified_at || (initialData?.electoral_verification_status === data.electoral_verification_status ? initialData?.electoral_verified_at : null) || new Date().toISOString()),
         post_office: data.post_office === "" ? null : data.post_office,
         original_language_name: data.original_language_name === "" ? null : data.original_language_name,
         country: "India",
@@ -1642,6 +1664,118 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Country</label>
               <input {...register("country")} readOnly className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-medium cursor-not-allowed" value="India" />
+            </div>
+          </div>
+        </div>
+
+        {/* Electoral Details */}
+        <div>
+          <div className="flex items-center justify-between mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-2">
+            <div>
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Electoral Details</h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Assembly &amp; Parliamentary constituency records for voter services and verified form filling
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2 md:col-span-2">
+              <label htmlFor="assembly_constituency" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Assembly Constituency
+              </label>
+              <div className="relative">
+                <input
+                  id="assembly_constituency"
+                  {...register("assembly_constituency")}
+                  className="w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow border-zinc-300 dark:border-zinc-700 focus:ring-blue-500"
+                  placeholder="e.g. Basirhat Uttar"
+                />
+                <ValidFieldTick show={!!touchedFields.assembly_constituency && !!getValues("assembly_constituency")?.trim()} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="assembly_constituency_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                AC Number
+              </label>
+              <div className="relative">
+                <input
+                  id="assembly_constituency_number"
+                  {...register("assembly_constituency_number")}
+                  className="w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono border-zinc-300 dark:border-zinc-700 focus:ring-blue-500"
+                  placeholder="e.g. 102"
+                />
+                <ValidFieldTick show={!!touchedFields.assembly_constituency_number && !!getValues("assembly_constituency_number")?.trim()} />
+              </div>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label htmlFor="parliamentary_constituency" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Parliamentary Constituency
+              </label>
+              <div className="relative">
+                <input
+                  id="parliamentary_constituency"
+                  {...register("parliamentary_constituency")}
+                  className="w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow border-zinc-300 dark:border-zinc-700 focus:ring-blue-500"
+                  placeholder="e.g. Basirhat"
+                />
+                <ValidFieldTick show={!!touchedFields.parliamentary_constituency && !!getValues("parliamentary_constituency")?.trim()} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="parliamentary_constituency_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                PC Number
+              </label>
+              <div className="relative">
+                <input
+                  id="parliamentary_constituency_number"
+                  {...register("parliamentary_constituency_number")}
+                  className="w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono border-zinc-300 dark:border-zinc-700 focus:ring-blue-500"
+                  placeholder="e.g. 18"
+                />
+                <ValidFieldTick show={!!touchedFields.parliamentary_constituency_number && !!getValues("parliamentary_constituency_number")?.trim()} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="electoral_verification_status" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Verification Status
+              </label>
+              <select
+                id="electoral_verification_status"
+                {...register("electoral_verification_status", {
+                  onChange: (e) => {
+                    const newStatus = e.target.value;
+                    if (newStatus === "unverified") {
+                      setValue("electoral_verified_at", null, { shouldDirty: true });
+                    } else if (newStatus === "customer_confirmed") {
+                      if (!getValues("electoral_verified_at")) {
+                        setValue("electoral_verified_at", new Date().toISOString(), { shouldDirty: true });
+                      }
+                    }
+                  }
+                })}
+                className="w-full p-2.5 border rounded-lg bg-transparent focus:ring-2 transition-shadow border-zinc-300 dark:border-zinc-700 focus:ring-blue-500"
+              >
+                <option value="unverified" className="dark:bg-zinc-800">Unverified</option>
+                <option value="customer_confirmed" className="dark:bg-zinc-800">Customer Confirmed</option>
+                {initialData?.electoral_verification_status === "officially_verified" && (
+                  <option value="officially_verified" className="dark:bg-zinc-800">Officially Verified</option>
+                )}
+              </select>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Verified At
+              </label>
+              <div className="p-2.5 border rounded-lg bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 text-xs sm:text-sm font-mono text-zinc-600 dark:text-zinc-400 flex items-center min-h-[42px]">
+                {watch("electoral_verification_status") === "unverified" || !watch("electoral_verified_at")
+                  ? "—"
+                  : new Date(watch("electoral_verified_at")!).toLocaleString()}
+              </div>
             </div>
           </div>
         </div>

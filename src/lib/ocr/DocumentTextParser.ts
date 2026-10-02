@@ -8,6 +8,7 @@ export class DocumentTextParser {
       customer: {},
       address: {},
       documents: {},
+      electoral: {},
       detected_documents: [{
         detected_type: documentType,
         confidence: 0.9,
@@ -545,6 +546,49 @@ export class DocumentTextParser {
           const val = line.split(/[:\-]/)[1]?.trim() || lines[i + 1]?.trim();
           if (val && !isNonPersonHeader(val) && /^[A-Za-z\s.]{3,40}$/.test(val)) {
             result.customer!.spouse_name = cleanLatinName(val);
+          }
+        }
+
+        // 3. ELECTORAL CONSTITUENCY EXTRACTION (Assembly & Parliamentary)
+        if (
+          u.includes("ASSEMBLY CONSTITUENCY") ||
+          u.includes("AC NO") ||
+          u.includes("AC NAME") ||
+          line.includes("বিধানসভা") ||
+          line.includes("विधान सभा")
+        ) {
+          const val = line.split(/[:\-]/).slice(1).join('-').trim() || lines[i + 1]?.trim();
+          if (val && !isNonPersonHeader(val)) {
+            const numNameMatch = val.match(/^(\d{1,4})\s*[\-\s,:]+\s*([A-Za-z\u0900-\u097F\u0980-\u09FF\s.'()\-]+)$/);
+            if (numNameMatch) {
+              result.electoral!.assembly_constituency_number = numNameMatch[1].trim();
+              result.electoral!.assembly_constituency = numNameMatch[2].trim();
+            } else if (/^\d{1,4}$/.test(val.trim())) {
+              result.electoral!.assembly_constituency_number = val.trim();
+            } else {
+              result.electoral!.assembly_constituency = val.trim();
+            }
+          }
+        }
+
+        if (
+          u.includes("PARLIAMENTARY CONSTITUENCY") ||
+          u.includes("PC NO") ||
+          u.includes("PC NAME") ||
+          line.includes("লোকসভা") ||
+          line.includes("संसदीय")
+        ) {
+          const val = line.split(/[:\-]/).slice(1).join('-').trim() || lines[i + 1]?.trim();
+          if (val && !isNonPersonHeader(val)) {
+            const numNameMatch = val.match(/^(\d{1,4})\s*[\-\s,:]+\s*([A-Za-z\u0900-\u097F\u0980-\u09FF\s.'()\-]+)$/);
+            if (numNameMatch) {
+              result.electoral!.parliamentary_constituency_number = numNameMatch[1].trim();
+              result.electoral!.parliamentary_constituency = numNameMatch[2].trim();
+            } else if (/^\d{1,4}$/.test(val.trim())) {
+              result.electoral!.parliamentary_constituency_number = val.trim();
+            } else {
+              result.electoral!.parliamentary_constituency = val.trim();
+            }
           }
         }
       }

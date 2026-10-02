@@ -53,12 +53,18 @@ export interface ParsedDocumentFields {
     pan?: { number: string };
     voter_id?: { number: string };
   };
+  electoral?: {
+    assembly_constituency?: string;
+    assembly_constituency_number?: string;
+    parliamentary_constituency?: string;
+    parliamentary_constituency_number?: string;
+  };
   detected_documents?: Array<{
     detected_type: string;
     confidence: number;
     source_filename?: string;
   }>;
-  diagnostic_data?: Record<string, any>;
+  diagnostic_data?: Record<string, unknown>;
   raw_text?: string;
   confidence_summary?: {
     overall: number;

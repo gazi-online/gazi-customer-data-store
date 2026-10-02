@@ -108,6 +108,74 @@ async function resolveCallerActiveBusiness(supabase: Awaited<ReturnType<typeof c
   return { error: null, user, membership: membership as unknown as ActiveMembershipInfo };
 }
 
+const VALID_ELECTORAL_STATUSES = new Set(["unverified", "customer_confirmed", "officially_verified"]);
+
+function sanitizeElectoralFields(
+  payload: Record<string, unknown>,
+  isCreate: boolean,
+  existingStatus?: string,
+  existingVerifiedAt?: string | null
+): { error?: string } {
+  // 1. Sanitize constituency strings
+  if ("assembly_constituency" in payload) {
+    payload.assembly_constituency = typeof payload.assembly_constituency === "string" && payload.assembly_constituency.trim() !== ""
+      ? payload.assembly_constituency.trim()
+      : null;
+  }
+  if ("assembly_constituency_number" in payload) {
+    payload.assembly_constituency_number = typeof payload.assembly_constituency_number === "string" && payload.assembly_constituency_number.trim() !== ""
+      ? payload.assembly_constituency_number.trim()
+      : null;
+  }
+  if ("parliamentary_constituency" in payload) {
+    payload.parliamentary_constituency = typeof payload.parliamentary_constituency === "string" && payload.parliamentary_constituency.trim() !== ""
+      ? payload.parliamentary_constituency.trim()
+      : null;
+  }
+  if ("parliamentary_constituency_number" in payload) {
+    payload.parliamentary_constituency_number = typeof payload.parliamentary_constituency_number === "string" && payload.parliamentary_constituency_number.trim() !== ""
+      ? payload.parliamentary_constituency_number.trim()
+      : null;
+  }
+
+  // 2. Validate electoral_verification_status
+  let status = payload.electoral_verification_status as string | undefined;
+  if (!status || (typeof status === "string" && status.trim() === "")) {
+    status = "unverified";
+    payload.electoral_verification_status = "unverified";
+  }
+
+  if (typeof status !== "string" || !VALID_ELECTORAL_STATUSES.has(status)) {
+    return { error: `Invalid electoral verification status: ${status}` };
+  }
+
+  // 3. Official verification requires dedicated verification path
+  if (status === "officially_verified") {
+    if (isCreate) {
+      return { error: "New customer cannot be created directly as officially verified. Official verification requires dedicated verification workflow." };
+    } else if (existingStatus !== "officially_verified") {
+      return { error: "Transition to officially verified requires dedicated official verification workflow." };
+    }
+  }
+
+  // 4. Lifecycle consistency rules for electoral_verified_at (authoritative server timestamps)
+  if (status === "unverified") {
+    payload.electoral_verified_at = null;
+  } else if (status === "customer_confirmed") {
+    // Preserve existing confirmed timestamp if already customer_confirmed; otherwise stamp current server time
+    if (existingStatus === "customer_confirmed" && existingVerifiedAt) {
+      payload.electoral_verified_at = existingVerifiedAt;
+    } else {
+      payload.electoral_verified_at = new Date().toISOString();
+    }
+  } else if (status === "officially_verified") {
+    // Retain existing official verification timestamp; do NOT trust client timestamp
+    payload.electoral_verified_at = existingVerifiedAt || new Date().toISOString();
+  }
+
+  return {};
+}
+
 export async function createCustomer(data: CustomerFormData) {
   const supabase = await createClient();
   await requireAal2(supabase);
@@ -133,6 +201,12 @@ export async function createCustomer(data: CustomerFormData) {
     delete payload.customer_code;
   } else if (typeof payload.customer_code === "string") {
     payload.customer_code = payload.customer_code.trim();
+  }
+
+  // Validate and sanitize electoral details
+  const electoralErr = sanitizeElectoralFields(payload, true);
+  if (electoralErr.error) {
+    return { error: electoralErr.error };
   }
 
   // Authoritatively bind to caller's active business
@@ -192,6 +266,22 @@ export async function updateCustomer(id: string, data: CustomerFormData) {
   // Prevent client from mutating business_id (absolute tenant immutability)
   delete payload.business_id;
 
+  // Retrieve current customer to check existing verification status
+  if (payload.electoral_verification_status !== undefined) {
+    const { data: currentCust } = await supabase
+      .from("customers")
+      .select("electoral_verification_status, electoral_verified_at")
+      .eq("id", id)
+      .single();
+
+    const existingStatus = currentCust?.electoral_verification_status;
+    const existingVerifiedAt = currentCust?.electoral_verified_at;
+    const electoralErr = sanitizeElectoralFields(payload, false, existingStatus, existingVerifiedAt);
+    if (electoralErr.error) {
+      return { error: electoralErr.error };
+    }
+  }
+
   const { error } = await supabase.from("customers").update(payload).eq("id", id);
   
   if (error) {
@@ -201,6 +291,71 @@ export async function updateCustomer(id: string, data: CustomerFormData) {
   revalidatePath("/customers");
   revalidatePath(`/customers/${id}`);
   return { success: true };
+}
+
+export async function officiallyVerifyCustomerElectoral(
+  id: string,
+  options?: {
+    assembly_constituency?: string;
+    assembly_constituency_number?: string;
+    parliamentary_constituency?: string;
+    parliamentary_constituency_number?: string;
+  }
+) {
+  const supabase = await createClient();
+  await requireAal2(supabase);
+
+  const { error: callerErr, membership } = await resolveCallerActiveBusiness(supabase);
+  if (callerErr || !membership) {
+    return { error: callerErr || "Access denied: Active business membership required" };
+  }
+
+  const { data: customer, error: fetchErr } = await supabase
+    .from("customers")
+    .select("id, business_id, assembly_constituency, parliamentary_constituency")
+    .eq("id", id)
+    .single();
+
+  if (fetchErr || !customer) {
+    return { error: fetchErr?.message || "Customer not found" };
+  }
+
+  if (customer.business_id !== membership.business_id) {
+    return { error: "Access denied: Customer does not belong to active business" };
+  }
+
+  const serverVerifiedAt = new Date().toISOString();
+  const updatePayload: Record<string, unknown> = {
+    electoral_verification_status: "officially_verified",
+    electoral_verified_at: serverVerifiedAt,
+  };
+
+  if (options?.assembly_constituency !== undefined) {
+    updatePayload.assembly_constituency = options.assembly_constituency.trim() || null;
+  }
+  if (options?.assembly_constituency_number !== undefined) {
+    updatePayload.assembly_constituency_number = options.assembly_constituency_number.trim() || null;
+  }
+  if (options?.parliamentary_constituency !== undefined) {
+    updatePayload.parliamentary_constituency = options.parliamentary_constituency.trim() || null;
+  }
+  if (options?.parliamentary_constituency_number !== undefined) {
+    updatePayload.parliamentary_constituency_number = options.parliamentary_constituency_number.trim() || null;
+  }
+
+  const { error: updateErr } = await supabase
+    .from("customers")
+    .update(updatePayload)
+    .eq("id", id)
+    .eq("business_id", membership.business_id);
+
+  if (updateErr) {
+    return { error: updateErr.message };
+  }
+
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${id}`);
+  return { success: true, verified_at: serverVerifiedAt };
 }
 
 export async function softDeleteCustomer(id: string) {
