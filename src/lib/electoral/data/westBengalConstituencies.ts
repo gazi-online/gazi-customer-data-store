@@ -522,7 +522,6 @@ export function validateConstituency(
 
   const cleanName = acName.trim().toLowerCase();
   const canonicalName = canonical.ac_name.toLowerCase();
-  // Strip reservation suffix for flexible matching if needed
   const baseCanonicalName = canonicalName.replace(/\s*\((sc|st)\)\s*$/i, '').trim();
   const baseCleanName = cleanName.replace(/\s*\((sc|st)\)\s*$/i, '').trim();
 
@@ -563,11 +562,9 @@ export function buildCandidateFromCatalog(
   }
 
   const prefix =
-    provenance.source_type === 'verified_local_mapping'
-      ? 'Verified Local Mapping: '
-      : provenance.source_type === 'operator_curated'
-      ? 'Operator Curated Mapping: '
-      : 'Official ECI Delimitation: ';
+    provenance.source_type === 'official'
+      ? 'Official Statutory Source: '
+      : 'Operator Curated Candidate: ';
 
   return {
     assembly_constituency: official.ac_name,
@@ -580,9 +577,7 @@ export function buildCandidateFromCatalog(
     confidence: provenance.confidence,
     reason:
       reason ||
-      (provenance.source_type === 'verified_local_mapping'
-        ? `Postal area mapped to ${official.ac_name} (AC ${official.ac_number})`
-        : `Candidate ${official.ac_name} (AC ${official.ac_number}) — operator review required`),
+      `Candidate ${official.ac_name} (AC ${official.ac_number}) — operator confirmation required`,
   };
 }
 
@@ -592,14 +587,18 @@ export function buildCandidateFromCatalog(
  * ============================================================================
  * PIN / post-office / locality → candidate constituency mapping.
  *
- * SAFETY RULES:
- * - DO NOT label any postal PIN mapping as "official" unless an official source
- *   explicitly establishes that postal-area boundary.
- * - Mappings derived from India Post Sub-Offices matching administrative CD blocks
- *   are tagged as 'verified_local_mapping'.
- * - Mappings covering multiple constituencies or postal zones spanning boundaries
- *   are tagged as 'operator_curated' with confidence 'medium'. They NEVER auto-fill.
- * - Fabricated submappings (unverified keywords, fictitious "sectors") are REMOVED.
+ * CRITICAL SAFETY & PROVENANCE INVARIANTS:
+ * 1. Delimitation documents establish electoral boundaries (CD Blocks, Wards, GPs).
+ *    They DO NOT establish that an entire postal PIN belongs uniquely to one AC.
+ * 2. Unless certified traceable evidence proves the WHOLE PIN delivery area is
+ *    100% contained within one AC, all mappings MUST be:
+ *    - isUnique: false
+ *    - isDeterministic: false
+ *    - source_type: 'operator_curated'
+ *    - confidence: 'medium'
+ * 3. Such mappings MUST NEVER silently auto-fill; they return candidate(s) for
+ *    explicit operator review and selection (status: 'multiple').
+ * 4. Never invent extra constituencies merely to create multiple candidates.
  */
 
 export interface PincodeElectoralMapping {
@@ -607,7 +606,7 @@ export interface PincodeElectoralMapping {
   district: string;
   state: string;
   isUnique: boolean;
-  isDeterministic: boolean; // Only true when single verified local mapping exists
+  isDeterministic: boolean;
   provenance: LocationResolutionProvenance;
   candidates: ElectoralCandidate[];
 }
@@ -615,11 +614,8 @@ export interface PincodeElectoralMapping {
 export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
   // ── Basirhat Region (North 24 Parganas) ──────────────────────────────────
   {
-    // PIN 743411: Basirhat Head Post Office delivery jurisdiction.
-    // Official Delimitation: Basirhat Municipality & Basirhat-I CD Block = AC 124 (Basirhat Dakshin).
-    // Basirhat-II CD Block = AC 125 (Basirhat Uttar).
-    // Postal delivery area crosses AC boundaries.
-    // Invariant: MUST NOT auto-fill. Ambiguous / requires operator selection.
+    // PIN 743411: Basirhat Head Post Office delivery area.
+    // Intersects Basirhat Municipality (AC 124) and adjoining rural GPs (AC 125).
     pincode: '743411',
     district: 'North 24 Parganas',
     state: 'West Bengal',
@@ -627,7 +623,7 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     isDeterministic: false,
     provenance: {
       source_type: 'operator_curated',
-      source_reference: 'Barasat Postal Division / Basirhat delivery area spans AC 124 & 125',
+      source_reference: 'India Post Basirhat HPO; delivery beats intersect AC 124 and AC 125',
       confidence: 'medium',
     },
     candidates: [
@@ -635,7 +631,7 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
         '124',
         {
           source_type: 'operator_curated',
-          source_reference: 'Basirhat Town / Municipality delivery zone (AC 124)',
+          source_reference: 'Basirhat town / municipality postal beat',
           confidence: 'medium',
         },
         'Basirhat Dakshin (AC 124) candidate for PIN 743411 — operator confirmation required'
@@ -644,7 +640,7 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
         '125',
         {
           source_type: 'operator_curated',
-          source_reference: 'Basirhat North / Rural delivery border (AC 125)',
+          source_reference: 'Basirhat rural / northern postal beat',
           confidence: 'medium',
         },
         'Basirhat Uttar (AC 125) candidate for PIN 743411 — operator confirmation required'
@@ -653,8 +649,7 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
   },
   {
     // PIN 743412: Hasnabad Sub Post Office.
-    // Spans Sandeshkhali (ST) (AC 123) and Hingalganj (SC) (AC 126).
-    // Invariant: MUST NOT auto-fill. Ambiguous / requires operator selection.
+    // Intersects Sandeshkhali (ST) (AC 123) and Hingalganj (SC) (AC 126).
     pincode: '743412',
     district: 'North 24 Parganas',
     state: 'West Bengal',
@@ -662,7 +657,7 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     isDeterministic: false,
     provenance: {
       source_type: 'operator_curated',
-      source_reference: 'Barasat Postal Division / Hasnabad delivery area spans AC 123 & 126',
+      source_reference: 'India Post Hasnabad SO; delivery beats intersect AC 123 and AC 126',
       confidence: 'medium',
     },
     candidates: [
@@ -670,187 +665,187 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
         '123',
         {
           source_type: 'operator_curated',
-          source_reference: 'Sandeshkhali area under Hasnabad delivery zone',
+          source_reference: 'Sandeshkhali area postal delivery beat',
           confidence: 'medium',
         },
-        'Sandeshkhali (ST) (AC 123) candidate — operator confirmation required'
+        'Sandeshkhali (ST) (AC 123) candidate for PIN 743412 — operator confirmation required'
       ),
       buildCandidateFromCatalog(
         '126',
         {
           source_type: 'operator_curated',
-          source_reference: 'Hasnabad / Hingalganj area under Hasnabad delivery zone',
+          source_reference: 'Hasnabad / Hingalganj area postal delivery beat',
           confidence: 'medium',
         },
-        'Hingalganj (SC) (AC 126) candidate — operator confirmation required'
+        'Hingalganj (SC) (AC 126) candidate for PIN 743412 — operator confirmation required'
       ),
     ],
   },
   {
     // PIN 743423: Deganga Sub Office.
-    // Deganga CD Block falls inside AC 120 (Deganga), PC 17 (Barasat).
+    // Located in Deganga block; uncertified postal boundary containment.
     pincode: '743423',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Deganga SO delimited to Deganga CD Block (AC 120)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Deganga SO location; delivery beat boundary uncertified by ECI',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('120', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Deganga SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Deganga SO location',
+        confidence: 'medium',
       }),
     ],
   },
   {
     // PIN 743424: Haroa Sub Office.
-    // Haroa CD Block falls inside AC 121 (Haroa), PC 18 (Basirhat).
+    // Located in Haroa block; uncertified postal boundary containment.
     pincode: '743424',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Haroa SO delimited to Haroa CD Block (AC 121)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Haroa SO location; delivery beat boundary uncertified by ECI',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('121', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Haroa SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Haroa SO location',
+        confidence: 'medium',
       }),
     ],
   },
   {
     // PIN 743425: Baduria Sub Office.
-    // Baduria Municipality & CD Block falls inside AC 99 (Baduria), PC 18 (Basirhat).
+    // Located in Baduria; uncertified postal boundary containment.
     pincode: '743425',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Baduria SO delimited to Baduria Municipality (AC 99)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Baduria SO location; delivery beat boundary uncertified by ECI',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('99', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Baduria SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Baduria SO location',
+        confidence: 'medium',
       }),
     ],
   },
   {
     // PIN 743426: Kholapota Sub Office.
-    // Located in Basirhat-II CD Block which constitutes AC 125 (Basirhat Uttar), PC 18 (Basirhat).
+    // Located in Basirhat-II; uncertified postal boundary containment.
     pincode: '743426',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Kholapota SO delimited to Basirhat-II CD Block (AC 125)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Kholapota SO location; delivery beat boundary uncertified by ECI',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('125', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Kholapota SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Kholapota SO location',
+        confidence: 'medium',
       }),
     ],
   },
   {
     // PIN 743427: Minakhan Sub Office.
-    // Minakhan CD Block constitutes AC 122 (Minakhan SC), PC 18 (Basirhat).
+    // Located in Minakhan; uncertified postal boundary containment.
     pincode: '743427',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Minakhan SO delimited to Minakhan CD Block (AC 122)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Minakhan SO location; delivery beat boundary uncertified by ECI',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('122', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Minakhan SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Minakhan SO location',
+        confidence: 'medium',
       }),
     ],
   },
   {
     // PIN 743429: Sandeshkhali Sub Office.
-    // Sandeshkhali-II CD Block constitutes AC 123 (Sandeshkhali ST), PC 18 (Basirhat).
+    // Located in Sandeshkhali; uncertified postal boundary containment.
     pincode: '743429',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Sandeshkhali SO delimited to Sandeshkhali-II CD Block (AC 123)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Sandeshkhali SO location; delivery beat boundary uncertified by ECI',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('123', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Sandeshkhali SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Sandeshkhali SO location',
+        confidence: 'medium',
       }),
     ],
   },
   {
     // PIN 743435: Hingalganj Sub Office.
-    // Hingalganj CD Block constitutes AC 126 (Hingalganj SC), PC 18 (Basirhat).
+    // Located in Hingalganj; uncertified postal boundary containment.
     pincode: '743435',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Hingalganj SO delimited to Hingalganj CD Block (AC 126)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Hingalganj SO location; delivery beat boundary uncertified by ECI',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('126', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Hingalganj SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Hingalganj SO location',
+        confidence: 'medium',
       }),
     ],
   },
   {
     // PIN 743456: Bhebia Sub Office.
-    // Bhebia Gram Panchayat is explicitly delimited into AC 125 (Basirhat Uttar), PC 18 (Basirhat).
+    // Located in Hasnabad block; uncertified postal boundary containment.
     pincode: '743456',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Bhebia SO delimited to Bhebia GP (AC 125)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Bhebia SO location; delivery beat boundary uncertified by ECI',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('125', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Bhebia SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Bhebia SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -860,18 +855,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700124',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Barasat Head Post Office (AC 119)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Barasat HPO location; municipal ward delivery beats uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('119', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Barasat HPO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Barasat HPO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -879,18 +874,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700125',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Nabapally SO (AC 119)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Nabapally SO location; municipal ward delivery beats uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('119', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Nabapally SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Nabapally SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -898,39 +893,37 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700129',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Madhyamgram SO (AC 118)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Madhyamgram SO location; municipal ward delivery beats uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('118', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Madhyamgram SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Madhyamgram SO location',
+        confidence: 'medium',
       }),
     ],
   },
   {
-    // PIN 700136: Rajarhat Sub Office.
-    // Falls in AC 117 (Rajarhat Gopalpur), PC 16 (Dum Dum).
     pincode: '700136',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Rajarhat SO (AC 117 / PC 16 Dum Dum)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Rajarhat SO location; delivery beat boundary uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('117', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Rajarhat SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Rajarhat SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -938,18 +931,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700156',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / New Town Action Area SO (AC 115)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post New Town SO location; delivery beats uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('115', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / New Town Action Area SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post New Town SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -957,18 +950,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700091',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Salt Lake Sector V SO (AC 116)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Salt Lake Sector V SO location; municipal boundary uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('116', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Salt Lake Sector V SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Salt Lake Sector V SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -976,67 +969,62 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700064',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Salt Lake Sector I & II SO (AC 116)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Salt Lake Sector I/II SO location; municipal boundary uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('116', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Salt Lake Sector I & II SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Salt Lake Sector I/II SO location',
+        confidence: 'medium',
       }),
     ],
   },
   {
-    // PIN 743263: Habra Sub Office.
-    // Habra Municipality & Block falls inside AC 100 (Habra), PC 17 (Barasat).
     pincode: '743263',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Habra SO delimited to Habra (AC 100)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Habra SO location; rural delivery beats uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('100', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Habra SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Habra SO location',
+        confidence: 'medium',
       }),
     ],
   },
   {
-    // PIN 743273: Ashoknagar Sub Office.
-    // Ashoknagar Kalyangarh Municipality falls inside AC 101 (Ashoknagar), PC 17 (Barasat).
     pincode: '743273',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Ashoknagar SO delimited to Ashoknagar (AC 101)',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Ashoknagar SO location; rural delivery beats uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('101', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Ashoknagar SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Ashoknagar SO location',
+        confidence: 'medium',
       }),
     ],
   },
   {
     // PIN 743235: Bangaon Sub Office.
-    // Delivery area spans Bangaon Municipality (AC 95) and surrounding GPs (partly AC 96).
-    // Invariant: MUST NOT auto-fill. Ambiguous / requires operator selection.
+    // Delivery area spans Bangaon Municipality (AC 95) and surrounding rural GPs (AC 96).
     pincode: '743235',
     district: 'North 24 Parganas',
     state: 'West Bengal',
@@ -1044,40 +1032,38 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     isDeterministic: false,
     provenance: {
       source_type: 'operator_curated',
-      source_reference: 'Barasat Postal Division / Bangaon delivery area spans AC 95 & 96',
+      source_reference: 'India Post Bangaon SO; delivery beats intersect AC 95 and AC 96',
       confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('95', {
         source_type: 'operator_curated',
-        source_reference: 'Bangaon Municipality area (AC 95)',
+        source_reference: 'Bangaon Municipality area',
         confidence: 'medium',
       }),
       buildCandidateFromCatalog('96', {
         source_type: 'operator_curated',
-        source_reference: 'Bangaon South rural border area (AC 96)',
+        source_reference: 'Bangaon rural border area',
         confidence: 'medium',
       }),
     ],
   },
   {
-    // PIN 743245: Chandpara Bazar Sub Office.
-    // Chandpara GP in Gaighata CD Block falls inside AC 96 (Bangaon Dakshin SC), PC 14 (Bangaon SC).
     pincode: '743245',
     district: 'North 24 Parganas',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Barasat Division / Chandpara Bazar SO delimited to AC 96',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Chandpara Bazar SO location; rural delivery beats uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('96', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Barasat Division / Chandpara Bazar SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Chandpara Bazar SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1086,7 +1072,6 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
   {
     // PIN 700001: Kolkata General Post Office.
     // Central BBD Bagh area spans AC 162 (Chowrangee) and AC 165 (Jorasanko).
-    // Invariant: MUST NOT auto-fill without operator selection.
     pincode: '700001',
     district: 'Kolkata',
     state: 'West Bengal',
@@ -1100,12 +1085,12 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     candidates: [
       buildCandidateFromCatalog('162', {
         source_type: 'operator_curated',
-        source_reference: 'Dalhousie / Chowringhee sector (AC 162)',
+        source_reference: 'Dalhousie / Chowringhee sector',
         confidence: 'medium',
       }),
       buildCandidateFromCatalog('165', {
         source_type: 'operator_curated',
-        source_reference: 'Burrabazar / northern commercial border sector (AC 165)',
+        source_reference: 'Burrabazar / northern commercial border sector',
         confidence: 'medium',
       }),
     ],
@@ -1114,18 +1099,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700007',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Burrabazar SO delimited to AC 165',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Burrabazar SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('165', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Burrabazar SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Burrabazar SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1133,18 +1118,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700006',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Beadon Street SO delimited to AC 166',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Beadon Street SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('166', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Beadon Street SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Beadon Street SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1152,18 +1137,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700004',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Shyambazar SO delimited to AC 166',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Shyambazar SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('166', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Shyambazar SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Shyambazar SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1171,18 +1156,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700019',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Ballygunge SO delimited to AC 161',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Ballygunge SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('161', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Ballygunge SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Ballygunge SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1190,18 +1175,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700020',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Bhowanipore & AJC Bose Road SO delimited to AC 159',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Bhowanipore SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('159', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Bhowanipore SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Bhowanipore SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1209,18 +1194,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700025',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Bhowanipore delivery area delimited to AC 159',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Bhowanipore SO delivery beats; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('159', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Bhowanipore SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Bhowanipore SO delivery beat',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1228,18 +1213,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700029',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Sarat Bose Road & Southern Avenue delimited to AC 160',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Sarat Bose Road SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('160', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Sarat Bose Road SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Sarat Bose Road SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1247,18 +1232,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700034',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Behala Chowrasta SO delimited to AC 154',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Behala Chowrasta SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('154', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Behala Chowrasta SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Behala Chowrasta SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1266,18 +1251,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700038',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Behala East SO delimited to AC 153',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Behala East SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('153', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Behala East SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Behala East SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1285,18 +1270,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700042',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Kasba SO delimited to AC 149',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Kasba SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('149', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Kasba SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Kasba SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1304,18 +1289,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700043',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Garden Reach & Kolkata Port SO delimited to AC 158',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Garden Reach SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('158', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Garden Reach SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Garden Reach SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1323,18 +1308,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700032',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Jadavpur SO delimited to AC 150',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Jadavpur SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('150', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Jadavpur SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Jadavpur SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1342,18 +1327,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '700033',
     district: 'Kolkata',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Kolkata / Tollygunge SO delimited to AC 152',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Tollygunge SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('152', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Kolkata / Tollygunge SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Tollygunge SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1363,18 +1348,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '711101',
     district: 'Howrah',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Howrah / Howrah Head Post Office delimited to AC 171',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Howrah HPO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('171', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Howrah / Howrah HPO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Howrah HPO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1382,18 +1367,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '711102',
     district: 'Howrah',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Howrah / Shibpur SO delimited to AC 172',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Shibpur SO location; ward boundary containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('172', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Howrah / Shibpur SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Shibpur SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1401,18 +1386,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '712201',
     district: 'Hooghly',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Hooghly / Serampore SO delimited to AC 186',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Serampore SO location; municipal ward containment uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('186', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Hooghly / Serampore SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Serampore SO location',
+        confidence: 'medium',
       }),
     ],
   },
@@ -1420,18 +1405,18 @@ export const WEST_BENGAL_PINCODE_MAPPINGS: PincodeElectoralMapping[] = [
     pincode: '741201',
     district: 'Nadia',
     state: 'West Bengal',
-    isUnique: true,
-    isDeterministic: true,
+    isUnique: false,
+    isDeterministic: false,
     provenance: {
-      source_type: 'verified_local_mapping',
-      source_reference: 'India Post Nadia / Ranaghat SO delimited to AC 90',
-      confidence: 'high',
+      source_type: 'operator_curated',
+      source_reference: 'India Post Ranaghat SO location; delivery beat boundary uncertified',
+      confidence: 'medium',
     },
     candidates: [
       buildCandidateFromCatalog('90', {
-        source_type: 'verified_local_mapping',
-        source_reference: 'India Post Nadia / Ranaghat SO',
-        confidence: 'high',
+        source_type: 'operator_curated',
+        source_reference: 'India Post Ranaghat SO location',
+        confidence: 'medium',
       }),
     ],
   },

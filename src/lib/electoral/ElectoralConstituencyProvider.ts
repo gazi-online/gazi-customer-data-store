@@ -1,19 +1,22 @@
 /**
- * Electoral Constituency Provider (Safety Hardened)
+ * Electoral Constituency Provider (Safety Hardened & Fail-Closed)
  *
- * Implements deterministic Assembly Constituency (AC) and Parliamentary Constituency (PC)
- * lookup for Customer Create/Edit flows.
+ * Implements Assembly Constituency (AC) and Parliamentary Constituency (PC)
+ * resolution for Customer Create/Edit flows.
  *
  * Built strictly according to Election Commission of India (ECI) Delimitation Orders
  * and CEO West Bengal electoral roll jurisdiction mapping.
  *
- * Invariants:
- * 1. Never guesses or infers constituency from vague similarity.
- * 2. Only auto-fills without operator selection when a location mapping is sufficiently
- *    verified, deterministic, and backed by traceable official/local provenance.
- * 3. Ambiguous PINs, operator-curated mappings, or address keyword matches NEVER silently auto-fill;
- *    they return candidates with status 'multiple' for explicit operator review and selection.
- * 4. Priority: correct but manual > fast but wrong.
+ * CRITICAL FAIL-CLOSED SAFETY INVARIANTS:
+ * 1. Delimitation documents establish electoral boundaries (CD Blocks, Wards, GPs).
+ *    They DO NOT establish that an entire postal PIN belongs uniquely to one AC.
+ * 2. status='unique' (silent auto-fill) is STRICTLY PROHIBITED unless certified
+ *    statutory evidence proves the WHOLE postal PIN delivery area is 100% contained
+ *    within a single constituency.
+ * 3. All uncertified, operator-curated, or multi-constituency PINs fail closed to
+ *    status='multiple' with candidates presented for explicit operator review.
+ * 4. Free-text address or locality keyword matching NEVER generates status='unique'.
+ * 5. Priority: correct but manual > fast but wrong.
  */
 
 import {
@@ -122,17 +125,18 @@ export class AuthoritativeElectoralConstituencyProvider implements IElectoralCon
 
   /**
    * Resolves a known PIN mapping.
-   * AUTO-FILL POLICY:
-   * Only auto-fills (status 'unique') when the mapping is:
-   * - isUnique === true
-   * - isDeterministic === true
-   * - exactly 1 candidate
-   * - source_type === 'verified_local_mapping'
-   * - confidence === 'high'
    *
-   * If any condition fails (ambiguous, multi-AC, or operator-curated):
-   * Returns status 'multiple' with candidates for operator review.
-   * NEVER GUESSES.
+   * FAIL-CLOSED AUTOFILL POLICY:
+   * status='unique' (silent auto-fill) is permitted IF AND ONLY IF:
+   * - mapping.isUnique === true
+   * - mapping.isDeterministic === true
+   * - exactly 1 valid candidate
+   * - mapping.provenance.source_type === 'official' (statutory certified source only)
+   * - mapping.provenance.confidence === 'high'
+   *
+   * If ANY condition is not met (operator-curated, uncertified, ambiguous, or medium/low confidence):
+   * Provider FAILS CLOSED to status='multiple' with candidates presented for operator confirmation.
+   * NEVER SILENTLY AUTO-FILLS UNLESS PROVENANCE IS OFFICIAL & TRUSTWORTHY.
    */
   private resolvePincodeMapping(
     mapping: PincodeElectoralMapping
@@ -155,11 +159,13 @@ export class AuthoritativeElectoralConstituencyProvider implements IElectoralCon
       };
     }
 
+    // Fail-closed gate: Requires statutory 'official' source_type and 'high' confidence
+    const isStatutoryOfficialSource = mapping.provenance.source_type === 'official';
     const canAutoFill =
-      mapping.isUnique &&
-      mapping.isDeterministic &&
+      mapping.isUnique === true &&
+      mapping.isDeterministic === true &&
       validCandidates.length === 1 &&
-      mapping.provenance.source_type === 'verified_local_mapping' &&
+      isStatutoryOfficialSource &&
       mapping.provenance.confidence === 'high';
 
     if (canAutoFill) {
@@ -167,17 +173,16 @@ export class AuthoritativeElectoralConstituencyProvider implements IElectoralCon
         status: 'unique',
         candidates: validCandidates,
         source: validCandidates[0].source,
-        reason: 'Constituency matched from address',
+        reason: 'Constituency matched from verified official statutory electoral mapping',
       };
     }
 
-    // Ambiguous, multi-constituency, or operator-curated mapping:
-    // Requires operator selection. DO NOT GUESS.
+    // Default fail-closed: return candidate(s) for operator review. NEVER GUESS OR SILENTLY AUTO-FILL.
     return {
       status: 'multiple',
       candidates: validCandidates,
       source: validCandidates[0]?.source,
-      reason: 'Multiple constituencies found — select the correct one',
+      reason: 'Constituency candidates found — operator confirmation required',
     };
   }
 
@@ -185,9 +190,8 @@ export class AuthoritativeElectoralConstituencyProvider implements IElectoralCon
    * Fallback resolution when PIN is unmapped or absent, searching canonical constituency
    * names within address or post office text.
    *
-   * Critical safety rule:
-   * Unverified locality keywords from free text MUST NEVER produce an authoritative unique match.
-   * Any keyword match returns status 'multiple' so operator must confirm.
+   * Invariant: Free-text/locality keywords NEVER produce status='unique'.
+   * Always fails closed to status='multiple' with confidence 'low' for operator review.
    */
   private resolveByLocalityFallback(
     postOffice: string,
@@ -233,7 +237,7 @@ export class AuthoritativeElectoralConstituencyProvider implements IElectoralCon
         status: 'multiple',
         candidates: matchedCandidates,
         source: matchedCandidates[0].source,
-        reason: 'Multiple constituencies found — select the correct one',
+        reason: 'Constituency candidates found — operator confirmation required',
       };
     }
 
