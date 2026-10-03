@@ -65,7 +65,7 @@ export class AuthoritativeElectoralConstituencyProvider implements IElectoralCon
         return {
           status: 'insufficient_data',
           candidates: [],
-          reason: 'Need more address details',
+          reason: 'Need more address details. Search by constituency name or number.',
         };
       }
 
@@ -182,7 +182,7 @@ export class AuthoritativeElectoralConstituencyProvider implements IElectoralCon
       status: 'multiple',
       candidates: validCandidates,
       source: validCandidates[0]?.source,
-      reason: 'Constituency candidates found — operator confirmation required',
+      reason: 'Possible constituencies found — confirm the correct one',
     };
   }
 
@@ -202,7 +202,7 @@ export class AuthoritativeElectoralConstituencyProvider implements IElectoralCon
       return {
         status: 'not_found',
         candidates: [],
-        reason: 'No reliable constituency match found',
+        reason: 'Address could not be narrowed safely. Search by constituency name or number.',
       };
     }
 
@@ -237,14 +237,14 @@ export class AuthoritativeElectoralConstituencyProvider implements IElectoralCon
         status: 'multiple',
         candidates: matchedCandidates,
         source: matchedCandidates[0].source,
-        reason: 'Constituency candidates found — operator confirmation required',
+        reason: 'Possible constituencies found — confirm the correct one',
       };
     }
 
     return {
       status: 'not_found',
       candidates: [],
-      reason: 'No reliable constituency match found',
+      reason: 'Address could not be narrowed safely. Search by constituency name or number.',
     };
   }
 

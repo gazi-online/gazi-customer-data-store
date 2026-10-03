@@ -14,12 +14,16 @@ import { v4 as uuidv4 } from "uuid";
 import { createCustomer, updateCustomer, checkDuplicateCustomer } from "@/app/(dashboard)/customers/actions";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
-import { CheckCircle2, AlertTriangle, MapPin, AlertCircle } from "lucide-react";
+import { CheckCircle2, AlertTriangle, MapPin, AlertCircle, Search, X } from "lucide-react";
 import { AiSmartImportEngine, SmartImportMetadata } from "../AiSmartImportEngine";
 import { IndiaPincodeProvider } from "@/lib/address/IndiaPincodeProvider";
 import { constructCustomerCanonicalName } from "@/lib/names/NativeNameSuggestionProvider";
 import { lookupElectoralConstituency } from "@/lib/electoral/electoral-action";
 import { ElectoralCandidate, ElectoralLookupStatus } from "@/lib/electoral/electoral-types";
+import {
+  searchWestBengalConstituencies,
+  ConstituencySearchResult,
+} from "@/lib/electoral/data/westBengalConstituencies";
 import {
   FieldOrigins,
   initializeFieldOrigins,
@@ -421,6 +425,12 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     setElectoralCandidates([]);
     setSelectedCandidate(null);
     setElectoralConflict(null);
+    setIsFinderOpen(false);
+    setFinderMode('address');
+    setManualSearchQuery('');
+    setManualSearchResults([]);
+    setManualVisibleCount(6);
+    setHasAddressSearched(false);
 
     // 11. Re-mount SmartImportEngine completely fresh
     setSmartImportKey(prev => prev + 1);
@@ -463,7 +473,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   
   const lookupReqIdRef = useRef(0);
 
-  // Electoral constituency lookup state
+  // Electoral constituency lookup state (Finder V2)
   const [isElectoralLoading, setIsElectoralLoading] = useState(false);
   const [electoralStatus, setElectoralStatus] = useState<ElectoralLookupStatus | null>(null);
   const [electoralMessage, setElectoralMessage] = useState<string | null>(null);
@@ -474,6 +484,25 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   const lastLookedUpLocationKeyRef = useRef<string>(
     initialData?.pincode ? `${initialData.pincode}|${initialData.state || ''}|${initialData.district || ''}|${initialData.post_office || ''}|${initialData.address || ''}` : ""
   );
+
+  // Finder V2 Panel State
+  const [isFinderOpen, setIsFinderOpen] = useState(false);
+  const [finderMode, setFinderMode] = useState<'address' | 'manual'>('address');
+  const [manualSearchQuery, setManualSearchQuery] = useState('');
+  const [manualSearchResults, setManualSearchResults] = useState<ConstituencySearchResult[]>([]);
+  const [manualVisibleCount, setManualVisibleCount] = useState(6);
+  const [hasAddressSearched, setHasAddressSearched] = useState(false);
+
+  const handleManualSearchChange = useCallback((query: string) => {
+    setManualSearchQuery(query);
+    setManualVisibleCount(6);
+    if (!query.trim()) {
+      setManualSearchResults([]);
+      return;
+    }
+    const results = searchWestBengalConstituencies(query);
+    setManualSearchResults(results);
+  }, []);
 
   const triggerElectoralLookup = useCallback((forceManual = false) => {
     const rawPin = getValues("pincode") || "";
@@ -561,22 +590,22 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           origins.parliamentary_constituency_number = "lookup";
         }
 
-        setElectoralMessage("Constituency matched from address");
+        setElectoralMessage("Constituency selected");
       } else if (res.status === 'multiple') {
         setElectoralCandidates(res.candidates);
         setSelectedCandidate(null);
         setElectoralConflict(null);
-        setElectoralMessage("Multiple constituencies found — select the correct one");
+        setElectoralMessage("Possible constituencies found — confirm the correct one");
       } else if (res.status === 'not_found') {
         setElectoralCandidates([]);
         setSelectedCandidate(null);
         setElectoralConflict(null);
-        setElectoralMessage("No reliable constituency match found");
+        setElectoralMessage("Address could not be narrowed safely. Search by constituency name or number.");
       } else if (res.status === 'insufficient_data') {
         setElectoralCandidates([]);
         setSelectedCandidate(null);
         setElectoralConflict(null);
-        setElectoralMessage("Need more address details");
+        setElectoralMessage("Need more address details. Search by constituency name or number.");
       } else {
         setElectoralCandidates([]);
         setSelectedCandidate(null);
@@ -596,7 +625,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     });
   }, [getValues, setValue]);
 
-  const handleSelectElectoralCandidate = useCallback((candidate: ElectoralCandidate) => {
+  const applyCandidateToForm = useCallback((candidate: ElectoralCandidate) => {
     const origins = fieldOriginsRef.current!;
 
     setValue("assembly_constituency", candidate.assembly_constituency, { shouldValidate: true, shouldDirty: true });
@@ -619,12 +648,52 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     setElectoralCandidates([]);
     setElectoralConflict(null);
     setElectoralStatus('unique');
-    setElectoralMessage("Constituency matched from address");
+    setElectoralMessage("Constituency selected");
+    setIsFinderOpen(false);
   }, [setValue]);
 
+  const handleSelectElectoralCandidate = useCallback((candidate: ElectoralCandidate) => {
+    const origins = fieldOriginsRef.current!;
+    const curAc = (getValues("assembly_constituency") || "").trim();
+    const curAcOrigin = origins.assembly_constituency;
+
+    // Check for conflict with existing value (import, user-edited, or initial saved in edit mode)
+    if (curAc && curAc.toLowerCase() !== candidate.assembly_constituency.toLowerCase()) {
+      if (curAcOrigin === 'import') {
+        setElectoralConflict({
+          imported: curAc,
+          lookup: candidate.assembly_constituency,
+          candidate,
+        });
+        setElectoralMessage(`Document imported "${curAc}" — selected candidate is "${candidate.assembly_constituency}"`);
+        return;
+      }
+      if (curAcOrigin === 'user') {
+        setElectoralConflict({
+          imported: curAc,
+          lookup: candidate.assembly_constituency,
+          candidate,
+        });
+        setElectoralMessage(`Manual value is "${curAc}" — selected candidate is "${candidate.assembly_constituency}"`);
+        return;
+      }
+      if (curAcOrigin === 'initial') {
+        setElectoralConflict({
+          imported: curAc,
+          lookup: candidate.assembly_constituency,
+          candidate,
+        });
+        setElectoralMessage(`Saved record has "${curAc}" — selected candidate is "${candidate.assembly_constituency}"`);
+        return;
+      }
+    }
+
+    applyCandidateToForm(candidate);
+  }, [getValues, applyCandidateToForm]);
+
   const handleManualFindConstituency = useCallback(() => {
-    triggerElectoralLookup(true);
-  }, [triggerElectoralLookup]);
+    setIsFinderOpen(prev => !prev);
+  }, []);
 
   const watchedPincode = watch("pincode");
   const watchedState = watch("state");
@@ -1884,20 +1953,266 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                 ) : (
                   <>
                     <MapPin className="h-3.5 w-3.5" />
-                    <span>Find Constituency</span>
+                    <span>{isFinderOpen ? "Close Finder" : "Find Constituency"}</span>
                   </>
                 )}
               </button>
             </div>
           </div>
 
-          {/* Status feedback & Candidate selector */}
-          {electoralStatus && (
+          {/* FIND CONSTITUENCY V2 OPERATOR PANEL */}
+          {isFinderOpen && (
+            <div className="mb-6 p-4 rounded-xl border border-blue-200 dark:border-blue-800/60 bg-blue-50/40 dark:bg-blue-950/20 shadow-sm space-y-4">
+              {/* Mode Selector Tabs & Close Button */}
+              <div className="flex items-center justify-between border-b border-blue-100 dark:border-blue-900/50 pb-3">
+                <div className="flex items-center gap-1.5 p-1 bg-white dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs">
+                  <button
+                    type="button"
+                    id="finder_mode_address_btn"
+                    onClick={() => setFinderMode('address')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+                      finderMode === 'address'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                    }`}
+                  >
+                    <MapPin className="h-3.5 w-3.5" />
+                    <span>Use Customer Address</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="finder_mode_manual_btn"
+                    onClick={() => setFinderMode('manual')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+                      finderMode === 'manual'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                    }`}
+                  >
+                    <Search className="h-3.5 w-3.5" />
+                    <span>Search Manually</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsFinderOpen(false)}
+                  className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-white/60 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer"
+                  title="Close Finder"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* MODE A: USE CUSTOMER ADDRESS */}
+              {finderMode === 'address' && (
+                <div className="space-y-3">
+                  <div className="bg-white dark:bg-zinc-800/80 rounded-lg p-3 border border-zinc-200 dark:border-zinc-700 text-xs space-y-2">
+                    <div className="text-zinc-500 dark:text-zinc-400 font-medium">Customer Address Context:</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <div>
+                        <span className="text-zinc-400 block text-[11px]">PIN</span>
+                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">{watchedPincode || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-400 block text-[11px]">District</span>
+                        <span className="font-medium text-zinc-800 dark:text-zinc-200">{watchedDistrict || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-400 block text-[11px]">Post Office</span>
+                        <span className="font-medium text-zinc-800 dark:text-zinc-200">{watchedPostOffice || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-400 block text-[11px]">City / Locality</span>
+                        <span className="font-medium text-zinc-800 dark:text-zinc-200">{watch("city") || '—'}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-zinc-400 block text-[11px]">Address</span>
+                        <span className="font-medium text-zinc-800 dark:text-zinc-200 truncate block">{watch("address") || '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      id="find_possible_constituencies_btn"
+                      onClick={() => {
+                        setHasAddressSearched(true);
+                        triggerElectoralLookup(true);
+                      }}
+                      disabled={isElectoralLoading}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                    >
+                      {isElectoralLoading ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span>Checking Address Records...</span>
+                        </>
+                      ) : (
+                        <>
+                          <MapPin className="h-3.5 w-3.5" />
+                          <span>Find Possible Constituencies</span>
+                        </>
+                      )}
+                    </button>
+                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                      Searches postal &amp; locality evidence without silent auto-fill
+                    </span>
+                  </div>
+
+                  {/* Address-based Results */}
+                  {hasAddressSearched && !isElectoralLoading && (
+                    <div className="pt-2">
+                      {electoralCandidates.length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs font-medium text-amber-800 dark:text-amber-300">
+                            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                            <span>Possible constituencies found — click Select to confirm:</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {electoralCandidates.map((cand) => (
+                              <div
+                                key={`addr-${cand.assembly_constituency_number}-${cand.assembly_constituency}`}
+                                className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:border-blue-400 dark:hover:border-blue-600 transition-colors shadow-sm"
+                              >
+                                <div className="space-y-0.5 pr-2">
+                                  <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">
+                                    {cand.assembly_constituency_number} — {cand.assembly_constituency}
+                                  </div>
+                                  {cand.parliamentary_constituency && (
+                                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
+                                      {cand.parliamentary_constituency_number ? `PC ${cand.parliamentary_constituency_number} — ` : ''}{cand.parliamentary_constituency}
+                                    </div>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectElectoralCandidate(cand)}
+                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer shrink-0"
+                                >
+                                  Select
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-zinc-100/80 dark:bg-zinc-800/60 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+                            <AlertCircle className="h-4 w-4 shrink-0 text-zinc-400" />
+                            <span>Address could not be narrowed safely. Search by constituency name or number.</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFinderMode('manual')}
+                            className="px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-800 border border-blue-200 dark:border-blue-800/60 rounded hover:bg-blue-50 transition-colors cursor-pointer shrink-0"
+                          >
+                            Switch to Search Manually →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* MODE B: SEARCH MANUALLY */}
+              {finderMode === 'manual' && (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400 pointer-events-none" />
+                    <input
+                      id="manual_constituency_search_input"
+                      type="text"
+                      value={manualSearchQuery}
+                      onChange={(e) => handleManualSearchChange(e.target.value)}
+                      placeholder="Search constituency name or number (e.g. Basirhat Uttar, 125, Dum Dum)"
+                      className="w-full pl-9 pr-9 py-2 text-xs border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:ring-2 focus:ring-blue-500 shadow-sm"
+                    />
+                    {manualSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => handleManualSearchChange('')}
+                        className="absolute right-2.5 top-2.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-0.5 cursor-pointer"
+                        title="Clear search"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Results Area */}
+                  {manualSearchQuery.trim() === '' ? (
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400 p-2.5 bg-white/60 dark:bg-zinc-800/40 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700">
+                      Type an AC number (e.g. 125), AC name (e.g. Basirhat Uttar), or PC name/number to search the canonical West Bengal catalog.
+                    </div>
+                  ) : manualSearchResults.length > 0 ? (
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
+                        <span>{manualSearchResults.length} candidate(s) found — click Select to confirm:</span>
+                        <span className="text-[11px] text-zinc-400">Canonical catalog</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
+                        {manualSearchResults.slice(0, manualVisibleCount).map((cand) => (
+                          <div
+                            key={`manual-${cand.assembly_constituency_number}-${cand.assembly_constituency}`}
+                            className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:border-blue-400 dark:hover:border-blue-600 transition-colors shadow-sm"
+                          >
+                            <div className="space-y-0.5 pr-2">
+                              <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 flex-wrap">
+                                <span>{cand.assembly_constituency_number} — {cand.assembly_constituency}</span>
+                                {cand.match_reason === 'exact_ac_number' && (
+                                  <span className="px-1.5 py-0.2 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] rounded font-mono">
+                                    Exact AC
+                                  </span>
+                                )}
+                              </div>
+                              {cand.parliamentary_constituency && (
+                                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
+                                  {cand.parliamentary_constituency_number ? `PC ${cand.parliamentary_constituency_number} — ` : ''}{cand.parliamentary_constituency}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleSelectElectoralCandidate(cand)}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer shrink-0"
+                            >
+                              Select
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {manualSearchResults.length > manualVisibleCount && (
+                        <button
+                          type="button"
+                          onClick={() => setManualVisibleCount(prev => prev + 6)}
+                          className="w-full py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium text-center border border-dashed border-blue-200 dark:border-blue-800/60 rounded-lg hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors cursor-pointer"
+                        >
+                          Show more results ({manualSearchResults.length - manualVisibleCount} remaining)
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-zinc-100/80 dark:bg-zinc-800/60 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-300 flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-zinc-400" />
+                      <span>No constituencies found matching &ldquo;{manualSearchQuery}&rdquo;. Try searching by AC number (e.g. 125) or PC name.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Status feedback & Candidate selector (when Finder is closed) */}
+          {electoralStatus && !isFinderOpen && (
             <div className="mb-4">
               {electoralStatus === 'unique' && (
                 <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 p-2.5 rounded-lg">
                   <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                  <span>{electoralMessage || "Constituency matched from address"}</span>
+                  <span>{electoralMessage || "Constituency selected"}</span>
                 </div>
               )}
 
@@ -1905,7 +2220,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                 <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg space-y-2">
                   <div className="flex items-center gap-2 text-xs font-medium text-amber-800 dark:text-amber-300">
                     <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
-                    <span>Multiple constituencies found — select the correct one</span>
+                    <span>Possible constituencies found — confirm the correct one:</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     {electoralCandidates.map((cand) => (
@@ -1931,16 +2246,40 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
               )}
 
               {electoralStatus === 'not_found' && (
-                <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 p-2.5 rounded-lg">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-zinc-400" />
-                  <span>No reliable constituency match found</span>
+                <div className="flex items-center justify-between gap-2 text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 p-2.5 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-zinc-400" />
+                    <span>Address could not be narrowed safely. Search by constituency name or number.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsFinderOpen(true);
+                      setFinderMode('manual');
+                    }}
+                    className="text-blue-600 dark:text-blue-400 hover:underline font-medium shrink-0 cursor-pointer"
+                  >
+                    Search Manually →
+                  </button>
                 </div>
               )}
 
               {electoralStatus === 'insufficient_data' && (
-                <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 p-2.5 rounded-lg">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-zinc-400" />
-                  <span>Need more address details</span>
+                <div className="flex items-center justify-between gap-2 text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 p-2.5 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-zinc-400" />
+                    <span>Need more address details. Search by constituency name or number.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsFinderOpen(true);
+                      setFinderMode('manual');
+                    }}
+                    className="text-blue-600 dark:text-blue-400 hover:underline font-medium shrink-0 cursor-pointer"
+                  >
+                    Search Manually →
+                  </button>
                 </div>
               )}
 
@@ -1955,25 +2294,25 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
           {/* Import / Lookup conflict review banner */}
           {electoralConflict && (
-            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg space-y-2 text-xs">
-              <div className="flex items-center gap-2 font-medium text-blue-900 dark:text-blue-300">
-                <AlertCircle className="h-4 w-4 shrink-0 text-blue-500" />
-                <span>Constituency review: Document import has &ldquo;{electoralConflict.imported}&rdquo;, address lookup suggests &ldquo;{electoralConflict.lookup}&rdquo;.</span>
+            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg space-y-2 text-xs">
+              <div className="flex items-center gap-2 font-medium text-amber-900 dark:text-amber-200">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
+                <span>Constituency conflict: Current value is &ldquo;{electoralConflict.imported}&rdquo;, selected candidate is &ldquo;{electoralConflict.lookup}&rdquo;.</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleSelectElectoralCandidate(electoralConflict.candidate)}
-                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors cursor-pointer"
+                  onClick={() => applyCandidateToForm(electoralConflict.candidate)}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-sm transition-colors cursor-pointer"
                 >
-                  Use {electoralConflict.lookup}
+                  Use Selected ({electoralConflict.lookup})
                 </button>
                 <button
                   type="button"
                   onClick={() => setElectoralConflict(null)}
-                  className="px-2.5 py-1 border border-zinc-300 dark:border-zinc-700 rounded text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                  className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer font-medium"
                 >
-                  Keep {electoralConflict.imported}
+                  Keep Current ({electoralConflict.imported})
                 </button>
               </div>
             </div>

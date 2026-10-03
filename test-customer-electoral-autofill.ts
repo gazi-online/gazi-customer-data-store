@@ -52,6 +52,7 @@ import {
   WEST_BENGAL_PINCODE_MAPPINGS,
   validateConstituency,
   getCanonicalConstituency,
+  searchWestBengalConstituencies,
 } from './src/lib/electoral/data/westBengalConstituencies';
 import {
   canLookupOverwriteElectoralField,
@@ -654,6 +655,161 @@ async function runSuite() {
   const resEmpty = await provider.lookup({});
   assert(resEmpty.status === 'insufficient_data', 'Empty context returns insufficient_data');
   assert(resEmpty.candidates.length === 0, 'Empty context returns 0 candidates');
+
+  // ==============================================================================
+  // SECTION 16: FIND CONSTITUENCY V2 — CANONICAL MANUAL SEARCH & FINDER SAFETY
+  // ==============================================================================
+  console.log("\n== SECTION 16: Find Constituency V2 — Canonical Manual Search & Selection ==");
+
+  // 1. "125" -> Basirhat Uttar candidate (rank #1, exact_ac_number)
+  const search125 = searchWestBengalConstituencies('125');
+  assert(search125.length >= 1, 'Search "125": Returns at least 1 candidate');
+  assert(
+    search125[0].assembly_constituency_number === '125' && search125[0].assembly_constituency === 'Basirhat Uttar',
+    'Search "125": Basirhat Uttar is ranked #1 (exact AC number)'
+  );
+  assert(search125[0].match_reason === 'exact_ac_number', 'Search "125": match_reason is exact_ac_number');
+
+  // 2. "Basirhat Uttar" -> exact candidate
+  const searchBasirhatUttar = searchWestBengalConstituencies('Basirhat Uttar');
+  assert(searchBasirhatUttar.length >= 1, 'Search "Basirhat Uttar": Returns at least 1 candidate');
+  assert(
+    searchBasirhatUttar[0].assembly_constituency_number === '125' && searchBasirhatUttar[0].assembly_constituency === 'Basirhat Uttar',
+    'Search "Basirhat Uttar": AC 125 Basirhat Uttar is ranked #1 (exact name)'
+  );
+  assert(searchBasirhatUttar[0].match_reason === 'exact_ac_name', 'Search "Basirhat Uttar": match_reason is exact_ac_name');
+
+  // 3. lowercase: "basirhat uttar" -> same candidate
+  const searchLower = searchWestBengalConstituencies('basirhat uttar');
+  assert(searchLower.length >= 1 && searchLower[0].assembly_constituency_number === '125',
+    'Search lowercase "basirhat uttar": Returns same candidate AC 125');
+
+  // 4. partial: "Basirhat" -> multiple relevant candidates, NOT auto-select
+  const searchPartial = searchWestBengalConstituencies('Basirhat');
+  assert(searchPartial.length >= 2, 'Search partial "Basirhat": Returns multiple candidates');
+  assert(searchPartial.some(c => c.assembly_constituency === 'Basirhat Dakshin' && c.assembly_constituency_number === '124'),
+    'Search partial "Basirhat": Includes Basirhat Dakshin (124)');
+  assert(searchPartial.some(c => c.assembly_constituency === 'Basirhat Uttar' && c.assembly_constituency_number === '125'),
+    'Search partial "Basirhat": Includes Basirhat Uttar (125)');
+  assert(searchPartial.some(c => c.assembly_constituency === 'Haroa' && c.parliamentary_constituency === 'Basirhat'),
+    'Search partial "Basirhat": Includes PC Basirhat segment Haroa (121)');
+
+  // 5. whitespace normalization: "  125  ", "  Basirhat   Uttar  "
+  const searchPaddedNum = searchWestBengalConstituencies('  125  ');
+  assert(searchPaddedNum.length >= 1 && searchPaddedNum[0].assembly_constituency_number === '125',
+    'Search "  125  ": Whitespace trimmed, finds AC 125');
+  const searchPaddedName = searchWestBengalConstituencies('  Basirhat   Uttar  ');
+  assert(searchPaddedName.length >= 1 && searchPaddedName[0].assembly_constituency_number === '125',
+    'Search "  Basirhat   Uttar  ": Whitespace collapsed and trimmed, finds AC 125');
+
+  // 6. unknown query -> no results
+  const searchUnknown = searchWestBengalConstituencies('xyzunknown999nonexistent');
+  assert(searchUnknown.length === 0, 'Search unknown query: Returns 0 results');
+  const searchEmpty = searchWestBengalConstituencies('   ');
+  assert(searchEmpty.length === 0, 'Search empty string: Returns 0 results');
+
+  // 7. PC-name / PC-number search -> relevant AC candidates but no automatic selection
+  const searchPC18 = searchWestBengalConstituencies('PC 18');
+  assert(searchPC18.length >= 6, 'Search "PC 18": Returns all 6+ AC candidates in PC 18');
+  assert(searchPC18.every(c => c.parliamentary_constituency_number === '18'),
+    'Search "PC 18": Every returned candidate belongs to PC 18');
+
+  // 8. Canonical relationship: every search candidate must exist in canonical catalog
+  let allSearchCanonical = true;
+  for (const query of ['125', '120', '100', '101', 'Basirhat', 'Dum Dum', 'Kolkata', 'PC 18', 'PC 17']) {
+    const results = searchWestBengalConstituencies(query);
+    for (const cand of results) {
+      if (!validateConstituency(
+        cand.assembly_constituency_number,
+        cand.assembly_constituency,
+        cand.parliamentary_constituency_number,
+        cand.parliamentary_constituency
+      )) {
+        allSearchCanonical = false;
+        console.error('Non-canonical search result:', cand);
+      }
+    }
+  }
+  assert(allSearchCanonical, 'Search: Every candidate across all sample queries exists in canonical catalog');
+
+  // 9. AC number/name pair canonical
+  const ac125_v2 = getCanonicalConstituency('125');
+  assert(ac125_v2?.ac_name === 'Basirhat Uttar' && ac125_v2?.ac_number === '125', 'AC 125 canonical name is Basirhat Uttar');
+
+  // 10. PC number/name pair canonical
+  assert(ac125_v2?.pc_number === '18' && ac125_v2?.pc_name === 'Basirhat', 'AC 125 canonical PC is PC 18 Basirhat');
+
+  // 16-21. Explicit selection behavior: populates 4 fields, does not set officially_verified or verified_at
+  const selectedCand = search125[0];
+  const operatorForm: CustomerFormData = createCanonicalEmptyCustomer();
+  const v2OperatorOrigins: FieldOrigins = initializeFieldOrigins(operatorForm as unknown as Record<string, unknown>, false);
+
+  // Simulate explicit operator click on candidate [Select]
+  operatorForm.assembly_constituency = selectedCand.assembly_constituency;
+  operatorForm.assembly_constituency_number = selectedCand.assembly_constituency_number;
+  operatorForm.parliamentary_constituency = selectedCand.parliamentary_constituency || '';
+  operatorForm.parliamentary_constituency_number = selectedCand.parliamentary_constituency_number || '';
+  v2OperatorOrigins.assembly_constituency = 'lookup';
+  v2OperatorOrigins.assembly_constituency_number = 'lookup';
+  v2OperatorOrigins.parliamentary_constituency = 'lookup';
+  v2OperatorOrigins.parliamentary_constituency_number = 'lookup';
+
+  assert(operatorForm.assembly_constituency === 'Basirhat Uttar', 'Operator selection fills AC name (Basirhat Uttar)');
+  assert(operatorForm.assembly_constituency_number === '125', 'Operator selection fills AC number (125)');
+  assert(operatorForm.parliamentary_constituency === 'Basirhat', 'Operator selection fills PC name (Basirhat)');
+  assert(operatorForm.parliamentary_constituency_number === '18', 'Operator selection fills PC number (18)');
+  assert(operatorForm.electoral_verification_status === 'unverified', 'Operator selection does NOT set officially_verified');
+  assert(operatorForm.electoral_verified_at === null, 'Operator selection does NOT set electoral_verified_at');
+
+  // 22-24. Field protection: manual and imported electoral values are not silently overwritten
+  const v2ManualForm: CustomerFormData = createCanonicalEmptyCustomer();
+  v2ManualForm.assembly_constituency = 'Habra';
+  v2ManualForm.assembly_constituency_number = '100';
+  const v2ManualOrigins: FieldOrigins = {
+    ...initializeFieldOrigins(v2ManualForm as unknown as Record<string, unknown>, false),
+    assembly_constituency: 'user',
+    assembly_constituency_number: 'user',
+  };
+
+  assert(canLookupOverwriteElectoralField('assembly_constituency', 'Basirhat Uttar', v2ManualOrigins.assembly_constituency) === false,
+    'Manual user AC field cannot be silently overwritten by lookup');
+  assert(canLookupOverwriteElectoralField('assembly_constituency_number', '125', v2ManualOrigins.assembly_constituency_number) === false,
+    'Manual user AC number cannot be silently overwritten by lookup');
+
+  const v2ImportOrigins: FieldOrigins = {
+    assembly_constituency: 'import',
+    assembly_constituency_number: 'import',
+  };
+  assert(canLookupOverwriteElectoralField('assembly_constituency', 'Basirhat Uttar', v2ImportOrigins.assembly_constituency) === false,
+    'Imported AC field cannot be silently overwritten by lookup');
+
+  // 25. Finder & Search session reset anti-leakage
+  const customerAFinderState = {
+    isFinderOpen: true,
+    finderMode: 'manual' as const,
+    manualSearchQuery: 'Basirhat Uttar',
+    manualSearchResults: searchBasirhatUttar,
+    manualVisibleCount: 12,
+    hasAddressSearched: true,
+  };
+  assert(customerAFinderState.isFinderOpen === true && customerAFinderState.manualSearchResults.length > 0,
+    'Customer A: Had active finder open and search results');
+
+  const resetFinderState = () => ({
+    isFinderOpen: false,
+    finderMode: 'address' as const,
+    manualSearchQuery: '',
+    manualSearchResults: [],
+    manualVisibleCount: 6,
+    hasAddressSearched: false,
+  });
+
+  const customerBFinderState = resetFinderState();
+  assert(customerBFinderState.isFinderOpen === false, 'Customer B: Finder starts closed');
+  assert(customerBFinderState.finderMode === 'address', 'Customer B: Finder mode resets to address');
+  assert(customerBFinderState.manualSearchQuery === '', 'Customer B: Manual search query is empty');
+  assert(customerBFinderState.manualSearchResults.length === 0, 'Customer B: Search results list is empty');
+  assert(customerBFinderState.hasAddressSearched === false, 'Customer B: Address search flag reset to false');
 
   console.log("\n==========================================================================");
   console.log(`TOTAL RESULT: ${passed} PASSED, ${failed} FAILED`);

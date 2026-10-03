@@ -548,6 +548,127 @@ export function getCanonicalConstituency(acNumber: string): OfficialConstituency
   return OFFICIAL_CONSTITUENCY_CATALOG[acNumber.trim()];
 }
 
+export type ConstituencyMatchReason =
+  | 'exact_ac_number'
+  | 'exact_ac_name'
+  | 'ac_name_prefix'
+  | 'ac_name_contains'
+  | 'exact_pc_number'
+  | 'exact_pc_name'
+  | 'location_context_candidate';
+
+export interface ConstituencySearchResult extends ElectoralCandidate {
+  match_reason: ConstituencyMatchReason;
+  match_strength: number;
+}
+
+/**
+ * Searches the canonical West Bengal constituency catalog without guessing.
+ *
+ * Deterministic ordering:
+ * 1. exact AC number
+ * 2. exact normalized AC name
+ * 3. AC name prefix
+ * 4. AC name contains
+ * 5. exact PC name/number
+ * 6. PC name contains
+ *
+ * INVARIANT: Every returned candidate strictly exists in OFFICIAL_CONSTITUENCY_CATALOG.
+ * Ranking never means auto-selection — explicit operator selection is required.
+ */
+export function searchWestBengalConstituencies(query: string): ConstituencySearchResult[] {
+  const q = query.trim().replace(/\s+/g, ' ');
+  if (!q || q.length === 0) {
+    return [];
+  }
+
+  const qLower = q.toLowerCase();
+  const cleanDigits = q.replace(/\D/g, '');
+  const isPureNumeric = /^\d+$/.test(q);
+
+  const results: ConstituencySearchResult[] = [];
+
+  for (const [acNum, official] of Object.entries(OFFICIAL_CONSTITUENCY_CATALOG)) {
+    const acNameFull = official.ac_name.toLowerCase();
+    const acNameClean = official.ac_name.replace(/\s*\((sc|st)\)\s*$/i, '').trim().toLowerCase();
+    const pcNameFull = official.pc_name.toLowerCase();
+    const pcNameClean = official.pc_name.replace(/\s*\((sc|st)\)\s*$/i, '').trim().toLowerCase();
+
+    let matchReason: ConstituencyMatchReason | null = null;
+    let matchStrength = 99;
+
+    // 1. Exact AC Number (Highest Priority)
+    if (q === official.ac_number || (isPureNumeric && cleanDigits === official.ac_number)) {
+      matchReason = 'exact_ac_number';
+      matchStrength = 1;
+    }
+    // 2. Exact AC Name
+    else if (qLower === acNameClean || qLower === acNameFull) {
+      matchReason = 'exact_ac_name';
+      matchStrength = 2;
+    }
+    // 3. AC Name Prefix
+    else if (acNameClean.startsWith(qLower) || acNameFull.startsWith(qLower)) {
+      matchReason = 'ac_name_prefix';
+      matchStrength = 3;
+    }
+    // 4. AC Name Contains
+    else if (acNameClean.includes(qLower) || acNameFull.includes(qLower)) {
+      matchReason = 'ac_name_contains';
+      matchStrength = 4;
+    }
+    // 5. Exact PC Number (e.g. "18" or "PC 18" or "PC-18")
+    else if (
+      (qLower.startsWith('pc') && cleanDigits === official.pc_number) ||
+      (isPureNumeric && q === official.pc_number)
+    ) {
+      matchReason = 'exact_pc_number';
+      matchStrength = 5;
+    }
+    // 5b. Exact PC Name
+    else if (qLower === pcNameClean || qLower === pcNameFull) {
+      matchReason = 'exact_pc_name';
+      matchStrength = 5;
+    }
+    // 6. PC Name Contains (e.g. "Basir" matching PC "Basirhat")
+    else if (pcNameClean.includes(qLower) || pcNameFull.includes(qLower)) {
+      matchReason = 'exact_pc_name';
+      matchStrength = 6;
+    }
+
+    if (matchReason) {
+      const baseCandidate = buildCandidateFromCatalog(
+        acNum,
+        {
+          source_type: 'operator_curated',
+          source_reference: `Canonical Catalog Manual Search (${matchReason})`,
+          confidence: 'medium',
+        },
+        `Manual search candidate (${matchReason}) — operator confirmation required`
+      );
+
+      results.push({
+        ...baseCandidate,
+        source: 'Canonical Catalog Manual Search',
+        match_reason: matchReason,
+        match_strength: matchStrength,
+      });
+    }
+  }
+
+  // Deterministic sorting:
+  // 1. match_strength ascending (1 = strongest)
+  // 2. AC number numeric ascending
+  results.sort((a, b) => {
+    if (a.match_strength !== b.match_strength) {
+      return a.match_strength - b.match_strength;
+    }
+    return parseInt(a.assembly_constituency_number, 10) - parseInt(b.assembly_constituency_number, 10);
+  });
+
+  return results;
+}
+
 /**
  * Helper to construct an ElectoralCandidate strictly linked to canonical catalog data.
  */

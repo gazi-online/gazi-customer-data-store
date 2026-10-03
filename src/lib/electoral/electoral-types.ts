@@ -32,6 +32,8 @@ export interface ElectoralCandidate {
   source_reference?: string;
   confidence?: 'high' | 'medium' | 'low';
   reason?: string;
+  match_reason?: string;
+  match_strength?: number;
 }
 
 export interface ElectoralLookupLocationContext {
