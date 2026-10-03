@@ -58,7 +58,7 @@ console.log("\n== SECTION 1: Database Migration & Schema Verification ==");
 const migrationPath = path.resolve(__dirname, 'supabase/migrations/20261002224500_customer_electoral_details.sql');
 assert(fs.existsSync(migrationPath), "Migration file exists at supabase/migrations/20261002224500_customer_electoral_details.sql");
 
-const migrationContent = fs.existsSync(migrationPath) ? fs.readFileSync(migrationPath, 'utf8') : '';
+const migrationContent = (fs.existsSync(migrationPath) ? fs.readFileSync(migrationPath, 'utf8') : '').replace(/\r\n/g, '\n');
 
 assert(migrationContent.includes("assembly_constituency TEXT NULL"), "Migration adds assembly_constituency column");
 assert(migrationContent.includes("assembly_constituency_number TEXT NULL"), "Migration adds assembly_constituency_number column");

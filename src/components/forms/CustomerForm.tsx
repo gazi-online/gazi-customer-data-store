@@ -14,14 +14,17 @@ import { v4 as uuidv4 } from "uuid";
 import { createCustomer, updateCustomer, checkDuplicateCustomer } from "@/app/(dashboard)/customers/actions";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
-import { CheckCircle2, AlertTriangle } from "lucide-react";
+import { CheckCircle2, AlertTriangle, MapPin, AlertCircle } from "lucide-react";
 import { AiSmartImportEngine, SmartImportMetadata } from "../AiSmartImportEngine";
 import { IndiaPincodeProvider } from "@/lib/address/IndiaPincodeProvider";
 import { constructCustomerCanonicalName } from "@/lib/names/NativeNameSuggestionProvider";
+import { lookupElectoralConstituency } from "@/lib/electoral/electoral-action";
+import { ElectoralCandidate, ElectoralLookupStatus } from "@/lib/electoral/electoral-types";
 import {
   FieldOrigins,
   initializeFieldOrigins,
   canLookupOverwriteField,
+  canLookupOverwriteElectoralField,
   resolveAutoFillPayload,
   checkLookupFreshness,
   VALID_FORM_FIELDS,
@@ -409,7 +412,17 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     setLocalityOptions([]);
     setPinRef(null);
 
-    // 10. Re-mount SmartImportEngine completely fresh
+    // 10. Reset electoral lookup state
+    electoralReqIdRef.current += 1;
+    lastLookedUpLocationKeyRef.current = "";
+    setIsElectoralLoading(false);
+    setElectoralStatus(null);
+    setElectoralMessage(null);
+    setElectoralCandidates([]);
+    setSelectedCandidate(null);
+    setElectoralConflict(null);
+
+    // 11. Re-mount SmartImportEngine completely fresh
     setSmartImportKey(prev => prev + 1);
   }, [isEditing, reset]);
 
@@ -450,10 +463,180 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
   
   const lookupReqIdRef = useRef(0);
 
+  // Electoral constituency lookup state
+  const [isElectoralLoading, setIsElectoralLoading] = useState(false);
+  const [electoralStatus, setElectoralStatus] = useState<ElectoralLookupStatus | null>(null);
+  const [electoralMessage, setElectoralMessage] = useState<string | null>(null);
+  const [electoralCandidates, setElectoralCandidates] = useState<ElectoralCandidate[]>([]);
+  const [, setSelectedCandidate] = useState<ElectoralCandidate | null>(null);
+  const [electoralConflict, setElectoralConflict] = useState<{ imported: string; lookup: string; candidate: ElectoralCandidate } | null>(null);
+  const electoralReqIdRef = useRef(0);
+  const lastLookedUpLocationKeyRef = useRef<string>(
+    initialData?.pincode ? `${initialData.pincode}|${initialData.state || ''}|${initialData.district || ''}|${initialData.post_office || ''}|${initialData.address || ''}` : ""
+  );
+
+  const triggerElectoralLookup = useCallback((forceManual = false) => {
+    const rawPin = getValues("pincode") || "";
+    const cleanPin = rawPin.replace(/\D/g, "").trim();
+    const state = getValues("state") || "";
+    const district = getValues("district") || "";
+    const postOffice = getValues("post_office") || "";
+    const address = getValues("address") || "";
+    const country = getValues("country") || "India";
+
+    // Automatic triggers require a valid 6-digit PIN
+    if (!forceManual && cleanPin.length !== 6) {
+      return;
+    }
+
+    const locationKey = `${cleanPin}|${state}|${district}|${postOffice}|${address}`;
+    if (!forceManual && lastLookedUpLocationKeyRef.current === locationKey) {
+      return;
+    }
+    lastLookedUpLocationKeyRef.current = locationKey;
+
+    const currentReqId = ++electoralReqIdRef.current;
+    const currentSession = sessionGenerationRef.current;
+
+    setIsElectoralLoading(true);
+
+    lookupElectoralConstituency({
+      pincode: cleanPin,
+      state,
+      district,
+      post_office: postOffice,
+      address,
+      country,
+    }).then(res => {
+      // Async race protection: discard if session changed or newer request started
+      if (sessionGenerationRef.current !== currentSession || electoralReqIdRef.current !== currentReqId) {
+        return;
+      }
+
+      setIsElectoralLoading(false);
+      setElectoralStatus(res.status);
+
+      if (res.status === 'unique' && res.candidates.length === 1) {
+        const candidate = res.candidates[0];
+        const origins = fieldOriginsRef.current!;
+
+        // Smart Import conflict check
+        const curAc = getValues("assembly_constituency") || "";
+        const curAcOrigin = origins.assembly_constituency;
+
+        if (curAcOrigin === 'import' && curAc.trim() && curAc.trim().toLowerCase() !== candidate.assembly_constituency.toLowerCase()) {
+          setElectoralCandidates([]);
+          setSelectedCandidate(candidate);
+          setElectoralConflict({
+            imported: curAc.trim(),
+            lookup: candidate.assembly_constituency,
+            candidate,
+          });
+          setElectoralMessage(`Document imported "${curAc.trim()}" — address lookup suggests "${candidate.assembly_constituency}"`);
+          return;
+        }
+
+        setElectoralConflict(null);
+        setElectoralCandidates([]);
+        setSelectedCandidate(candidate);
+
+        // Safe auto-fill respecting field origin protections
+        if (canLookupOverwriteElectoralField("assembly_constituency", candidate.assembly_constituency, origins.assembly_constituency)) {
+          setValue("assembly_constituency", candidate.assembly_constituency, { shouldValidate: true, shouldDirty: true });
+          origins.assembly_constituency = "lookup";
+        }
+
+        if (canLookupOverwriteElectoralField("assembly_constituency_number", candidate.assembly_constituency_number, origins.assembly_constituency_number)) {
+          setValue("assembly_constituency_number", candidate.assembly_constituency_number, { shouldValidate: true, shouldDirty: true });
+          origins.assembly_constituency_number = "lookup";
+        }
+
+        if (candidate.parliamentary_constituency && canLookupOverwriteElectoralField("parliamentary_constituency", candidate.parliamentary_constituency, origins.parliamentary_constituency)) {
+          setValue("parliamentary_constituency", candidate.parliamentary_constituency, { shouldValidate: true, shouldDirty: true });
+          origins.parliamentary_constituency = "lookup";
+        }
+
+        if (candidate.parliamentary_constituency_number && canLookupOverwriteElectoralField("parliamentary_constituency_number", candidate.parliamentary_constituency_number, origins.parliamentary_constituency_number)) {
+          setValue("parliamentary_constituency_number", candidate.parliamentary_constituency_number, { shouldValidate: true, shouldDirty: true });
+          origins.parliamentary_constituency_number = "lookup";
+        }
+
+        setElectoralMessage("Constituency matched from address");
+      } else if (res.status === 'multiple') {
+        setElectoralCandidates(res.candidates);
+        setSelectedCandidate(null);
+        setElectoralConflict(null);
+        setElectoralMessage("Multiple constituencies found — select the correct one");
+      } else if (res.status === 'not_found') {
+        setElectoralCandidates([]);
+        setSelectedCandidate(null);
+        setElectoralConflict(null);
+        setElectoralMessage("No reliable constituency match found");
+      } else if (res.status === 'insufficient_data') {
+        setElectoralCandidates([]);
+        setSelectedCandidate(null);
+        setElectoralConflict(null);
+        setElectoralMessage("Need more address details");
+      } else {
+        setElectoralCandidates([]);
+        setSelectedCandidate(null);
+        setElectoralConflict(null);
+        setElectoralMessage("Unable to check constituency");
+      }
+    }).catch(() => {
+      if (sessionGenerationRef.current !== currentSession || electoralReqIdRef.current !== currentReqId) {
+        return;
+      }
+      setIsElectoralLoading(false);
+      setElectoralStatus('provider_error');
+      setElectoralCandidates([]);
+      setSelectedCandidate(null);
+      setElectoralConflict(null);
+      setElectoralMessage("Unable to check constituency");
+    });
+  }, [getValues, setValue]);
+
+  const handleSelectElectoralCandidate = useCallback((candidate: ElectoralCandidate) => {
+    const origins = fieldOriginsRef.current!;
+
+    setValue("assembly_constituency", candidate.assembly_constituency, { shouldValidate: true, shouldDirty: true });
+    origins.assembly_constituency = "lookup";
+
+    setValue("assembly_constituency_number", candidate.assembly_constituency_number, { shouldValidate: true, shouldDirty: true });
+    origins.assembly_constituency_number = "lookup";
+
+    if (candidate.parliamentary_constituency) {
+      setValue("parliamentary_constituency", candidate.parliamentary_constituency, { shouldValidate: true, shouldDirty: true });
+      origins.parliamentary_constituency = "lookup";
+    }
+
+    if (candidate.parliamentary_constituency_number) {
+      setValue("parliamentary_constituency_number", candidate.parliamentary_constituency_number, { shouldValidate: true, shouldDirty: true });
+      origins.parliamentary_constituency_number = "lookup";
+    }
+
+    setSelectedCandidate(candidate);
+    setElectoralCandidates([]);
+    setElectoralConflict(null);
+    setElectoralStatus('unique');
+    setElectoralMessage("Constituency matched from address");
+  }, [setValue]);
+
+  const handleManualFindConstituency = useCallback(() => {
+    triggerElectoralLookup(true);
+  }, [triggerElectoralLookup]);
+
   const watchedPincode = watch("pincode");
   const watchedState = watch("state");
   const watchedDistrict = watch("district");
   const watchedPostOffice = watch("post_office");
+
+  useEffect(() => {
+    const cleanPin = (watchedPincode || "").replace(/\D/g, "").trim();
+    if (cleanPin.length === 6 && watchedPostOffice) {
+      triggerElectoralLookup(false);
+    }
+  }, [watchedPostOffice, watchedPincode, triggerElectoralLookup]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -467,6 +650,13 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       setPinRef(null);
       setPostOfficeOptions([]);
       setLocalityOptions([]);
+      electoralReqIdRef.current++;
+      setIsElectoralLoading(false);
+      setElectoralStatus(null);
+      setElectoralMessage(null);
+      setElectoralCandidates([]);
+      setSelectedCandidate(null);
+      setElectoralConflict(null);
       return;
     }
 
@@ -512,6 +702,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         }
 
         setLocalityOptions(res.data.citiesOrLocalities);
+        triggerElectoralLookup(false);
       } else {
         setPincodeError("PIN code lookup unavailable. You can enter the address manually.");
         setPinRef(null);
@@ -533,7 +724,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     return () => {
       isCancelled = true;
     };
-  }, [watchedPincode, setValue, getValues]);
+  }, [watchedPincode, setValue, getValues, triggerElectoralLookup]);
 
   useEffect(() => {
     async function loadPhoto() {
@@ -1670,14 +1861,123 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
         {/* Electoral Details */}
         <div>
-          <div className="flex items-center justify-between mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 border-b border-zinc-100 dark:border-zinc-800 pb-2 gap-2">
             <div>
               <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Electoral Details</h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                 Assembly &amp; Parliamentary constituency records for voter services and verified form filling
               </p>
             </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                id="find_constituency_btn"
+                onClick={() => handleManualFindConstituency()}
+                disabled={isElectoralLoading}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition-colors border border-blue-200 dark:border-blue-800/60 disabled:opacity-50 cursor-pointer"
+              >
+                {isElectoralLoading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Checking...</span>
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="h-3.5 w-3.5" />
+                    <span>Find Constituency</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
+
+          {/* Status feedback & Candidate selector */}
+          {electoralStatus && (
+            <div className="mb-4">
+              {electoralStatus === 'unique' && (
+                <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 p-2.5 rounded-lg">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                  <span>{electoralMessage || "Constituency matched from address"}</span>
+                </div>
+              )}
+
+              {electoralStatus === 'multiple' && electoralCandidates.length > 0 && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-medium text-amber-800 dark:text-amber-300">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                    <span>Multiple constituencies found — select the correct one</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {electoralCandidates.map((cand) => (
+                      <button
+                        key={`${cand.assembly_constituency_number}-${cand.assembly_constituency}`}
+                        type="button"
+                        onClick={() => handleSelectElectoralCandidate(cand)}
+                        className="text-left p-2.5 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-white dark:bg-zinc-800 hover:bg-amber-100/50 dark:hover:bg-amber-900/30 transition-all text-xs space-y-0.5 group focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      >
+                        <div className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center justify-between">
+                          <span>{cand.assembly_constituency_number} — {cand.assembly_constituency}</span>
+                          <span className="text-[10px] text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 font-normal">Select →</span>
+                        </div>
+                        {cand.parliamentary_constituency && (
+                          <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
+                            {cand.parliamentary_constituency_number ? `PC ${cand.parliamentary_constituency_number} — ` : ''}{cand.parliamentary_constituency}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {electoralStatus === 'not_found' && (
+                <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 p-2.5 rounded-lg">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-zinc-400" />
+                  <span>No reliable constituency match found</span>
+                </div>
+              )}
+
+              {electoralStatus === 'insufficient_data' && (
+                <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 p-2.5 rounded-lg">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-zinc-400" />
+                  <span>Need more address details</span>
+                </div>
+              )}
+
+              {electoralStatus === 'provider_error' && (
+                <div className="flex items-center gap-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 p-2.5 rounded-lg">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+                  <span>Unable to check constituency</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Import / Lookup conflict review banner */}
+          {electoralConflict && (
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg space-y-2 text-xs">
+              <div className="flex items-center gap-2 font-medium text-blue-900 dark:text-blue-300">
+                <AlertCircle className="h-4 w-4 shrink-0 text-blue-500" />
+                <span>Constituency review: Document import has &ldquo;{electoralConflict.imported}&rdquo;, address lookup suggests &ldquo;{electoralConflict.lookup}&rdquo;.</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSelectElectoralCandidate(electoralConflict.candidate)}
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors cursor-pointer"
+                >
+                  Use {electoralConflict.lookup}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setElectoralConflict(null)}
+                  className="px-2.5 py-1 border border-zinc-300 dark:border-zinc-700 rounded text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                >
+                  Keep {electoralConflict.imported}
+                </button>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2 md:col-span-2">
               <label htmlFor="assembly_constituency" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">

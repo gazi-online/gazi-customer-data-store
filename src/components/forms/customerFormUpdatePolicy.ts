@@ -171,14 +171,27 @@ export function canImportOverwriteField(
   return true;
 }
 
+export const ELECTORAL_FIELDS = [
+  'assembly_constituency',
+  'assembly_constituency_number',
+  'parliamentary_constituency',
+  'parliamentary_constituency_number',
+] as const;
+
+export type ElectoralFieldName = (typeof ELECTORAL_FIELDS)[number];
+
+export function isElectoralField(field: string): field is ElectoralFieldName {
+  return (ELECTORAL_FIELDS as readonly string[]).includes(field as ElectoralFieldName);
+}
+
 /**
- * Predicate determining whether an asynchronous PIN lookup result can overwrite a field.
+ * Predicate determining whether an asynchronous lookup result (PIN or Electoral) can overwrite a field.
  */
 export function canLookupOverwriteField(
-  field: 'state' | 'district' | 'country' | 'post_office',
+  field: 'state' | 'district' | 'country' | 'post_office' | ElectoralFieldName,
   incomingVal: unknown,
   origin: FieldOrigin | undefined,
-  isManualAddressEdit: boolean
+  isManualAddressEdit?: boolean
 ): boolean {
   if (incomingVal === undefined || incomingVal === null || String(incomingVal).trim() === '') {
     return false;
@@ -206,6 +219,23 @@ export function canLookupOverwriteField(
   // Only eligible if previous lookup or untouched default
   return origin === 'lookup' || origin === undefined;
 }
+
+/**
+ * Predicate determining whether an automatic or lookup-derived electoral result can overwrite an electoral field.
+ * Invariants:
+ * - Manual user inputs ('user') are strictly protected.
+ * - Initial loaded customer values ('initial') are strictly protected in Edit mode.
+ * - Reviewed/Imported values ('import') are strictly protected against automatic lookup overwrites.
+ * - Only 'lookup' or untouched default (undefined) may be overwritten.
+ */
+export function canLookupOverwriteElectoralField(
+  field: ElectoralFieldName,
+  incomingVal: unknown,
+  origin: FieldOrigin | undefined
+): boolean {
+  return canLookupOverwriteField(field, incomingVal, origin, false);
+}
+
 
 export interface AddressBatchResult {
   acceptedAddressFields: Record<string, unknown>;
