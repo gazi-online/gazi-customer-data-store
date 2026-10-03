@@ -56,14 +56,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  CANONICAL_EMPTY_CUSTOMER,
   createCanonicalEmptyCustomer,
   VALID_FORM_FIELDS,
   ELECTORAL_FIELDS,
-  canImportOverwriteField,
   canLookupOverwriteElectoralField,
   resolveAutoFillPayloadForNewIntake,
-  initializeFieldOrigins,
   FieldOrigins,
 } from './src/components/forms/customerFormUpdatePolicy';
 import { Customer, CustomerFormData } from './src/types/customer';
@@ -356,6 +353,133 @@ const userOrigin: FieldOrigins = {
 const canOverwritePart = canLookupOverwriteElectoralField('electoral_part_number', '999', userOrigin.electoral_part_number);
 const canOverwriteSerial = canLookupOverwriteElectoralField('electoral_serial_number', '999', userOrigin.electoral_serial_number);
 assert(!canOverwritePart && !canOverwriteSerial, "24. Existing manual value not silently overwritten");
+
+// ==============================================================================
+// 6B. SMART IMPORT HARDENING REGRESSION CASES (Fail-Closed Boundary Verification)
+// ==============================================================================
+console.log("\n== SECTION 6B: Smart Import Hardening (Fail-Closed Boundaries) ==");
+
+// 1. Invoice part_number does NOT become electoral_part_number
+const invoiceRawData = {
+  document_type: "invoice",
+  part_number: "PART-INV-9988",
+  part_no: "PNO-4433",
+  items: [{ description: "Spare Part", code: "P-101" }],
+};
+const normalizedInvoice = DataNormalizer.normalize(invoiceRawData);
+assert(
+  normalizedInvoice.electoral_part_number === undefined,
+  "Hardening 1: Invoice generic part_number/part_no does NOT become electoral_part_number"
+);
+
+// 2. Invoice serial_number does NOT become electoral_serial_number
+const invoiceWithSerial = {
+  document_type: "invoice",
+  serial_number: "INV-SR-12345",
+  serial_no: "SR-9988",
+};
+const normalizedInvoiceSerial = DataNormalizer.normalize(invoiceWithSerial);
+assert(
+  normalizedInvoiceSerial.electoral_serial_number === undefined,
+  "Hardening 2: Invoice generic serial_number does NOT become electoral_serial_number"
+);
+
+// 3. Receipt serial_number does NOT become electoral_serial_number
+const receiptRawData = {
+  document_type: "money_receipt",
+  customer: {
+    full_name: "Customer Name",
+    serial_number: "RCPT-SR-7766",
+    serial_number_in_part: "NON-ELECTORAL-SERIAL",
+  },
+};
+const normalizedReceipt = DataNormalizer.normalize(receiptRawData);
+assert(
+  normalizedReceipt.electoral_serial_number === undefined,
+  "Hardening 3: Receipt serial_number does NOT become electoral_serial_number"
+);
+
+// 4. Generic customer serial_number / part_number does NOT become electoral serial / part
+const genericCustomerData = {
+  customer: {
+    part_number: "888",
+    part_no: "777",
+    serial_number: "555",
+    serial_number_in_part: "444",
+  },
+  part_number: "888",
+  serial_number: "555",
+};
+const normalizedGenericCustomer = DataNormalizer.normalize(genericCustomerData);
+assert(
+  normalizedGenericCustomer.electoral_part_number === undefined,
+  "Hardening 4A: Generic customer part_number does NOT become electoral_part_number"
+);
+assert(
+  normalizedGenericCustomer.electoral_serial_number === undefined,
+  "Hardening 4B: Generic customer serial_number does NOT become electoral_serial_number"
+);
+
+// 5. electoral.part_number DOES normalize
+const electoralWithPartNumber = {
+  electoral: {
+    part_number: "123",
+  },
+};
+const normalizedElectoralPart = DataNormalizer.normalize(electoralWithPartNumber);
+assert(
+  normalizedElectoralPart.electoral_part_number?.value === "123",
+  "Hardening 5: electoral.part_number DOES normalize"
+);
+
+// 6. electoral.serial_number_in_part DOES normalize
+const electoralWithSerialInPart = {
+  electoral: {
+    serial_number_in_part: "456",
+  },
+};
+const normalizedElectoralSerial = DataNormalizer.normalize(electoralWithSerialInPart);
+assert(
+  normalizedElectoralSerial.electoral_serial_number?.value === "456",
+  "Hardening 6: electoral.serial_number_in_part DOES normalize"
+);
+
+// 7. Canonical electoral_part_number DOES normalize
+const canonicalPartData = {
+  electoral_part_number: "178-A",
+};
+const normalizedCanonicalPart = DataNormalizer.normalize(canonicalPartData);
+assert(
+  normalizedCanonicalPart.electoral_part_number?.value === "178-A",
+  "Hardening 7: Canonical electoral_part_number DOES normalize"
+);
+
+// 8. Canonical electoral_serial_number DOES normalize
+const canonicalSerialData = {
+  electoral_serial_number: "921",
+};
+const normalizedCanonicalSerial = DataNormalizer.normalize(canonicalSerialData);
+assert(
+  normalizedCanonicalSerial.electoral_serial_number?.value === "921",
+  "Hardening 8: Canonical electoral_serial_number DOES normalize"
+);
+
+// 9. Existing voter-document parser extraction still works
+const voterDocOcr = `
+ELECTION COMMISSION OF INDIA
+VOTER IDENTITY CARD
+EPIC NO: WB/18/125/445566
+Name: Animesh Ghosh
+Assembly Constituency: 125 - Basirhat Uttar
+Part No: 108
+Serial No. in Part: 342
+`;
+const parsedVoterDoc = DocumentTextParser.parse(voterDocOcr, 'voter_id');
+assert(parsedVoterDoc.electoral?.electoral_part_number === "108", "Hardening 9A: DocumentTextParser extracts Part No into electoral.electoral_part_number");
+assert(parsedVoterDoc.electoral?.electoral_serial_number === "342", "Hardening 9B: DocumentTextParser extracts Serial No in Part into electoral.electoral_serial_number");
+const normalizedVoterDoc = DataNormalizer.normalize(parsedVoterDoc);
+assert(normalizedVoterDoc.electoral_part_number?.value === "108", "Hardening 9C: Voter doc normalizes electoral_part_number");
+assert(normalizedVoterDoc.electoral_serial_number?.value === "342", "Hardening 9D: Voter doc normalizes electoral_serial_number");
 
 // ==============================================================================
 // 7. VERIFICATION (Points 25 - 27)
