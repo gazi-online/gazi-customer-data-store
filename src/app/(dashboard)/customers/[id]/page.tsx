@@ -394,16 +394,16 @@ export default async function CustomerProfilePage({
               </div>
 
               <div className="space-y-1">
-                <p className="text-xs sm:text-sm font-medium text-zinc-500">Parliamentary Constituency</p>
-                <p className="text-zinc-900 dark:text-zinc-100 font-medium text-sm break-words">
-                  {customer.parliamentary_constituency || <span className="text-zinc-400 italic">Not provided</span>}
+                <p className="text-xs sm:text-sm font-medium text-zinc-500">Part Number</p>
+                <p className="text-zinc-900 dark:text-zinc-100 font-medium font-mono text-sm">
+                  {customer.electoral_part_number || <span className="text-zinc-400 italic">—</span>}
                 </p>
               </div>
 
               <div className="space-y-1">
-                <p className="text-xs sm:text-sm font-medium text-zinc-500">PC Number</p>
+                <p className="text-xs sm:text-sm font-medium text-zinc-500">Serial Number in Part</p>
                 <p className="text-zinc-900 dark:text-zinc-100 font-medium font-mono text-sm">
-                  {customer.parliamentary_constituency_number || <span className="text-zinc-400 italic">—</span>}
+                  {customer.electoral_serial_number || <span className="text-zinc-400 italic">—</span>}
                 </p>
               </div>
 

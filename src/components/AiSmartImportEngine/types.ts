@@ -38,6 +38,8 @@ export interface NormalizedData {
   voter_id_number?: AiField<string>;
   assembly_constituency?: AiField<string>;
   assembly_constituency_number?: AiField<string>;
+  electoral_part_number?: AiField<string>;
+  electoral_serial_number?: AiField<string>;
   parliamentary_constituency?: AiField<string>;
   parliamentary_constituency_number?: AiField<string>;
   date_of_birth?: AiField<string>; // YYYY-MM-DD

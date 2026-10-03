@@ -214,6 +214,8 @@ const customerSchema = z.object({
   // ── Electoral Details ────────────────────────────────────────────────────
   assembly_constituency: z.string().optional().or(z.literal("")).transform(v => (v ? v.trim() : "")),
   assembly_constituency_number: z.string().optional().or(z.literal("")).transform(v => (v ? v.trim() : "")),
+  electoral_part_number: z.string().optional().or(z.literal("")).transform(v => (v ? v.trim() : "")),
+  electoral_serial_number: z.string().optional().or(z.literal("")).transform(v => (v ? v.trim() : "")),
   parliamentary_constituency: z.string().optional().or(z.literal("")).transform(v => (v ? v.trim() : "")),
   parliamentary_constituency_number: z.string().optional().or(z.literal("")).transform(v => (v ? v.trim() : "")),
   electoral_verification_status: z.enum(["unverified", "customer_confirmed", "officially_verified"]).default("unverified"),
@@ -282,6 +284,8 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       country: "India",
       assembly_constituency: initialData.assembly_constituency || "",
       assembly_constituency_number: initialData.assembly_constituency_number || "",
+      electoral_part_number: initialData.electoral_part_number || "",
+      electoral_serial_number: initialData.electoral_serial_number || "",
       parliamentary_constituency: initialData.parliamentary_constituency || "",
       parliamentary_constituency_number: initialData.parliamentary_constituency_number || "",
       electoral_verification_status: initialData.electoral_verification_status || "unverified",
@@ -580,16 +584,6 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
           origins.assembly_constituency_number = "lookup";
         }
 
-        if (candidate.parliamentary_constituency && canLookupOverwriteElectoralField("parliamentary_constituency", candidate.parliamentary_constituency, origins.parliamentary_constituency)) {
-          setValue("parliamentary_constituency", candidate.parliamentary_constituency, { shouldValidate: true, shouldDirty: true });
-          origins.parliamentary_constituency = "lookup";
-        }
-
-        if (candidate.parliamentary_constituency_number && canLookupOverwriteElectoralField("parliamentary_constituency_number", candidate.parliamentary_constituency_number, origins.parliamentary_constituency_number)) {
-          setValue("parliamentary_constituency_number", candidate.parliamentary_constituency_number, { shouldValidate: true, shouldDirty: true });
-          origins.parliamentary_constituency_number = "lookup";
-        }
-
         setElectoralMessage("Constituency selected");
       } else if (res.status === 'multiple') {
         setElectoralCandidates(res.candidates);
@@ -633,16 +627,6 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
 
     setValue("assembly_constituency_number", candidate.assembly_constituency_number, { shouldValidate: true, shouldDirty: true });
     origins.assembly_constituency_number = "lookup";
-
-    if (candidate.parliamentary_constituency) {
-      setValue("parliamentary_constituency", candidate.parliamentary_constituency, { shouldValidate: true, shouldDirty: true });
-      origins.parliamentary_constituency = "lookup";
-    }
-
-    if (candidate.parliamentary_constituency_number) {
-      setValue("parliamentary_constituency_number", candidate.parliamentary_constituency_number, { shouldValidate: true, shouldDirty: true });
-      origins.parliamentary_constituency_number = "lookup";
-    }
 
     setSelectedCandidate(candidate);
     setElectoralCandidates([]);
@@ -1059,6 +1043,8 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         voter_id_number: data.voter_id_number === "" ? null : data.voter_id_number,
         assembly_constituency: data.assembly_constituency?.trim() || null,
         assembly_constituency_number: data.assembly_constituency_number?.trim() || null,
+        electoral_part_number: data.electoral_part_number?.trim() || null,
+        electoral_serial_number: data.electoral_serial_number?.trim() || null,
         parliamentary_constituency: data.parliamentary_constituency?.trim() || null,
         parliamentary_constituency_number: data.parliamentary_constituency_number?.trim() || null,
         electoral_verification_status: data.electoral_verification_status || "unverified",
@@ -2080,11 +2066,6 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                                   <div className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">
                                     {cand.assembly_constituency_number} — {cand.assembly_constituency}
                                   </div>
-                                  {cand.parliamentary_constituency && (
-                                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
-                                      {cand.parliamentary_constituency_number ? `PC ${cand.parliamentary_constituency_number} — ` : ''}{cand.parliamentary_constituency}
-                                    </div>
-                                  )}
                                 </div>
                                 <button
                                   type="button"
@@ -2168,11 +2149,6 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                                   </span>
                                 )}
                               </div>
-                              {cand.parliamentary_constituency && (
-                                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
-                                  {cand.parliamentary_constituency_number ? `PC ${cand.parliamentary_constituency_number} — ` : ''}{cand.parliamentary_constituency}
-                                </div>
-                              )}
                             </div>
                             <button
                               type="button"
@@ -2234,11 +2210,6 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
                           <span>{cand.assembly_constituency_number} — {cand.assembly_constituency}</span>
                           <span className="text-[10px] text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 font-normal">Select →</span>
                         </div>
-                        {cand.parliamentary_constituency && (
-                          <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
-                            {cand.parliamentary_constituency_number ? `PC ${cand.parliamentary_constituency_number} — ` : ''}{cand.parliamentary_constituency}
-                          </div>
-                        )}
                       </button>
                     ))}
                   </div>
@@ -2349,32 +2320,32 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <label htmlFor="parliamentary_constituency" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Parliamentary Constituency
+              <label htmlFor="electoral_part_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Part Number
               </label>
               <div className="relative">
                 <input
-                  id="parliamentary_constituency"
-                  {...register("parliamentary_constituency")}
-                  className="w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow border-zinc-300 dark:border-zinc-700 focus:ring-blue-500"
-                  placeholder="e.g. Basirhat"
+                  id="electoral_part_number"
+                  {...register("electoral_part_number")}
+                  className="w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono border-zinc-300 dark:border-zinc-700 focus:ring-blue-500"
+                  placeholder="e.g. 123"
                 />
-                <ValidFieldTick show={!!touchedFields.parliamentary_constituency && !!getValues("parliamentary_constituency")?.trim()} />
+                <ValidFieldTick show={!!touchedFields.electoral_part_number && !!getValues("electoral_part_number")?.trim()} />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="parliamentary_constituency_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                PC Number
+              <label htmlFor="electoral_serial_number" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Serial Number in Part
               </label>
               <div className="relative">
                 <input
-                  id="parliamentary_constituency_number"
-                  {...register("parliamentary_constituency_number")}
+                  id="electoral_serial_number"
+                  {...register("electoral_serial_number")}
                   className="w-full p-2.5 pr-9 border rounded-lg bg-transparent focus:ring-2 transition-shadow font-mono border-zinc-300 dark:border-zinc-700 focus:ring-blue-500"
-                  placeholder="e.g. 18"
+                  placeholder="e.g. 456"
                 />
-                <ValidFieldTick show={!!touchedFields.parliamentary_constituency_number && !!getValues("parliamentary_constituency_number")?.trim()} />
+                <ValidFieldTick show={!!touchedFields.electoral_serial_number && !!getValues("electoral_serial_number")?.trim()} />
               </div>
             </div>
 

@@ -56,6 +56,8 @@ export interface ParsedDocumentFields {
   electoral?: {
     assembly_constituency?: string;
     assembly_constituency_number?: string;
+    electoral_part_number?: string;
+    electoral_serial_number?: string;
     parliamentary_constituency?: string;
     parliamentary_constituency_number?: string;
   };

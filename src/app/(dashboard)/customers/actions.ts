@@ -127,6 +127,16 @@ function sanitizeElectoralFields(
       ? payload.assembly_constituency_number.trim()
       : null;
   }
+  if ("electoral_part_number" in payload) {
+    payload.electoral_part_number = typeof payload.electoral_part_number === "string" && payload.electoral_part_number.trim() !== ""
+      ? payload.electoral_part_number.trim()
+      : null;
+  }
+  if ("electoral_serial_number" in payload) {
+    payload.electoral_serial_number = typeof payload.electoral_serial_number === "string" && payload.electoral_serial_number.trim() !== ""
+      ? payload.electoral_serial_number.trim()
+      : null;
+  }
   if ("parliamentary_constituency" in payload) {
     payload.parliamentary_constituency = typeof payload.parliamentary_constituency === "string" && payload.parliamentary_constituency.trim() !== ""
       ? payload.parliamentary_constituency.trim()

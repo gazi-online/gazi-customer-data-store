@@ -29,6 +29,8 @@ export interface Customer {
   // Electoral Details
   assembly_constituency?: string | null;
   assembly_constituency_number?: string | null;
+  electoral_part_number?: string | null;
+  electoral_serial_number?: string | null;
   parliamentary_constituency?: string | null;
   parliamentary_constituency_number?: string | null;
   electoral_verification_status?: ElectoralVerificationStatus;
@@ -99,6 +101,8 @@ export interface CustomerFormData {
   // Electoral Details
   assembly_constituency?: string;
   assembly_constituency_number?: string;
+  electoral_part_number?: string;
+  electoral_serial_number?: string;
   parliamentary_constituency?: string;
   parliamentary_constituency_number?: string;
   electoral_verification_status?: ElectoralVerificationStatus;

@@ -591,6 +591,43 @@ export class DocumentTextParser {
             }
           }
         }
+
+        // 4. ELECTORAL ROLL PART NUMBER EXTRACTION
+        if (
+          u.includes("PART NO") ||
+          u.includes("PART NUMBER") ||
+          u.includes("ELECTORAL ROLL PART") ||
+          line.includes("ভাগ নম্বর") ||
+          line.includes("অংশ নম্বর") ||
+          line.includes("भाग संख्या")
+        ) {
+          const val = line.split(/[:\-]/).slice(1).join('-').trim() || lines[i + 1]?.trim();
+          if (val && !isNonPersonHeader(val)) {
+            const cleanPart = val.replace(/^[#\s]+/, '').trim();
+            if (cleanPart && !result.electoral!.electoral_part_number) {
+              result.electoral!.electoral_part_number = cleanPart;
+            }
+          }
+        }
+
+        // 5. ELECTORAL ROLL SERIAL NUMBER IN PART EXTRACTION
+        // Contextual: strictly requires electoral context
+        if (
+          u.includes("SERIAL NO IN PART") ||
+          u.includes("SERIAL NUMBER IN PART") ||
+          u.includes("SL NO IN PART") ||
+          u.includes("SR NO IN PART") ||
+          ((u.includes("SERIAL NO") || u.includes("SERIAL NUMBER") || u.includes("SL NO") || u.includes("SR NO") || line.includes("ক্রমিক নম্বর") || line.includes("क्रम संख्या")) &&
+           (cleanText.toUpperCase().includes("ELECTOR") || cleanText.toUpperCase().includes("PART NO") || cleanText.toUpperCase().includes("VOTER") || cleanText.toUpperCase().includes("ELECTION") || cleanText.toUpperCase().includes("POLLING") || cleanText.toUpperCase().includes("AC NO") || cleanText.toUpperCase().includes("ASSEMBLY")))
+        ) {
+          const val = line.split(/[:\-]/).slice(1).join('-').trim() || lines[i + 1]?.trim();
+          if (val && !isNonPersonHeader(val)) {
+            const cleanSerial = val.replace(/^[#\s]+/, '').trim();
+            if (cleanSerial && !result.electoral!.electoral_serial_number) {
+              result.electoral!.electoral_serial_number = cleanSerial;
+            }
+          }
+        }
       }
     } else if (documentType === 'bank_passbook' || documentType === 'bank_statement') {
       const acctMatch = cleanText.match(/\b(A\/C|ACCOUNT NO|ACCOUNT NUMBER)[:\s]*([0-9]{9,18})\b/i);

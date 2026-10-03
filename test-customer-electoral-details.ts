@@ -589,8 +589,8 @@ const profileSource = fs.readFileSync(path.resolve(__dirname, 'src/app/(dashboar
 assert(profileSource.includes("Electoral Details"), "Customer profile renders 'Electoral Details' card heading");
 assert(profileSource.includes("customer.assembly_constituency"), "Profile displays customer.assembly_constituency");
 assert(profileSource.includes("customer.assembly_constituency_number"), "Profile displays customer.assembly_constituency_number");
-assert(profileSource.includes("customer.parliamentary_constituency"), "Profile displays customer.parliamentary_constituency");
-assert(profileSource.includes("customer.parliamentary_constituency_number"), "Profile displays customer.parliamentary_constituency_number");
+assert(profileSource.includes("customer.electoral_part_number"), "Profile displays customer.electoral_part_number");
+assert(profileSource.includes("customer.electoral_serial_number"), "Profile displays customer.electoral_serial_number");
 assert(profileSource.includes("customer.electoral_verification_status"), "Profile displays customer.electoral_verification_status badge");
 assert(profileSource.includes("customer.electoral_verified_at"), "Profile displays customer.electoral_verified_at timestamp");
 

@@ -230,6 +230,24 @@ export class DataNormalizer {
       }
     }
 
+    // Electoral Roll Part Number
+    const partNo = electoralObj.electoral_part_number || electoralObj.part_number || electoralObj.part_no || rawData.electoral_part_number || customer.electoral_part_number || rawData.part_number || customer.part_number || rawData.part_no;
+    if (partNo !== undefined && partNo !== null && partNo !== '') {
+      const cleanPartNo = typeof partNo === 'string' ? partNo.trim() : (partNo.value !== undefined ? String(partNo.value).trim() : String(partNo).trim());
+      if (cleanPartNo) {
+        normalized.electoral_part_number = toAiField(cleanPartNo, conf.electoral_part_number || conf.part_number || (typeof partNo === 'object' ? partNo : undefined), 0.9);
+      }
+    }
+
+    // Electoral Roll Serial Number in Part
+    const serialNo = electoralObj.electoral_serial_number || electoralObj.serial_number || electoralObj.serial_number_in_part || rawData.electoral_serial_number || customer.electoral_serial_number || rawData.serial_number || customer.serial_number || rawData.serial_number_in_part;
+    if (serialNo !== undefined && serialNo !== null && serialNo !== '') {
+      const cleanSerialNo = typeof serialNo === 'string' ? serialNo.trim() : (serialNo.value !== undefined ? String(serialNo.value).trim() : String(serialNo).trim());
+      if (cleanSerialNo) {
+        normalized.electoral_serial_number = toAiField(cleanSerialNo, conf.electoral_serial_number || conf.serial_number || (typeof serialNo === 'object' ? serialNo : undefined), 0.9);
+      }
+    }
+
     // Date of Birth
     const dob = customer.dob || customer.date_of_birth || customer.dateOfBirth;
     if (dob) {

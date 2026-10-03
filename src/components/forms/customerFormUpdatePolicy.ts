@@ -25,6 +25,8 @@ export const CANONICAL_EMPTY_CUSTOMER: CustomerFormData = {
   voter_id_number: "",
   assembly_constituency: "",
   assembly_constituency_number: "",
+  electoral_part_number: "",
+  electoral_serial_number: "",
   parliamentary_constituency: "",
   parliamentary_constituency_number: "",
   electoral_verification_status: "unverified",
@@ -67,6 +69,8 @@ export const VALID_FORM_FIELDS = new Set<string>([
   'voter_id_number',
   'assembly_constituency',
   'assembly_constituency_number',
+  'electoral_part_number',
+  'electoral_serial_number',
   'parliamentary_constituency',
   'parliamentary_constituency_number',
   'electoral_verification_status',
@@ -174,6 +178,8 @@ export function canImportOverwriteField(
 export const ELECTORAL_FIELDS = [
   'assembly_constituency',
   'assembly_constituency_number',
+  'electoral_part_number',
+  'electoral_serial_number',
   'parliamentary_constituency',
   'parliamentary_constituency_number',
 ] as const;

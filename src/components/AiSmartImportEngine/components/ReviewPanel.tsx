@@ -180,6 +180,8 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
   'voter_id_number',
   'assembly_constituency',
   'assembly_constituency_number',
+  'electoral_part_number',
+  'electoral_serial_number',
   'parliamentary_constituency',
   'parliamentary_constituency_number',
   'date_of_birth',
@@ -844,7 +846,7 @@ const ALL_FIELDS: (keyof NormalizedData)[] = [
                   isConflict ? 'border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-900/10' : 'border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50'
                 }`}>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 capitalize flex items-center justify-between">
-                    {key === 'voter_id_number' ? 'Voter ID / EPIC Number' : key === 'aadhaar_number' ? 'Aadhaar Number' : key === 'pan_number' ? 'PAN Number' : key === 'gst_number' ? 'GST Number' : key === 'assembly_constituency' ? 'Assembly Constituency' : key === 'assembly_constituency_number' ? 'AC Number' : key === 'parliamentary_constituency' ? 'Parliamentary Constituency' : key === 'parliamentary_constituency_number' ? 'PC Number' : key.replace(/_/g, ' ')}
+                    {key === 'voter_id_number' ? 'Voter ID / EPIC Number' : key === 'aadhaar_number' ? 'Aadhaar Number' : key === 'pan_number' ? 'PAN Number' : key === 'gst_number' ? 'GST Number' : key === 'assembly_constituency' ? 'Assembly Constituency' : key === 'assembly_constituency_number' ? 'AC Number' : key === 'electoral_part_number' ? 'Part Number' : key === 'electoral_serial_number' ? 'Serial Number in Part' : key === 'parliamentary_constituency' ? 'Parliamentary Constituency' : key === 'parliamentary_constituency_number' ? 'PC Number' : key.replace(/_/g, ' ')}
                     {!isConflict && confidence > 0 && confidence < 0.7 && (
                       <span title="Low Confidence">
                         <AlertCircle className="h-3 w-3 text-amber-500" />
