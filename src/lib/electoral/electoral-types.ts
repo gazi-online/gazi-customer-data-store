@@ -11,12 +11,25 @@ export type ElectoralLookupStatus =
   | 'insufficient_data'
   | 'provider_error';
 
+export type MappingProvenanceSourceType =
+  | 'official'
+  | 'verified_local_mapping'
+  | 'operator_curated';
+
+export interface LocationResolutionProvenance {
+  source_type: MappingProvenanceSourceType;
+  source_reference: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
 export interface ElectoralCandidate {
   assembly_constituency: string;
   assembly_constituency_number: string;
   parliamentary_constituency?: string;
   parliamentary_constituency_number?: string;
   source: string;
+  source_type?: MappingProvenanceSourceType;
+  source_reference?: string;
   confidence?: 'high' | 'medium' | 'low';
   reason?: string;
 }

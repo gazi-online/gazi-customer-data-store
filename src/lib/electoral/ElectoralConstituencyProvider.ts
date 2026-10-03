@@ -1,5 +1,5 @@
 /**
- * Authoritative Electoral Constituency Provider
+ * Electoral Constituency Provider (Safety Hardened)
  *
  * Implements deterministic Assembly Constituency (AC) and Parliamentary Constituency (PC)
  * lookup for Customer Create/Edit flows.
@@ -7,8 +7,13 @@
  * Built strictly according to Election Commission of India (ECI) Delimitation Orders
  * and CEO West Bengal electoral roll jurisdiction mapping.
  *
- * Invariant: Never guesses or infers constituency from vague similarity.
- * Single/unique match auto-fills; ambiguous multi-AC PINs return all candidates for operator selection.
+ * Invariants:
+ * 1. Never guesses or infers constituency from vague similarity.
+ * 2. Only auto-fills without operator selection when a location mapping is sufficiently
+ *    verified, deterministic, and backed by traceable official/local provenance.
+ * 3. Ambiguous PINs, operator-curated mappings, or address keyword matches NEVER silently auto-fill;
+ *    they return candidates with status 'multiple' for explicit operator review and selection.
+ * 4. Priority: correct but manual > fast but wrong.
  */
 
 import {
@@ -17,7 +22,12 @@ import {
   ElectoralLookupResult,
   ElectoralCandidate,
 } from './electoral-types';
-import { WEST_BENGAL_PINCODE_MAPPINGS, PincodeElectoralMapping } from './data/westBengalConstituencies';
+import {
+  WEST_BENGAL_PINCODE_MAPPINGS,
+  PincodeElectoralMapping,
+  OFFICIAL_CONSTITUENCY_CATALOG,
+  validateConstituency,
+} from './data/westBengalConstituencies';
 
 interface CacheEntry {
   result: ElectoralLookupResult;
@@ -80,15 +90,15 @@ export class AuthoritativeElectoralConstituencyProvider implements IElectoralCon
 
       let result: ElectoralLookupResult;
 
-      // 6. Match against authoritative dataset
+      // 6. Match against dataset
       const mapping = cleanPin
         ? WEST_BENGAL_PINCODE_MAPPINGS.find(m => m.pincode === cleanPin)
         : undefined;
 
       if (mapping) {
-        result = this.resolvePincodeMapping(mapping, postOffice, address);
+        result = this.resolvePincodeMapping(mapping);
       } else {
-        // Fallback: search by locality/post office keywords if PIN is missing or unmapped in dataset
+        // Fallback: search by locality/post office keywords if PIN is missing or unmapped
         result = this.resolveByLocalityFallback(postOffice, address);
       }
 
@@ -112,93 +122,72 @@ export class AuthoritativeElectoralConstituencyProvider implements IElectoralCon
 
   /**
    * Resolves a known PIN mapping.
-   * If unique: returns single candidate with status 'unique'.
-   * If multi-AC: attempts deterministic disambiguation via post office and address keywords.
-   * If still ambiguous: returns all candidates with status 'multiple' — NEVER GUESSES.
+   * AUTO-FILL POLICY:
+   * Only auto-fills (status 'unique') when the mapping is:
+   * - isUnique === true
+   * - isDeterministic === true
+   * - exactly 1 candidate
+   * - source_type === 'verified_local_mapping'
+   * - confidence === 'high'
+   *
+   * If any condition fails (ambiguous, multi-AC, or operator-curated):
+   * Returns status 'multiple' with candidates for operator review.
+   * NEVER GUESSES.
    */
   private resolvePincodeMapping(
-    mapping: PincodeElectoralMapping,
-    postOffice: string,
-    address: string
+    mapping: PincodeElectoralMapping
   ): ElectoralLookupResult {
-    // Case A: PIN is geographically unique to a single Assembly Constituency
-    if (mapping.isUnique && mapping.candidates.length === 1) {
+    // Validate all candidates against canonical catalog
+    const validCandidates = mapping.candidates.filter(cand =>
+      validateConstituency(
+        cand.assembly_constituency_number,
+        cand.assembly_constituency,
+        cand.parliamentary_constituency_number,
+        cand.parliamentary_constituency
+      )
+    );
+
+    if (validCandidates.length === 0) {
+      return {
+        status: 'not_found',
+        candidates: [],
+        reason: 'No verified constituency match found in canonical catalog',
+      };
+    }
+
+    const canAutoFill =
+      mapping.isUnique &&
+      mapping.isDeterministic &&
+      validCandidates.length === 1 &&
+      mapping.provenance.source_type === 'verified_local_mapping' &&
+      mapping.provenance.confidence === 'high';
+
+    if (canAutoFill) {
       return {
         status: 'unique',
-        candidates: mapping.candidates,
-        source: mapping.candidates[0].source,
+        candidates: validCandidates,
+        source: validCandidates[0].source,
         reason: 'Constituency matched from address',
       };
     }
 
-    // Case B: PIN covers multiple Assembly Constituencies
-    const searchText = `${postOffice} ${address}`.trim();
-
-    if (mapping.subMappings && mapping.subMappings.length > 0 && searchText) {
-      const matchedCandidates: ElectoralCandidate[] = [];
-
-      for (const sub of mapping.subMappings) {
-        let isMatched = false;
-
-        // Check exact or partial post office name
-        if (sub.postOffices && postOffice) {
-          isMatched = sub.postOffices.some(po => {
-            const cleanPo = po.toLowerCase();
-            return postOffice.includes(cleanPo) || cleanPo.includes(postOffice);
-          });
-        }
-
-        // Check locality keywords in address or post office
-        if (!isMatched && sub.localityKeywords) {
-          isMatched = sub.localityKeywords.some(keyword => {
-            const cleanKeyword = keyword.toLowerCase();
-            const regex = new RegExp(`\\b${cleanKeyword}\\b`, 'i');
-            return regex.test(searchText);
-          });
-        }
-
-        if (isMatched) {
-          // Avoid duplicate candidate entries
-          if (!matchedCandidates.some(c => c.assembly_constituency_number === sub.candidate.assembly_constituency_number)) {
-            matchedCandidates.push(sub.candidate);
-          }
-        }
-      }
-
-      // If exactly one sub-mapping resolved uniquely
-      if (matchedCandidates.length === 1) {
-        return {
-          status: 'unique',
-          candidates: matchedCandidates,
-          source: matchedCandidates[0].source,
-          reason: 'Constituency matched from address',
-        };
-      }
-
-      // If multiple sub-mappings matched, return them as candidates
-      if (matchedCandidates.length > 1) {
-        return {
-          status: 'multiple',
-          candidates: matchedCandidates,
-          source: matchedCandidates[0].source,
-          reason: 'Multiple constituencies found — select the correct one',
-        };
-      }
-    }
-
-    // Default for ambiguous PIN with unresolved or missing post office/address details:
-    // Return all possible candidates for operator selection. DO NOT GUESS.
+    // Ambiguous, multi-constituency, or operator-curated mapping:
+    // Requires operator selection. DO NOT GUESS.
     return {
       status: 'multiple',
-      candidates: mapping.candidates,
-      source: mapping.candidates[0]?.source,
+      candidates: validCandidates,
+      source: validCandidates[0]?.source,
       reason: 'Multiple constituencies found — select the correct one',
     };
   }
 
   /**
-   * Fallback resolution when PIN is unmapped or absent, searching authoritative constituency
-   * names and known localities within address text.
+   * Fallback resolution when PIN is unmapped or absent, searching canonical constituency
+   * names within address or post office text.
+   *
+   * Critical safety rule:
+   * Unverified locality keywords from free text MUST NEVER produce an authoritative unique match.
+   * Any keyword match returns status 'multiple' so operator must confirm.
    */
   private resolveByLocalityFallback(
     postOffice: string,
@@ -215,46 +204,31 @@ export class AuthoritativeElectoralConstituencyProvider implements IElectoralCon
 
     const matchedCandidates: ElectoralCandidate[] = [];
 
-    for (const mapping of WEST_BENGAL_PINCODE_MAPPINGS) {
-      for (const cand of mapping.candidates) {
-        const acName = cand.assembly_constituency.toLowerCase();
-        // Regex word boundary match on full constituency name
-        const regex = new RegExp(`\\b${acName.replace(/\s+/g, '\\s+')}\\b`, 'i');
-        if (regex.test(searchText)) {
-          if (!matchedCandidates.some(c => c.assembly_constituency_number === cand.assembly_constituency_number)) {
-            matchedCandidates.push(cand);
-          }
-        }
-      }
+    // Search against OFFICIAL_CONSTITUENCY_CATALOG
+    for (const [acNum, official] of Object.entries(OFFICIAL_CONSTITUENCY_CATALOG)) {
+      const acBaseName = official.ac_name.replace(/\s*\((sc|st)\)\s*$/i, '').trim().toLowerCase();
+      const regex = new RegExp(`\\b${acBaseName.replace(/\s+/g, '\\s+')}\\b`, 'i');
 
-      // Also check subMapping localities
-      if (mapping.subMappings) {
-        for (const sub of mapping.subMappings) {
-          if (sub.localityKeywords) {
-            const hasKeyword = sub.localityKeywords.some(kw => {
-              const regex = new RegExp(`\\b${kw}\\b`, 'i');
-              return regex.test(searchText);
-            });
-            if (hasKeyword) {
-              if (!matchedCandidates.some(c => c.assembly_constituency_number === sub.candidate.assembly_constituency_number)) {
-                matchedCandidates.push(sub.candidate);
-              }
-            }
-          }
+      if (regex.test(searchText)) {
+        if (!matchedCandidates.some(c => c.assembly_constituency_number === acNum)) {
+          matchedCandidates.push({
+            assembly_constituency: official.ac_name,
+            assembly_constituency_number: official.ac_number,
+            parliamentary_constituency: official.pc_name,
+            parliamentary_constituency_number: official.pc_number,
+            source: 'Locality Keyword Suggestion (Unverified)',
+            source_type: 'operator_curated',
+            source_reference: `Keyword matched in text: "${official.ac_name}"`,
+            confidence: 'low',
+            reason: `Locality name found in address text — operator verification required`,
+          });
         }
       }
     }
 
-    if (matchedCandidates.length === 1) {
-      return {
-        status: 'unique',
-        candidates: matchedCandidates,
-        source: matchedCandidates[0].source,
-        reason: 'Constituency matched from address',
-      };
-    }
-
-    if (matchedCandidates.length > 1) {
+    if (matchedCandidates.length > 0) {
+      // Safety rule: Unverified keyword matches ALWAYS require operator review.
+      // NEVER return 'unique' from free-text keyword heuristics.
       return {
         status: 'multiple',
         candidates: matchedCandidates,
