@@ -18,7 +18,9 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldAlert,
+  Plug,
 } from "lucide-react";
+import { ExtensionIntegrationsTab } from "@/components/settings/ExtensionIntegrationsTab";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 import {
@@ -36,13 +38,16 @@ import {
   exportInvoicesCsv,
 } from "@/app/(dashboard)/settings/export-actions";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getMfaStatusAction } from "@/app/(dashboard)/settings/security/mfa/actions";
+
+export type SettingsTabType = "profile" | "billing" | "team" | "security" | "exports" | "integrations";
 
 interface SettingsTabsViewProps {
   initialSettings?: BusinessSettingsData | null;
   teamMembers?: TeamMemberItem[];
+  initialTab?: SettingsTabType;
 }
 
 const defaultFormData: Partial<BusinessSettingsData> = {
@@ -64,10 +69,39 @@ const defaultFormData: Partial<BusinessSettingsData> = {
   invoice_footer: "Gazi Online",
 };
 
-export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMembers }: SettingsTabsViewProps) {
+export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMembers, initialTab }: SettingsTabsViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"profile" | "billing" | "team" | "security" | "exports">("profile");
+
+  const tabParam = searchParams.get("tab");
+
+  const resolveTab = (): SettingsTabType => {
+    if (initialTab) return initialTab;
+    if (tabParam) {
+      const lower = tabParam.toLowerCase();
+      if (lower === "integrations" || lower === "extension" || lower === "form-filler" || lower === "form-filler-extension") {
+        return "integrations";
+      }
+      if (["profile", "billing", "team", "security", "exports"].includes(lower)) {
+        return lower as SettingsTabType;
+      }
+    }
+    return "profile";
+  };
+
+  const [activeTabOverride, setActiveTabOverride] = useState<SettingsTabType | null>(null);
+  const activeTab = activeTabOverride ?? resolveTab();
+
+  const setActiveTab = (tab: SettingsTabType) => {
+    setActiveTabOverride(tab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tab);
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
+
   const [isSaving, startSaveTransition] = useTransition();
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const [resetTargetUser, setResetTargetUser] = useState<TeamMemberItem | null>(null);
@@ -193,20 +227,39 @@ export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMemb
 
   return (
     <div className="p-3.5 sm:p-6 md:p-8 space-y-5 sm:space-y-6 max-w-6xl mx-auto w-full overflow-x-hidden sm:overflow-visible">
-      {/* Page Title */}
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-start sm:items-center gap-2.5">
-          <SettingsIcon className="h-5 w-5 sm:h-6 sm:w-6 text-violet-600 shrink-0 mt-0.5 sm:mt-0" />
-          <span>Shop Settings & Daily Business Readiness</span>
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-500 mt-1 leading-relaxed">
-          Manage shop identity, address, UPI payment details, team roles, and data export archives.
-        </p>
+      {/* Page Title & Quick Navigation */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-start sm:items-center gap-2.5">
+            <SettingsIcon className="h-5 w-5 sm:h-6 sm:w-6 text-violet-600 shrink-0 mt-0.5 sm:mt-0" />
+            <span>Shop Settings & Daily Business Readiness</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 leading-relaxed">
+            Manage shop identity, address, UPI payment details, team roles, and browser extension integrations.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveTab("integrations")}
+          className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl border transition-all shrink-0 ${
+            activeTab === "integrations"
+              ? "bg-violet-600 text-white border-violet-600 shadow-xs"
+              : "bg-white text-slate-700 hover:text-slate-900 border-slate-200 hover:border-slate-300 shadow-2xs"
+          }`}
+        >
+          <Plug className={`h-4 w-4 ${activeTab === "integrations" ? "text-white" : "text-violet-600"}`} />
+          <span>Form Filler Extension</span>
+          <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-md ${
+            activeTab === "integrations" ? "bg-violet-500 text-white" : "bg-violet-100 text-violet-800"
+          }`}>
+            Pairing
+          </span>
+        </button>
       </div>
 
       {/* Tabs Navigation */}
       <div className="relative -mx-3.5 sm:mx-0 px-3.5 sm:px-0">
-        <div className="flex border-b border-slate-200 overflow-x-auto gap-1.5 sm:gap-2 pb-px scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex flex-wrap border-b border-slate-200 gap-1.5 sm:gap-2 pb-2">
           <button
             type="button"
             onClick={() => setActiveTab("profile")}
@@ -270,6 +323,22 @@ export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMemb
           >
             <Download className="h-4 w-4 shrink-0" />
             <span>Data Exports & Backups</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("integrations")}
+            className={`flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 min-h-[44px] text-xs font-bold border-b-2 transition-colors whitespace-nowrap shrink-0 rounded-t-xl ${
+              activeTab === "integrations"
+                ? "border-violet-600 text-violet-700 bg-violet-50/60"
+                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50/60"
+            }`}
+          >
+            <Plug className="h-4 w-4 shrink-0 text-violet-600" />
+            <span>Form Filler Extension</span>
+            <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-800 rounded-md">
+              Active
+            </span>
           </button>
         </div>
       </div>
@@ -963,6 +1032,9 @@ export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMemb
           </div>
         </div>
       )}
+
+      {/* TAB 5: FORM FILLER EXTENSION INTEGRATION */}
+      {activeTab === "integrations" && <ExtensionIntegrationsTab />}
     </div>
   );
 }
