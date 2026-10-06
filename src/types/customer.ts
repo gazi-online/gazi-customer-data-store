@@ -16,9 +16,15 @@ export interface Customer {
   date_of_birth: string | null;
   gender: Gender | null;
   father_name: string | null;
+  father_first_middle_name?: string | null;
+  father_surname?: string | null;
   mother_name: string | null;
+  mother_first_middle_name?: string | null;
+  mother_surname?: string | null;
   marital_status: string | null;
   spouse_name: string | null;
+  spouse_first_middle_name?: string | null;
+  spouse_surname?: string | null;
   
   // India specific
   aadhaar_number: string | null;
@@ -89,9 +95,15 @@ export interface CustomerFormData {
   date_of_birth?: string;
   gender?: Gender | "";
   father_name?: string;
+  father_first_middle_name?: string;
+  father_surname?: string;
   mother_name?: string;
+  mother_first_middle_name?: string;
+  mother_surname?: string;
   marital_status?: string;
   spouse_name?: string;
+  spouse_first_middle_name?: string;
+  spouse_surname?: string;
   
   aadhaar_number?: string;
   pan_number?: string;

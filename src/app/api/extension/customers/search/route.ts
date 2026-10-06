@@ -92,19 +92,26 @@ export async function GET(req: NextRequest) {
     const adminDb = getAdminSupabaseClient();
     const db = adminDb || (await createServerSupabaseClient());
 
-    // 4. Query customers strictly matching business_id, active status, and not deleted
-    // Searches: customer_code, first_name, middle_name, last_name, phone
+    // 4. Query customers strictly matching business_id, active/lead status, and not deleted
+    // Searches: customer_code, first_name, middle_name, last_name, phone, plus composed multi-word names
     const safeQ = q.replace(/[%_,]/g, '\\$&'); // Sanitize wildcards
+    const words = q.split(/\s+/).filter(Boolean);
+
+    let orClause = `customer_code.ilike.%${safeQ}%,first_name.ilike.%${safeQ}%,middle_name.ilike.%${safeQ}%,last_name.ilike.%${safeQ}%,phone.ilike.%${safeQ}%`;
+
+    if (words.length > 1) {
+      const firstWord = words[0].replace(/[%_,]/g, '\\$&');
+      const lastWord = words[words.length - 1].replace(/[%_,]/g, '\\$&');
+      orClause += `,and(first_name.ilike.%${firstWord}%,last_name.ilike.%${lastWord}%),and(first_name.ilike.%${firstWord}%,middle_name.ilike.%${lastWord}%)`;
+    }
 
     const { data, error } = await db
       .from('customers')
       .select('id, customer_code, first_name, middle_name, last_name, phone')
       .eq('business_id', businessId)
-      .eq('status', 'active')
+      .neq('status', 'inactive')
       .is('deleted_at', null)
-      .or(
-        `customer_code.ilike.%${safeQ}%,first_name.ilike.%${safeQ}%,middle_name.ilike.%${safeQ}%,last_name.ilike.%${safeQ}%,phone.ilike.%${safeQ}%`
-      )
+      .or(orClause)
       .order('first_name', { ascending: true })
       .limit(15);
 

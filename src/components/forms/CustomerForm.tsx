@@ -129,11 +129,17 @@ const customerSchema = z.object({
 
   gender: z.enum(["male", "female", "other", ""]).optional(),
 
-  // ── Optional relationship fields (no format restriction) ─────────────────
+  // ── Optional relationship fields ─────────────────────────────────────────
   father_name: z.string().optional().or(z.literal("")),
+  father_first_middle_name: z.string().optional().or(z.literal("")),
+  father_surname: z.string().optional().or(z.literal("")),
   mother_name: z.string().optional().or(z.literal("")),
+  mother_first_middle_name: z.string().optional().or(z.literal("")),
+  mother_surname: z.string().optional().or(z.literal("")),
   marital_status: z.string().optional().or(z.literal("")),
   spouse_name: z.string().optional().or(z.literal("")),
+  spouse_first_middle_name: z.string().optional().or(z.literal("")),
+  spouse_surname: z.string().optional().or(z.literal("")),
 
   // ── Identity / Tax IDs (all optional; validated when non-empty) ──────────
   aadhaar_number: z
@@ -267,9 +273,15 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
       date_of_birth: initialData.date_of_birth ? initialData.date_of_birth.split('T')[0] : "",
       gender: initialData.gender || "",
       father_name: initialData.father_name || "",
+      father_first_middle_name: initialData.father_first_middle_name || "",
+      father_surname: initialData.father_surname || "",
       mother_name: initialData.mother_name || "",
+      mother_first_middle_name: initialData.mother_first_middle_name || "",
+      mother_surname: initialData.mother_surname || "",
       marital_status: initialData.marital_status || "",
       spouse_name: initialData.spouse_name || "",
+      spouse_first_middle_name: initialData.spouse_first_middle_name || "",
+      spouse_surname: initialData.spouse_surname || "",
       
       aadhaar_number: initialData.aadhaar_number || "",
       pan_number: initialData.pan_number || "",
@@ -1026,17 +1038,36 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         dupCheck.warnings.forEach(w => toast.warning(w));
       }
 
-      // Clean up empty optional fields
-      const cleanedData = {
-        ...data,
-        customer_code: trimmedCustomerCode || undefined,
-        middle_name: data.middle_name === "" ? null : data.middle_name,
-        gender: data.gender === "" ? null : data.gender,
-        father_name: data.father_name === "" ? null : data.father_name,
-        mother_name: data.mother_name === "" ? null : data.mother_name,
-        marital_status: data.marital_status === "" ? null : data.marital_status,
-        spouse_name: data.spouse_name === "" ? null : data.spouse_name,
-        date_of_birth: data.date_of_birth === "" ? null : data.date_of_birth,
+        // Clean up empty optional fields
+        const composeRelativeFullName = (
+          firstMiddle?: string | null,
+          surname?: string | null,
+          fallbackLegacy?: string | null
+        ): string | null => {
+          const fm = (firstMiddle || '').trim();
+          const sur = (surname || '').trim();
+          if (fm || sur) {
+            return [fm, sur].filter(Boolean).join(' ');
+          }
+          return fallbackLegacy && fallbackLegacy.trim() ? fallbackLegacy.trim() : null;
+        };
+
+        const cleanedData = {
+          ...data,
+          customer_code: trimmedCustomerCode || undefined,
+          middle_name: data.middle_name === "" ? null : data.middle_name,
+          gender: data.gender === "" ? null : data.gender,
+          father_first_middle_name: data.father_first_middle_name?.trim() || null,
+          father_surname: data.father_surname?.trim() || null,
+          father_name: composeRelativeFullName(data.father_first_middle_name, data.father_surname, data.father_name),
+          mother_first_middle_name: data.mother_first_middle_name?.trim() || null,
+          mother_surname: data.mother_surname?.trim() || null,
+          mother_name: composeRelativeFullName(data.mother_first_middle_name, data.mother_surname, data.mother_name),
+          marital_status: data.marital_status === "" ? null : data.marital_status,
+          spouse_first_middle_name: data.spouse_first_middle_name?.trim() || null,
+          spouse_surname: data.spouse_surname?.trim() || null,
+          spouse_name: composeRelativeFullName(data.spouse_first_middle_name, data.spouse_surname, data.spouse_name),
+          date_of_birth: data.date_of_birth === "" ? null : data.date_of_birth,
         aadhaar_number: data.aadhaar_number === "" ? null : data.aadhaar_number,
         pan_number: data.pan_number === "" ? null : data.pan_number,
         gst_number: data.gst_number === "" ? null : data.gst_number,
@@ -1581,20 +1612,50 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
               </select>
             </div>
 
+            {/* Father Structured Name */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Father / Guardian Name</label>
-              <div className="relative">
-                <input {...register("father_name")} className="w-full p-2.5 pr-9 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Anil Sharma" />
-                <ValidFieldTick show={!!touchedFields.father_name && !errors.father_name && !!getValues("father_name")?.trim()} />
+              {initialData?.father_name && !initialData?.father_first_middle_name && !initialData?.father_surname && (
+                <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded px-2.5 py-1 mb-1">
+                  Legacy full name: <span className="font-semibold">{initialData.father_name}</span>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  {...register("father_first_middle_name")}
+                  className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow text-sm"
+                  placeholder="First + Middle (e.g. Anil Kumar)"
+                />
+                <input
+                  {...register("father_surname")}
+                  className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow text-sm"
+                  placeholder="Surname (e.g. Sharma)"
+                />
               </div>
+              <input type="hidden" {...register("father_name")} />
             </div>
 
+            {/* Mother Structured Name */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Mother Name</label>
-              <div className="relative">
-                <input {...register("mother_name")} className="w-full p-2.5 pr-9 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Sunita Sharma" />
-                <ValidFieldTick show={!!touchedFields.mother_name && !errors.mother_name && !!getValues("mother_name")?.trim()} />
+              {initialData?.mother_name && !initialData?.mother_first_middle_name && !initialData?.mother_surname && (
+                <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded px-2.5 py-1 mb-1">
+                  Legacy full name: <span className="font-semibold">{initialData.mother_name}</span>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  {...register("mother_first_middle_name")}
+                  className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow text-sm"
+                  placeholder="First + Middle (e.g. Sunita)"
+                />
+                <input
+                  {...register("mother_surname")}
+                  className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow text-sm"
+                  placeholder="Surname (e.g. Sharma)"
+                />
               </div>
+              <input type="hidden" {...register("mother_name")} />
             </div>
 
             <div className="space-y-2">
@@ -1613,10 +1674,24 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
             {maritalStatus === "Married" && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Spouse / Husband Name</label>
-                <div className="relative">
-                  <input {...register("spouse_name")} className="w-full p-2.5 pr-9 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow" placeholder="e.g. Suresh Kumar" />
-                  <ValidFieldTick show={!!touchedFields.spouse_name && !errors.spouse_name && !!getValues("spouse_name")?.trim()} />
+                {initialData?.spouse_name && !initialData?.spouse_first_middle_name && !initialData?.spouse_surname && (
+                  <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded px-2.5 py-1 mb-1">
+                    Legacy full name: <span className="font-semibold">{initialData.spouse_name}</span>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    {...register("spouse_first_middle_name")}
+                    className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow text-sm"
+                    placeholder="First + Middle (e.g. Suresh)"
+                  />
+                  <input
+                    {...register("spouse_surname")}
+                    className="w-full p-2.5 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-transparent focus:ring-2 focus:ring-blue-500 transition-shadow text-sm"
+                    placeholder="Surname (e.g. Kumar)"
+                  />
                 </div>
+                <input type="hidden" {...register("spouse_name")} />
               </div>
             )}
           </div>

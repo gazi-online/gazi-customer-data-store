@@ -281,6 +281,11 @@ export default async function CustomerProfilePage({
                 <p className="text-zinc-900 dark:text-zinc-100 font-medium text-sm break-words">
                   {customer.father_name || <span className="text-zinc-400 italic">Not provided</span>}
                 </p>
+                {(customer.father_first_middle_name || customer.father_surname) && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Structured: <span className="font-semibold text-zinc-700 dark:text-zinc-300">{customer.father_first_middle_name || '-'}</span> | Surname: <span className="font-semibold text-zinc-700 dark:text-zinc-300">{customer.father_surname || '-'}</span>
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -288,6 +293,11 @@ export default async function CustomerProfilePage({
                 <p className="text-zinc-900 dark:text-zinc-100 font-medium text-sm break-words">
                   {customer.mother_name || <span className="text-zinc-400 italic">Not provided</span>}
                 </p>
+                {(customer.mother_first_middle_name || customer.mother_surname) && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Structured: <span className="font-semibold text-zinc-700 dark:text-zinc-300">{customer.mother_first_middle_name || '-'}</span> | Surname: <span className="font-semibold text-zinc-700 dark:text-zinc-300">{customer.mother_surname || '-'}</span>
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -302,6 +312,11 @@ export default async function CustomerProfilePage({
                 <p className="text-zinc-900 dark:text-zinc-100 font-medium text-sm break-words">
                   {customer.spouse_name || <span className="text-zinc-400 italic">Not provided</span>}
                 </p>
+                {(customer.spouse_first_middle_name || customer.spouse_surname) && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Structured: <span className="font-semibold text-zinc-700 dark:text-zinc-300">{customer.spouse_first_middle_name || '-'}</span> | Surname: <span className="font-semibold text-zinc-700 dark:text-zinc-300">{customer.spouse_surname || '-'}</span>
+                  </p>
+                )}
               </div>
             </div>
           </div>

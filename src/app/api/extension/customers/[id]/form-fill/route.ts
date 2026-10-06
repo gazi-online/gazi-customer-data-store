@@ -76,7 +76,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const db = adminDb || (await createServerSupabaseClient());
 
     // 4. Query customer with explicit projection — strictly omitting Aadhaar, PAN, GST, documents
-    const { data: customer, error } = await db
+    const initialQuery = await db
       .from('customers')
       .select(`
         id,
@@ -90,8 +90,14 @@ export async function GET(req: NextRequest, context: RouteContext) {
         phone,
         email,
         father_name,
+        father_first_middle_name,
+        father_surname,
         mother_name,
+        mother_first_middle_name,
+        mother_surname,
         spouse_name,
+        spouse_first_middle_name,
+        spouse_surname,
         address,
         city,
         post_office,
@@ -111,6 +117,50 @@ export async function GET(req: NextRequest, context: RouteContext) {
       .eq('business_id', businessId)
       .is('deleted_at', null)
       .maybeSingle();
+
+    let customer: any = initialQuery.data;
+    let error: any = initialQuery.error;
+
+    if (error && error.message && error.message.includes('father_first_middle_name')) {
+      // Graceful fallback for environments before 20261006221500 migration is applied
+      const fallback = await db
+        .from('customers')
+        .select(`
+          id,
+          customer_code,
+          first_name,
+          middle_name,
+          last_name,
+          original_language_name,
+          date_of_birth,
+          gender,
+          phone,
+          email,
+          father_name,
+          mother_name,
+          spouse_name,
+          address,
+          city,
+          post_office,
+          pincode,
+          district,
+          state,
+          country,
+          voter_id_number,
+          assembly_constituency,
+          assembly_constituency_number,
+          electoral_part_number,
+          electoral_serial_number,
+          electoral_verification_status,
+          electoral_verified_at
+        `)
+        .eq('id', id)
+        .eq('business_id', businessId)
+        .is('deleted_at', null)
+        .maybeSingle();
+      customer = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       return jsonResponseWithCors(
@@ -160,8 +210,16 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
       relative: {
         fatherName: customer.father_name || null,
+        fatherFirstMiddleName: (customer as any).father_first_middle_name || null,
+        fatherSurname: (customer as any).father_surname || null,
+
         motherName: customer.mother_name || null,
+        motherFirstMiddleName: (customer as any).mother_first_middle_name || null,
+        motherSurname: (customer as any).mother_surname || null,
+
         spouseName: customer.spouse_name || null,
+        spouseFirstMiddleName: (customer as any).spouse_first_middle_name || null,
+        spouseSurname: (customer as any).spouse_surname || null,
       },
 
       address: {
