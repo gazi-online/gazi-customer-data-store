@@ -696,16 +696,30 @@ export async function testGeminiConnection() {
 }
 
 export async function getProfilePhotoSignedUrl(path: string | null) {
-  if (!path) return null;
+  if (!path || typeof path !== 'string' || !path.trim()) return null;
+  const cleanPath = path.trim();
+  if (cleanPath.startsWith('data:image/') || cleanPath.startsWith('blob:')) {
+    return cleanPath;
+  }
   try {
     const supabase = await createClient();
     await requireAal2(supabase);
-    const { data, error } = await supabase.storage.from('customer-profiles').createSignedUrl(path, 3600); // 1 hour
-    if (error) {
-      console.error("[getProfilePhotoSignedUrl] Error:", error.message);
-      return null;
+
+    // Enforce strict bucket isolation: canonical paths belong solely to customer_photos,
+    // while pre-hardening legacy paths belong solely to quarantined customer-profiles.
+    // Cross-bucket fallback is disallowed to prevent any potential authorization bypass.
+    const isCanonical = cleanPath.startsWith('customers/');
+    const bucket = isCanonical ? 'customer_photos' : 'customer-profiles';
+
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(cleanPath, 3600); // 1 hour
+    if (!error && data?.signedUrl) {
+      return data.signedUrl;
     }
-    return data.signedUrl;
+
+    if (error) {
+      console.error(`[getProfilePhotoSignedUrl] Error creating signed URL for ${cleanPath} in ${bucket}:`, error.message);
+    }
+    return null;
   } catch (error) {
     console.error("[getProfilePhotoSignedUrl] Error:", error);
     return null;
@@ -719,6 +733,7 @@ export async function cropAndUploadProfilePhoto(formData: FormData) {
 
     const file = formData.get("file") as File;
     const boxJson = formData.get("bounding_box") as string;
+    const customerId = (formData.get("customerId") || formData.get("customer_id")) as string | null;
 
     if (!file || !boxJson) {
       return { success: false, error: "File and bounding_box are required" };
@@ -770,28 +785,53 @@ export async function cropAndUploadProfilePhoto(formData: FormData) {
       .jpeg({ quality: 80, mozjpeg: false })
       .toBuffer();
 
-    const fileName = `${user.id}/${uuidv4()}.jpg`;
+    // If an authorized customer ID is provided, persist directly to canonical customer_photos
+    if (customerId) {
+      const { data: customerRecord, error: custError } = await supabase
+        .from('customers')
+        .select('id, business_id')
+        .eq('id', customerId)
+        .is('deleted_at', null)
+        .single();
 
-    const { error: uploadError } = await supabase.storage
-      .from('customer-profiles')
-      .upload(fileName, croppedBuffer, {
-        contentType: 'image/jpeg',
-        cacheControl: '3600',
-        upsert: false
-      });
+      if (custError || !customerRecord) {
+        return { success: false, error: "Customer record not found or unauthorized" };
+      }
 
-    if (uploadError) {
-      return { success: false, error: uploadError.message };
+      const fileName = `customers/${customerId}/${uuidv4()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('customer_photos')
+        .upload(fileName, croppedBuffer, {
+          contentType: 'image/jpeg',
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        return { success: false, error: uploadError.message };
+      }
+
+      const { data: signedData } = await supabase.storage
+        .from('customer_photos')
+        .createSignedUrl(fileName, 3600);
+
+      return {
+        success: true,
+        storagePath: fileName,
+        signedUrl: signedData?.signedUrl
+      };
     }
 
-    const { data: signedData } = await supabase.storage
-      .from('customer-profiles')
-      .createSignedUrl(fileName, 3600);
+    // Temporary unverified import: No customer record exists yet.
+    // Return data URL preview directly without forcing unverified objects into customer_photos
+    // or violating storage RLS policies.
+    const base64 = croppedBuffer.toString('base64');
+    const dataUrl = `data:image/jpeg;base64,${base64}`;
 
     return {
       success: true,
-      storagePath: fileName,
-      signedUrl: signedData?.signedUrl
+      storagePath: dataUrl,
+      signedUrl: dataUrl
     };
   } catch (error: unknown) {
     const err = error as Error;

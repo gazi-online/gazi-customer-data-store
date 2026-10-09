@@ -235,11 +235,32 @@ interface CustomerFormProps {
   initialData?: Customer;
 }
 
+function parseDataUrlToBlob(dataUrl: string): { blob: Blob; ext: string } | null {
+  try {
+    const parts = dataUrl.split(',');
+    if (parts.length < 2) return null;
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const bstr = atob(parts[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+    return { blob: new Blob([u8arr], { type: mime }), ext };
+  } catch (err) {
+    console.error("[parseDataUrlToBlob] Error:", err);
+    return null;
+  }
+}
+
 export function CustomerForm({ initialData }: CustomerFormProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null);
   const [aiDataApplied, setAiDataApplied] = useState(false);
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
   const [nativeNameDismissed, setNativeNameDismissed] = useState(false);
@@ -807,37 +828,70 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+    const cleanExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+
+    if (!allowedMimes.includes(file.type) || !allowedExts.includes(cleanExt)) {
+      toast.error("Please upload a valid image (JPG, PNG, or WEBP)");
+      return;
+    }
+
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Photo must be less than 5MB");
       return;
     }
 
+    // PHASE 1: Existing Customer Edit Flow (Canonical customer_photos bucket)
+    if (isEditing && initialData?.id) {
+      try {
+        setUploadingPhoto(true);
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Not authenticated");
+
+        const storagePath = `customers/${initialData.id}/${uuidv4()}.${cleanExt}`;
+
+        const { error } = await supabase.storage
+          .from('customer_photos')
+          .upload(storagePath, file, {
+            upsert: false,
+            contentType: file.type || 'image/jpeg',
+          });
+
+        if (error) throw error;
+
+        setValue("photo_source", storagePath, { shouldValidate: true, shouldDirty: true });
+        if (fieldOriginsRef.current) {
+          fieldOriginsRef.current.photo_source = 'user';
+        }
+
+        const signedUrl = await getProfilePhotoSignedUrl(storagePath);
+        setPreviewPhotoUrl(signedUrl);
+        setPendingPhotoFile(null);
+        toast.success("Profile photo uploaded");
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : "An error occurred";
+        toast.error("Failed to upload photo: " + msg);
+      } finally {
+        setUploadingPhoto(false);
+      }
+      return;
+    }
+
+    // PHASE 2: New Customer Intake Flow (Deferred upload after customer record is created)
     try {
-      setUploadingPhoto(true);
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const fileName = `${user.id}/${uuidv4()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      
-      const { error } = await supabase.storage
-        .from('customer-profiles')
-        .upload(fileName, file, {
-          upsert: false
-        });
-
-      if (error) throw error;
-
-      setValue("photo_source", fileName, { shouldValidate: true, shouldDirty: true });
+      setPendingPhotoFile(file);
+      const localUrl = URL.createObjectURL(file);
+      setPreviewPhotoUrl(localUrl);
+      setValue("photo_source", file.name, { shouldValidate: true, shouldDirty: true });
       if (fieldOriginsRef.current) {
         fieldOriginsRef.current.photo_source = 'user';
       }
-      toast.success("Profile photo uploaded");
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : "An error occurred";
-      toast.error("Failed to upload photo: " + msg);
-    } finally {
-      setUploadingPhoto(false);
+      toast.success("Profile photo selected (will be saved when customer is created)");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to select photo";
+      toast.error(msg);
     }
   };
 
@@ -846,6 +900,7 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
     if (fieldOriginsRef.current) {
       fieldOriginsRef.current.photo_source = 'user';
     }
+    setPendingPhotoFile(null);
     setPreviewPhotoUrl(null);
   };
 
@@ -1087,13 +1142,96 @@ export function CustomerForm({ initialData }: CustomerFormProps) {
         country: "India",
       } as unknown as CustomerFormData;
 
+      // Resolve pending photo from either manual file picker or Smart Import / Review crop
+      const rawPhotoSource = data.photo_source || "";
+      const isDataUrlPhoto = typeof rawPhotoSource === "string" && rawPhotoSource.startsWith("data:image/");
+      let pendingUploadBlob: Blob | File | null = pendingPhotoFile;
+      let pendingUploadExt = "jpg";
+
+      if (pendingPhotoFile) {
+        pendingUploadExt = (pendingPhotoFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+      } else if (isDataUrlPhoto) {
+        const parsed = parseDataUrlToBlob(rawPhotoSource);
+        if (parsed) {
+          pendingUploadBlob = parsed.blob;
+          pendingUploadExt = parsed.ext;
+        }
+      }
+
+      // Strip large data URL from customer table payload so we don't store 200KB base64 in database
+      const basePayloadWithoutDataUrl: CustomerFormData = {
+        ...cleanedData,
+        photo_source: isDataUrlPhoto ? (initialData?.photo_source || undefined) : (cleanedData.photo_source || undefined),
+      };
+
       if (isEditing && initialData) {
-        const result = await updateCustomer(initialData.id, cleanedData);
+        // EXISTING CUSTOMER EDIT FLOW:
+        let finalPhotoSource = basePayloadWithoutDataUrl.photo_source;
+
+        // If there is a pending photo blob from Smart Import or picker to upload
+        if (pendingUploadBlob && isDataUrlPhoto) {
+          try {
+            const storagePath = `customers/${initialData.id}/${uuidv4()}.${pendingUploadExt}`;
+            const supabase = createClient();
+            const { error: photoErr } = await supabase.storage
+              .from('customer_photos')
+              .upload(storagePath, pendingUploadBlob, {
+                upsert: false,
+                contentType: pendingUploadBlob.type || 'image/jpeg',
+              });
+
+            if (!photoErr) {
+              finalPhotoSource = storagePath;
+            } else {
+              console.warn("[CustomerForm] Edit photo upload warning:", photoErr);
+            }
+          } catch (uploadErr) {
+            console.warn("[CustomerForm] Edit photo upload error:", uploadErr);
+          }
+        }
+
+        const result = await updateCustomer(initialData.id, {
+          ...basePayloadWithoutDataUrl,
+          photo_source: finalPhotoSource,
+        });
         if (result.error) throw new Error(result.error);
         toast.success("Customer updated successfully");
       } else {
-        const result = await createCustomer(cleanedData);
+        // NEW CUSTOMER CREATE-FIRST FLOW:
+        // Create the customer row first to satisfy tenant-scoped RLS on customer_photos
+        const result = await createCustomer({
+          ...basePayloadWithoutDataUrl,
+          photo_source: undefined,
+        });
         if (result.error) throw new Error(result.error);
+
+        const newCustomerId = result.customer?.id;
+        if (pendingUploadBlob && newCustomerId) {
+          try {
+            const storagePath = `customers/${newCustomerId}/${uuidv4()}.${pendingUploadExt}`;
+            const supabase = createClient();
+            const { error: photoErr } = await supabase.storage
+              .from('customer_photos')
+              .upload(storagePath, pendingUploadBlob, {
+                upsert: false,
+                contentType: pendingUploadBlob.type || 'image/jpeg',
+              });
+
+            if (!photoErr) {
+              await updateCustomer(newCustomerId, {
+                ...basePayloadWithoutDataUrl,
+                photo_source: storagePath,
+              });
+            } else {
+              console.warn("[CustomerForm] Post-create photo upload warning:", photoErr);
+              toast.warning("Customer created, but photo upload encountered an issue. You can re-upload from the edit page.");
+            }
+          } catch (photoUploadErr) {
+            console.warn("[CustomerForm] Post-create photo upload error:", photoUploadErr);
+            toast.warning("Customer created, but photo upload encountered an issue. You can re-upload from the edit page.");
+          }
+        }
+
         toast.success("Customer added successfully");
         resetCustomerIntakeSession();
       }
