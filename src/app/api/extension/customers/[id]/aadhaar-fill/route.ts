@@ -313,6 +313,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
           ok: true,
           customerId: customer.id,
           hasAadhaar: false,
+          hasSupportingDocument: false,
           verificationStatus: 'unavailable',
           maskedAadhaar: null,
           documentVerified: false,
@@ -324,12 +325,11 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     // 3. Inspect supporting document verification in customer_documents
     // Statutory requirement: Never treat electoral_verification_status alone as proof of Aadhaar verification.
-    const { data: verifiedDocs, error: docErr } = await db
+    const { data: allDocs, error: docErr } = await db
       .from('customer_documents')
       .select('id, customer_id, document_type, document_number, verified')
       .eq('customer_id', customer.id)
-      .ilike('document_type', '%aadhaar%')
-      .eq('verified', true);
+      .ilike('document_type', '%aadhaar%');
 
     if (docErr) {
       return jsonResponseWithCors(
@@ -339,21 +339,46 @@ export async function GET(req: NextRequest, context: RouteContext) {
       );
     }
 
-    const docMatch = verifyAadhaarDocumentMatch(rawAadhaar, verifiedDocs || []);
-    const documentVerified = docMatch.verified;
-    const verificationStatus = docMatch.mismatch
-      ? 'document_mismatch'
-      : docMatch.maskedOnly || docMatch.code === 'AADHAAR_VERIFICATION_REQUIRED'
-      ? 'verification_required'
-      : documentVerified
-      ? 'verified'
-      : 'unverified';
+    const docsList = allDocs || [];
+    const hasSupportingDocument = docsList.length > 0;
+
+    let verificationStatus:
+      | 'verified'
+      | 'unverified'
+      | 'no_document'
+      | 'verification_required'
+      | 'document_mismatch';
+    let documentVerified = false;
+
+    if (!hasSupportingDocument) {
+      // Customer has Aadhaar on file, but zero supporting documents in Document Vault
+      verificationStatus = 'no_document';
+      documentVerified = false;
+    } else {
+      const verifiedDocs = docsList.filter((d: any) => d.verified === true);
+      if (verifiedDocs.length === 0) {
+        // Supporting document exists in Document Vault, but is unverified
+        verificationStatus = 'unverified';
+        documentVerified = false;
+      } else {
+        const docMatch = verifyAadhaarDocumentMatch(rawAadhaar, verifiedDocs);
+        documentVerified = docMatch.verified;
+        verificationStatus = docMatch.mismatch
+          ? 'document_mismatch'
+          : docMatch.maskedOnly || docMatch.code === 'AADHAAR_VERIFICATION_REQUIRED'
+          ? 'verification_required'
+          : documentVerified
+          ? 'verified'
+          : 'unverified';
+      }
+    }
 
     return jsonResponseWithCors(
       {
         ok: true,
         customerId: customer.id,
         hasAadhaar: true,
+        hasSupportingDocument,
         verificationStatus,
         maskedAadhaar,
         documentVerified,
