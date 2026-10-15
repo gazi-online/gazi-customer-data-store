@@ -819,13 +819,11 @@
         parent.style.boxShadow = '0 0 10px rgba(52, 211, 153, 0.35)';
       }, 200);
 
-      // Handle any immediate crop modal confirmation if present
-      setTimeout(() => {
-        try {
-          const cropBtn = document.querySelector('button.crop-btn, button[aria-label*="Crop" i], .modal button.btn-primary');
-          if (cropBtn) cropBtn.click();
-        } catch {}
-      }, 350);
+      // Automatically confirm the "Select From Image" crop modal and click Save
+      const modalConfirmed = await autoConfirmSelectFromImageModal(7000);
+      if (modalConfirmed) {
+        console.log('✅ "Select From Image" modal auto-confirmed and saved.');
+      }
 
       console.log(`✅ Photo injected: ${fileName}`);
       return true;
@@ -833,6 +831,88 @@
       console.error('[GCDS Photo] Failed to inject photo via DataTransfer:', err);
       return false;
     }
+  }
+
+  /**
+   * Automatically confirms and saves the ECI "Select From Image" crop modal.
+   * Polls for the modal, waits for the canvas image to initialize, clicks "Save",
+   * and handles any secondary confirmation/alert dialogs.
+   *
+   * @param {number} maxWaitMs - Max wait time in ms (default 8000ms)
+   * @returns {Promise<boolean>}
+   */
+  async function autoConfirmSelectFromImageModal(maxWaitMs = 8000) {
+    const startTime = Date.now();
+    const pollInterval = 150;
+    let clickedOnce = false;
+
+    while (Date.now() - startTime < maxWaitMs) {
+      // 1. Detect the "Select From Image" modal
+      const modal = document.querySelector(
+        '.confirmation_modal, .modal-content_custom, [class*="confirmation_modal"], [class*="modal_custom"]'
+      );
+
+      // Check for any modal alert (e.g. "No faces were found" dialog with "Ok" button)
+      const okBtn = Array.from(document.querySelectorAll('button')).find((b) => {
+        const text = (b.innerText || b.textContent || '').replace(/\u00a0/g, ' ').trim();
+        return /^ok$/i.test(text);
+      });
+      if (okBtn) {
+        ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach((evtName) => {
+          okBtn.dispatchEvent(new MouseEvent(evtName, { bubbles: true, cancelable: true, view: window }));
+        });
+        try {
+          okBtn.click();
+        } catch {}
+      }
+
+      if (modal && modal.offsetParent !== null) {
+        // Find the "Save" button inside the modal
+        const saveBtn =
+          Array.from(modal.querySelectorAll('button')).find((b) => {
+            const text = (b.innerText || b.textContent || '').replace(/\u00a0/g, ' ').trim().toLowerCase();
+            return text === 'save';
+          }) || modal.querySelector('button.btn-primary, button[type="button"].btn-primary');
+
+        if (saveBtn) {
+          // Allow the crop canvas and slider controls to finish rendering
+          if (!clickedOnce) {
+            await sleep(400);
+          }
+
+          // React synthetic onClick fallback
+          const propKey = Object.keys(saveBtn).find((k) => k.startsWith('__reactProps') || k.startsWith('__reactFiber'));
+          const props = propKey ? saveBtn[propKey] : null;
+          if (props && typeof props.onClick === 'function') {
+            try {
+              props.onClick({ preventDefault: () => {}, stopPropagation: () => {} });
+            } catch {}
+          }
+
+          // Dispatch complete synthetic and native click sequence
+          const mouseEvents = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+          for (const evName of mouseEvents) {
+            saveBtn.dispatchEvent(new MouseEvent(evName, { bubbles: true, cancelable: true, view: window }));
+          }
+          try {
+            saveBtn.click();
+          } catch {}
+
+          clickedOnce = true;
+          console.log('✅ Auto-clicked "Save" button in "Select From Image" modal.');
+
+          // Allow the portal to process the crop
+          await sleep(600);
+        }
+      } else if (clickedOnce) {
+        // Modal has successfully closed!
+        return true;
+      }
+
+      await sleep(pollInterval);
+    }
+
+    return clickedOnce;
   }
 
   /**
@@ -1661,6 +1741,7 @@
     clickSectionNextButton,
     findSectionBox,
     injectFileToPortal,
+    autoConfirmSelectFromImageModal,
     handlePhotoSection,
     runFill,
     fillForm,
