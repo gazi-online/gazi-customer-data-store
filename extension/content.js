@@ -983,6 +983,282 @@
     });
   }
 
+  // ─── Section C: Human-in-the-Loop Relation Confirmation ────────────────────
+
+  /**
+   * Relation option metadata for the Section C HITL card.
+   * Holds ECI radio value, display label (English + Bengali), and priority.
+   */
+  const RELATION_OPTIONS = [
+    { code: 'FTHR', labelEn: 'Father',  labelBn: 'পিতা',      priority: 1 },
+    { code: 'MTHR', labelEn: 'Mother',  labelBn: 'মাতা',      priority: 2 },
+    { code: 'HSBN', labelEn: 'Husband', labelBn: 'স্বামী',   priority: 3 },
+    { code: 'WIFE', labelEn: 'Wife',    labelBn: 'স্ত্রী',   priority: 4 },
+    { code: 'OTHR', labelEn: 'Other',   labelBn: 'অন্যান্য', priority: 5 },
+  ];
+
+  /**
+   * Injects the GCDS Section C floating Action Card styles (once per page).
+   */
+  function injectRelationCardStyles() {
+    if (document.getElementById('gcds-sec-c-card-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'gcds-sec-c-card-styles';
+    s.textContent = `
+      #gcds-rel-card {
+        position: fixed;
+        bottom: 28px;
+        right: 28px;
+        z-index: 2147483647;
+        width: 320px;
+        background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
+        border: 1.5px solid #6366f1;
+        border-radius: 14px;
+        padding: 18px 18px 14px;
+        box-shadow: 0 8px 40px rgba(99,102,241,0.35), 0 2px 12px rgba(0,0,0,0.5);
+        font-family: 'Inter', system-ui, sans-serif;
+        color: #f1f5f9;
+        animation: gcds-card-in 0.25s cubic-bezier(0.34,1.56,0.64,1);
+        user-select: none;
+      }
+      @keyframes gcds-card-in {
+        from { opacity: 0; transform: translateY(20px) scale(0.96); }
+        to   { opacity: 1; transform: translateY(0)  scale(1); }
+      }
+      #gcds-rel-card .gcds-card-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      #gcds-rel-card .gcds-card-badge {
+        background: #6366f1;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 2px 8px;
+        border-radius: 20px;
+        text-transform: uppercase;
+      }
+      #gcds-rel-card .gcds-card-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #94a3b8;
+      }
+      #gcds-rel-card .gcds-rec-box {
+        background: rgba(99,102,241,0.12);
+        border: 1px solid rgba(99,102,241,0.4);
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 12px;
+      }
+      #gcds-rel-card .gcds-rec-label {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      #gcds-rel-card .gcds-rec-name {
+        font-size: 18px;
+        font-weight: 700;
+        color: #a5b4fc;
+        letter-spacing: -0.01em;
+      }
+      #gcds-rel-card .gcds-rec-name-en {
+        font-size: 12px;
+        color: #64748b;
+        margin-top: 2px;
+      }
+      #gcds-rel-card .gcds-select-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+      #gcds-rel-card .gcds-rel-chip {
+        background: #1e293b;
+        border: 1.5px solid #334155;
+        color: #94a3b8;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 4px 10px;
+        cursor: pointer;
+        transition: border-color 0.15s, color 0.15s, background 0.15s;
+      }
+      #gcds-rel-card .gcds-rel-chip:hover {
+        border-color: #6366f1;
+        color: #e0e7ff;
+      }
+      #gcds-rel-card .gcds-rel-chip.active {
+        background: rgba(99,102,241,0.18);
+        border-color: #6366f1;
+        color: #a5b4fc;
+        font-weight: 700;
+      }
+      #gcds-rel-card .gcds-btn-row {
+        display: flex;
+        gap: 8px;
+      }
+      #gcds-rel-card .gcds-btn-confirm {
+        flex: 1;
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        border: none;
+        border-radius: 8px;
+        padding: 9px 0;
+        cursor: pointer;
+        letter-spacing: 0.02em;
+        transition: opacity 0.15s, transform 0.1s;
+        box-shadow: 0 2px 8px rgba(99,102,241,0.4);
+      }
+      #gcds-rel-card .gcds-btn-confirm:hover  { opacity: 0.9; transform: translateY(-1px); }
+      #gcds-rel-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
+      #gcds-rel-card .gcds-btn-skip {
+        background: transparent;
+        color: #64748b;
+        font-size: 12px;
+        border: 1.5px solid #334155;
+        border-radius: 8px;
+        padding: 9px 14px;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s;
+      }
+      #gcds-rel-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
+      #gcds-rel-card .gcds-spinner {
+        display: inline-block;
+        width: 14px; height: 14px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: gcds-spin 0.6s linear infinite;
+        vertical-align: middle;
+        margin-right: 6px;
+      }
+      @keyframes gcds-spin { to { transform: rotate(360deg); } }
+    `;
+    document.head.appendChild(s);
+  }
+
+  /**
+   * Shows a floating "Relation Recommendation" Action Card for Section C.
+   *
+   * Resolves with the operator-chosen relation object OR null if skipped.
+   *
+   * @param {object} recommendation - { code, labelEn, labelBn } of the suggested relation
+   * @param {string} relFirstName   - English first name of the relative
+   * @param {string} relLastName    - English last name of the relative
+   * @param {object} allNames       - Map of relCode → { first, last } so operator can pick a different one
+   * @returns {Promise<{code:string, labelEn:string, labelBn:string, firstName:string, lastName:string}|null>}
+   */
+  function waitForRelationConfirmation(recommendation, relFirstName, relLastName, allNames = {}) {
+    return new Promise((resolve) => {
+      injectRelationCardStyles();
+
+      // Remove any stale card
+      const stale = document.getElementById('gcds-rel-card');
+      if (stale) stale.remove();
+
+      let selectedCode = recommendation.code;
+
+      // Build other-options name display helper
+      const nameFor = (code) => {
+        if (allNames[code]) {
+          const n = allNames[code];
+          return [n.first, n.last].filter(Boolean).join(' ');
+        }
+        return '';
+      };
+
+      // Visible relation options (only those with data available)
+      const visibleOptions = RELATION_OPTIONS.filter((o) => allNames[o.code]);
+
+      const card = document.createElement('div');
+      card.id = 'gcds-rel-card';
+      card.setAttribute('role', 'dialog');
+      card.setAttribute('aria-label', 'Section C Relation Confirmation');
+
+      const renderCard = () => {
+        const sel = RELATION_OPTIONS.find((o) => o.code === selectedCode) || recommendation;
+        const selName = nameFor(selectedCode) || nameFor(recommendation.code) || relFirstName;
+
+        card.innerHTML = `
+          <div class="gcds-card-header">
+            <span class="gcds-card-badge">Section C</span>
+            <span class="gcds-card-title">Relation Recommendation</span>
+          </div>
+          <div class="gcds-rec-box">
+            <div class="gcds-rec-label">Recommended Relation</div>
+            <div class="gcds-rec-name">${sel.labelBn} (${sel.labelEn})</div>
+            <div class="gcds-rec-name-en">${selName}</div>
+          </div>
+          <div class="gcds-select-row" id="gcds-rel-chips">
+            ${visibleOptions.map((o) => `
+              <button class="gcds-rel-chip${o.code === selectedCode ? ' active' : ''}" data-code="${o.code}" title="${nameFor(o.code)}">
+                ${o.labelEn}
+              </button>
+            `).join('')}
+          </div>
+          <div class="gcds-btn-row">
+            <button class="gcds-btn-confirm" id="gcds-btn-confirm">
+              ✅ Confirm &amp; Fill
+            </button>
+            <button class="gcds-btn-skip" id="gcds-btn-skip" title="Skip Section C">
+              Skip
+            </button>
+          </div>
+        `;
+
+        // Chip selection
+        card.querySelectorAll('.gcds-rel-chip').forEach((chip) => {
+          chip.addEventListener('click', () => {
+            selectedCode = chip.dataset.code;
+            renderCard();
+          });
+        });
+
+        // Confirm button
+        card.querySelector('#gcds-btn-confirm').addEventListener('click', () => {
+          const chosenOpt = RELATION_OPTIONS.find((o) => o.code === selectedCode) || recommendation;
+          const chosenName = allNames[selectedCode] || allNames[recommendation.code] || {};
+          card.querySelector('#gcds-btn-confirm').innerHTML =
+            '<span class="gcds-spinner"></span> Filling…';
+          card.querySelector('#gcds-btn-confirm').disabled = true;
+
+          setTimeout(() => {
+            card.remove();
+            resolve({
+              code: chosenOpt.code,
+              labelEn: chosenOpt.labelEn,
+              labelBn: chosenOpt.labelBn,
+              firstName: chosenName.first || relFirstName,
+              lastName: chosenName.last || relLastName,
+            });
+          }, 350);
+        });
+
+        // Skip button
+        card.querySelector('#gcds-btn-skip').addEventListener('click', () => {
+          card.remove();
+          resolve(null);
+        });
+      };
+
+      renderCard();
+      document.body.appendChild(card);
+
+      // Auto-scroll Section C box into view so operator sees the form + card
+      const boxC = findSectionBox('C');
+      if (boxC) {
+        try { boxC.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+      }
+    });
+  }
+
   // ─── Main Fill Engine ─────────────────────────────────────────────────────
 
   /**
@@ -1197,107 +1473,140 @@
     await clickSectionNextButton('B');
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Section C: Relatives Details
+    // Section C: Relatives Details  ←  HUMAN-IN-THE-LOOP (HITL)
+    //
+    // Instead of auto-filling, we build a recommendation from GCDS data,
+    // display a floating "Relation Recommendation" Action Card, and WAIT for
+    // the operator to click "Confirm & Fill" (or "Skip").
+    // Priority: Father > Mother > Husband/Wife > Other.
     // ═══════════════════════════════════════════════════════════════════════════
 
-    let relCode = null;
-    let relFirst = '';
-    let relLast = '';
+    // 1. Build available-names map (relCode → { first, last })
+    const relAvailableNames = {};
 
     if (relative.fatherName || relative.fatherFirstMiddleName || data.father_name) {
-      relCode = 'FTHR';
-      relFirst = relative.fatherFirstMiddleName || relative.fatherName || data.father_name || '';
-      relLast = relative.fatherSurname || '';
-    } else if (relative.spouseName || relative.spouseFirstMiddleName || data.spouse_name) {
-      relCode = 'HSBN';
-      relFirst = relative.spouseFirstMiddleName || relative.spouseName || data.spouse_name || '';
-      relLast = relative.spouseSurname || '';
-    } else if (relative.motherName || relative.motherFirstMiddleName || data.mother_name) {
-      relCode = 'MTHR';
-      relFirst = relative.motherFirstMiddleName || relative.motherName || data.mother_name || '';
-      relLast = relative.motherSurname || '';
+      relAvailableNames['FTHR'] = {
+        first: relative.fatherFirstMiddleName || relative.fatherName || data.father_name || '',
+        last:  relative.fatherSurname || '',
+      };
+    }
+    if (relative.motherName || relative.motherFirstMiddleName || data.mother_name) {
+      relAvailableNames['MTHR'] = {
+        first: relative.motherFirstMiddleName || relative.motherName || data.mother_name || '',
+        last:  relative.motherSurname || '',
+      };
+    }
+    const rawGenderForRel = String(data.gender || '').trim().toLowerCase();
+    const spouseCode = (rawGenderForRel === 'female' || rawGenderForRel === 'f') ? 'HSBN' : 'WIFE';
+    if (relative.spouseName || relative.spouseFirstMiddleName || data.spouse_name) {
+      relAvailableNames[spouseCode] = {
+        first: relative.spouseFirstMiddleName || relative.spouseName || data.spouse_name || '',
+        last:  relative.spouseSurname || '',
+      };
     }
 
-    if (relCode) {
-      // 1. Radio button for relative type (ECI standard: FTHR, MTHR, HSBN, WIFE, OTHR)
-      const relRadio = document.querySelector(`input[type="radio"][name="relatives"][value="${relCode}"]`);
-      if (relRadio) {
-        setRadioOrCheckbox(relRadio, true);
-        highlightField(relRadio);
-        filledCount++;
-      } else {
-        const labelMap = { FTHR: 'Father', HSBN: 'Husband', MTHR: 'Mother' };
-        await fillSelectField('relationType', labelMap[relCode] || 'Father');
-      }
+    // 2. Determine recommended relation (priority: Father > Mother > Spouse)
+    const relPriorityOrder = ['FTHR', 'MTHR', spouseCode, 'WIFE', 'OTHR'];
+    const recommendedCode = relPriorityOrder.find((c) => relAvailableNames[c]) || null;
 
-      await sleep(50);
+    if (recommendedCode) {
+      const recommendedOpt = RELATION_OPTIONS.find((o) => o.code === recommendedCode) || {
+        code: recommendedCode, labelEn: recommendedCode, labelBn: recommendedCode
+      };
+      const defaultNames = relAvailableNames[recommendedCode];
 
-      // 2. Relative First Name and Surname
-      if (relFirst) {
-        await fillTextField('relativeFirstName', relFirst);
+      // 3. ── HITL: Show floating Action Card and await operator confirmation ──
+      const confirmed = await waitForRelationConfirmation(
+        recommendedOpt,
+        defaultNames.first,
+        defaultNames.last,
+        relAvailableNames
+      );
+
+      if (confirmed) {
+        const { code: relCode, firstName: relFirst, lastName: relLast } = confirmed;
+
+        // 4. Select radio button for chosen relation type
+        const relRadio = document.querySelector(
+          `input[type="radio"][name="relatives"][value="${relCode}"]`
+        );
+        if (relRadio) {
+          setRadioOrCheckbox(relRadio, true);
+          highlightField(relRadio);
+          filledCount++;
+        } else {
+          const labelMap = { FTHR: 'Father', HSBN: 'Husband', MTHR: 'Mother', WIFE: 'Wife', OTHR: 'Other' };
+          await fillSelectField('relationType', labelMap[relCode] || 'Father');
+        }
+
+        await sleep(50);
+
+        // 5. Fill relative first name and surname
+        if (relFirst) {
+          await fillTextField('relativeFirstName', relFirst);
+        } else {
+          skippedCount++;
+          skippedFields.push('relativeFirstName');
+        }
+        if (relLast) {
+          await fillTextField('relativeLastName', relLast);
+        }
+
+        // 6. Regional (Bengali/Devanagari) relative names
+        //    CRITICAL GUARD: Only write if we have genuine non-ASCII characters!
+        let regRelFirstVal = relative.regionalFirstName || relative.nativeFirstName || '';
+        let regRelLastVal  = relative.regionalLastName  || relative.nativeLastName  || '';
+
+        if (!regRelFirstVal && relFirst) {
+          try {
+            if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
+              const resp = await new Promise((res) => {
+                chrome.runtime.sendMessage(
+                  { action: 'TRANSLITERATE', payload: { text: relFirst, lang: window.glocale || 'bn' } },
+                  (r) => res(r)
+                );
+              });
+              if (resp && resp.success && resp.text) regRelFirstVal = resp.text;
+            }
+          } catch {}
+        }
+
+        if (!regRelLastVal && relLast) {
+          try {
+            if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
+              const resp = await new Promise((res) => {
+                chrome.runtime.sendMessage(
+                  { action: 'TRANSLITERATE', payload: { text: relLast, lang: window.glocale || 'bn' } },
+                  (r) => res(r)
+                );
+              });
+              if (resp && resp.success && resp.text) regRelLastVal = resp.text;
+            }
+          } catch {}
+        }
+
+        const regRelNameEl = document.querySelector('input#regRelatName, #regRelatName');
+        if (regRelNameEl && regRelFirstVal && /[^\u0000-\u007F]/.test(regRelFirstVal)) {
+          setInputValue(regRelNameEl, regRelFirstVal);
+        }
+        const regRelSurEl = document.querySelector('input#regRelatSurName, #regRelatSurName');
+        if (regRelSurEl && regRelLastVal && /[^\u0000-\u007F]/.test(regRelLastVal)) {
+          setInputValue(regRelSurEl, regRelLastVal);
+        }
+
+        // 7. Auto-advance Section C only after confirmed fill
+        await clickSectionNextButton('C');
       } else {
+        // Operator chose to skip Section C — do NOT auto-advance; leave for manual entry
+        console.info('[GCDS] Section C skipped by operator.');
         skippedCount++;
-        skippedFields.push('relativeFirstName');
-      }
-
-      if (relLast) {
-        await fillTextField('relativeLastName', relLast);
-      }
-
-      // 3. Regional Relative Names (CRITICAL: satisfies ECI React validation for Section C Next button)
-      let regRelFirstVal = relative.regionalFirstName || relative.nativeFirstName || '';
-      let regRelLastVal = relative.regionalLastName || relative.nativeLastName || '';
-
-      // If no regional name was provided, try transliterating via background service worker
-      if (!regRelFirstVal && relFirst) {
-        try {
-          if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
-            const resp = await new Promise((res) => {
-              chrome.runtime.sendMessage(
-                { action: 'TRANSLITERATE', payload: { text: relFirst, lang: window.glocale || 'bn' } },
-                (r) => res(r)
-              );
-            });
-            if (resp && resp.success && resp.text) {
-              regRelFirstVal = resp.text;
-            }
-          }
-        } catch {}
-      }
-
-      if (!regRelLastVal && relLast) {
-        try {
-          if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
-            const resp = await new Promise((res) => {
-              chrome.runtime.sendMessage(
-                { action: 'TRANSLITERATE', payload: { text: relLast, lang: window.glocale || 'bn' } },
-                (r) => res(r)
-              );
-            });
-            if (resp && resp.success && resp.text) {
-              regRelLastVal = resp.text;
-            }
-          }
-        } catch {}
-      }
-
-      // CRITICAL GUARD: Only set regional inputs if we have valid non-ASCII regional script characters!
-      // Setting English/Latin characters into regRelatName triggers the ECI portal "Invalid Input" error!
-      const regRelNameEl = document.querySelector('input#regRelatName, #regRelatName');
-      if (regRelNameEl && regRelFirstVal && /[^\u0000-\u007F]/.test(regRelFirstVal)) {
-        setInputValue(regRelNameEl, regRelFirstVal);
-      }
-      const regRelSurEl = document.querySelector('input#regRelatSurName, #regRelatSurName');
-      if (regRelSurEl && regRelLastVal && /[^\u0000-\u007F]/.test(regRelLastVal)) {
-        setInputValue(regRelSurEl, regRelLastVal);
+        skippedFields.push('relationType');
       }
     } else {
+      // No relative data at all — skip gracefully
       skippedCount++;
       skippedFields.push('relationType');
     }
-
-    // Auto-advance Section C
-    await clickSectionNextButton('C');
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Section D: Contact Details
@@ -1709,7 +2018,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.1.1',
+      version: '1.2.0',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
@@ -1743,6 +2052,7 @@
     injectFileToPortal,
     autoConfirmSelectFromImageModal,
     handlePhotoSection,
+    waitForRelationConfirmation,
     runFill,
     fillForm,
     generateDiagnosticReport,

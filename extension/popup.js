@@ -491,7 +491,7 @@ async function handleCopyDiagnostics() {
     if (!tab.url || !tab.url.includes('voters.eci.gov.in')) {
       const fallbackReport = {
         reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-        version: '1.1.1',
+        version: '1.2.0',
         timestamp: new Date().toISOString(),
         portal: {
           url: tab.url ? tab.url.split('?')[0].split('#')[0] : 'non-eci-page',
