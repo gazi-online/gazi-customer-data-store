@@ -16,7 +16,7 @@
 const DEFAULT_API_URL = 'https://gdsa-opal.vercel.app';
 const SEARCH_ENDPOINT = '/api/extension/customers/search';
 const FORM_FILL_ENDPOINT = '/api/extension/customers'; // /{id}/form-fill
-const EXTENSION_VERSION = '1.2.0';
+const EXTENSION_VERSION = '1.2.1';
 
 // Inactivity security timeout for multi-operator kiosk protection
 const INACTIVITY_TIMEOUT_MINUTES = 30;
@@ -510,14 +510,73 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               targetLang = 'pa';
             }
 
-            const relFirst = formData.relative.fatherFirstMiddleName || formData.relative.fatherName || formData.relative.spouseFirstMiddleName || formData.relative.spouseName || formData.relative.motherFirstMiddleName || formData.relative.motherName || '';
-            const relLast = formData.relative.fatherSurname || formData.relative.spouseSurname || formData.relative.motherSurname || '';
+            // Pre-transliterate relative names (Father, Mother, Spouse) if regional script is missing
+            const splitNameSafe = (firstMiddle, last, full) => {
+              let f = String(firstMiddle || '').trim();
+              let l = String(last || '').trim();
+              if (!f && full) {
+                const parts = String(full).trim().split(/\s+/);
+                if (parts.length > 1) {
+                  f = parts.slice(0, -1).join(' ');
+                  l = parts[parts.length - 1];
+                } else {
+                  f = parts[0];
+                }
+              }
+              return { first: f, last: l };
+            };
 
-            if (!formData.relative.regionalFirstName && relFirst) {
-              formData.relative.regionalFirstName = await transliterateText(relFirst, targetLang);
+            // 1. Father
+            const fName = splitNameSafe(
+              formData.relative.father_first_name || formData.relative.fatherFirstMiddleName,
+              formData.relative.father_last_name || formData.relative.fatherSurname,
+              formData.relative.fatherName || formData.father_name
+            );
+            if (!formData.relative.fatherRegionalFirstName && fName.first) {
+              formData.relative.fatherRegionalFirstName = await transliterateText(fName.first, targetLang);
             }
-            if (!formData.relative.regionalLastName && relLast) {
-              formData.relative.regionalLastName = await transliterateText(relLast, targetLang);
+            if (!formData.relative.fatherRegionalLastName && fName.last) {
+              formData.relative.fatherRegionalLastName = await transliterateText(fName.last, targetLang);
+            }
+
+            // 2. Mother
+            const mName = splitNameSafe(
+              formData.relative.mother_first_name || formData.relative.motherFirstMiddleName,
+              formData.relative.mother_last_name || formData.relative.motherSurname,
+              formData.relative.motherName || formData.mother_name
+            );
+            if (!formData.relative.motherRegionalFirstName && mName.first) {
+              formData.relative.motherRegionalFirstName = await transliterateText(mName.first, targetLang);
+            }
+            if (!formData.relative.motherRegionalLastName && mName.last) {
+              formData.relative.motherRegionalLastName = await transliterateText(mName.last, targetLang);
+            }
+
+            // 3. Spouse
+            const sName = splitNameSafe(
+              formData.relative.spouse_first_name || formData.relative.spouseFirstMiddleName,
+              formData.relative.spouse_last_name || formData.relative.spouseSurname,
+              formData.relative.spouseName || formData.spouse_name
+            );
+            if (!formData.relative.spouseRegionalFirstName && sName.first) {
+              formData.relative.spouseRegionalFirstName = await transliterateText(sName.first, targetLang);
+            }
+            if (!formData.relative.spouseRegionalLastName && sName.last) {
+              formData.relative.spouseRegionalLastName = await transliterateText(sName.last, targetLang);
+            }
+
+            // Fallback default relative regional names (backward compatibility)
+            if (!formData.relative.regionalFirstName) {
+              formData.relative.regionalFirstName =
+                formData.relative.fatherRegionalFirstName ||
+                formData.relative.motherRegionalFirstName ||
+                formData.relative.spouseRegionalFirstName || '';
+            }
+            if (!formData.relative.regionalLastName) {
+              formData.relative.regionalLastName =
+                formData.relative.fatherRegionalLastName ||
+                formData.relative.motherRegionalLastName ||
+                formData.relative.spouseRegionalLastName || '';
             }
           }
 

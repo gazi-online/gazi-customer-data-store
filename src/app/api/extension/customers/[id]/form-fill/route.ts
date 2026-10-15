@@ -232,18 +232,37 @@ export async function GET(req: NextRequest, context: RouteContext) {
       mobile: customer.phone,
       email: customer.email || null,
 
+      father_name: customer.father_name || null,
+      father_first_name: (customer as any).father_first_middle_name || null,
+      father_last_name: (customer as any).father_surname || null,
+      mother_name: customer.mother_name || null,
+      mother_first_name: (customer as any).mother_first_middle_name || null,
+      mother_last_name: (customer as any).mother_surname || null,
+      spouse_name: customer.spouse_name || null,
+      spouse_first_name: (customer as any).spouse_first_middle_name || null,
+      spouse_last_name: (customer as any).spouse_surname || null,
+
       relative: {
         fatherName: customer.father_name || null,
         fatherFirstMiddleName: (customer as any).father_first_middle_name || null,
         fatherSurname: (customer as any).father_surname || null,
+        father_first_name: (customer as any).father_first_middle_name || null,
+        father_last_name: (customer as any).father_surname || null,
+        father_regional_name: (customer as any).father_regional_name || null,
 
         motherName: customer.mother_name || null,
         motherFirstMiddleName: (customer as any).mother_first_middle_name || null,
         motherSurname: (customer as any).mother_surname || null,
+        mother_first_name: (customer as any).mother_first_middle_name || null,
+        mother_last_name: (customer as any).mother_surname || null,
+        mother_regional_name: (customer as any).mother_regional_name || null,
 
         spouseName: customer.spouse_name || null,
         spouseFirstMiddleName: (customer as any).spouse_first_middle_name || null,
         spouseSurname: (customer as any).spouse_surname || null,
+        spouse_first_name: (customer as any).spouse_first_middle_name || null,
+        spouse_last_name: (customer as any).spouse_surname || null,
+        spouse_regional_name: (customer as any).spouse_regional_name || null,
       },
 
       address: {

@@ -1145,6 +1145,89 @@
   }
 
   /**
+   * Requests transliteration from the background script into the target language.
+   * If the text is empty or already in the non-Latin script, returns as-is.
+   *
+   * @param {string} text - English text to transliterate
+   * @param {string} targetLang - Language code ('bn', 'hi', etc.)
+   * @returns {Promise<string>}
+   */
+  async function requestTransliteration(text, targetLang = 'bn') {
+    if (!text || typeof text !== 'string') return '';
+    const trimmed = text.trim();
+    if (!trimmed) return '';
+    if (/[^\u0000-\u007F]/.test(trimmed)) return trimmed; // already non-ASCII
+    try {
+      if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
+        const resp = await new Promise((res) => {
+          chrome.runtime.sendMessage(
+            { action: 'TRANSLITERATE', payload: { text: trimmed, lang: window.glocale || targetLang } },
+            (r) => res(r)
+          );
+        });
+        if (resp && resp.success && resp.text) {
+          return String(resp.text).trim();
+        }
+      }
+    } catch (e) {
+      console.warn('[GCDS] Transliteration failed for:', text, e);
+    }
+    return '';
+  }
+
+  /**
+   * Selects the ECI portal radio button for the given relative code.
+   * Targets standard ECI selectors, input#relatives[value="..."], and
+   * portal ID variants (input#relatMother, input#relatHusband, etc.).
+   *
+   * @param {string} relCode - 'FTHR' | 'MTHR' | 'HSBN' | 'WIFE' | 'OTHR'
+   * @returns {boolean}
+   */
+  function selectRelationRadio(relCode) {
+    const codeAliases = {
+      MTHR: ['relatMother', 'mother', 'relatMthr', 'radioMother'],
+      HSBN: ['relatHusband', 'husband', 'relatHsbn', 'radioHusband'],
+      FTHR: ['relatFather', 'father', 'relatFthr', 'radioFather'],
+      WIFE: ['relatWife', 'wife', 'radioWife'],
+      OTHR: ['relatOther', 'other', 'relatOthr', 'radioOther'],
+    };
+
+    const specificIds = codeAliases[relCode] || [];
+    const selectors = [
+      `input[type="radio"][name="relatives"][value="${relCode}"]`,
+      `input[name="relatives"][value="${relCode}"]`,
+      `input#relatives[value="${relCode}"]`,
+      ...specificIds.map((id) => `input#${id}`),
+      ...specificIds.map((id) => `#${id}`),
+    ];
+
+    for (const sel of selectors) {
+      const radio = document.querySelector(sel);
+      if (radio) {
+        setRadioOrCheckbox(radio, true);
+        highlightField(radio);
+        return true;
+      }
+    }
+
+    // Try finding by label or parent text if not found by selector
+    const allRelRadios = document.querySelectorAll('input[type="radio"][name="relatives"], input[type="radio"]');
+    const targetLabel = { FTHR: 'father', MTHR: 'mother', HSBN: 'husband', WIFE: 'wife', OTHR: 'guardian' }[relCode];
+    if (targetLabel) {
+      for (const r of allRelRadios) {
+        const text = (r.labels?.[0]?.innerText || r.parentElement?.innerText || '').toLowerCase();
+        if (text.includes(targetLabel)) {
+          setRadioOrCheckbox(r, true);
+          highlightField(r);
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
    * Shows a floating "Relation Recommendation" Action Card for Section C.
    *
    * Resolves with the operator-chosen relation object OR null if skipped.
@@ -1152,8 +1235,8 @@
    * @param {object} recommendation - { code, labelEn, labelBn } of the suggested relation
    * @param {string} relFirstName   - English first name of the relative
    * @param {string} relLastName    - English last name of the relative
-   * @param {object} allNames       - Map of relCode → { first, last } so operator can pick a different one
-   * @returns {Promise<{code:string, labelEn:string, labelBn:string, firstName:string, lastName:string}|null>}
+   * @param {object} allNames       - Map of relCode → { first, last, regionalFirst, regionalLast }
+   * @returns {Promise<{code:string, labelEn:string, labelBn:string, firstName:string, lastName:string, regionalFirst:string, regionalLast:string}|null>}
    */
   function waitForRelationConfirmation(recommendation, relFirstName, relLastName, allNames = {}) {
     return new Promise((resolve) => {
@@ -1164,12 +1247,35 @@
       if (stale) stale.remove();
 
       let selectedCode = recommendation.code;
+      let activeRelationData = allNames[selectedCode] || {
+        code: selectedCode,
+        first: relFirstName,
+        last: relLastName,
+        regionalFirst: '',
+        regionalLast: '',
+      };
 
-      // Build other-options name display helper
+      // Helper to trigger background transliteration for active relation
+      const ensureTransliteration = async (relData) => {
+        if (!relData || !relData.first) return;
+        if (!relData.regionalFirst) {
+          const res = await requestTransliteration(relData.first);
+          if (res) relData.regionalFirst = res;
+        }
+        if (relData.last && !relData.regionalLast) {
+          const res = await requestTransliteration(relData.last);
+          if (res) relData.regionalLast = res;
+        }
+      };
+
+      // Kick off background transliteration for initial recommendation if needed
+      ensureTransliteration(activeRelationData);
+
+      // Build name display helper
       const nameFor = (code) => {
         if (allNames[code]) {
           const n = allNames[code];
-          return [n.first, n.last].filter(Boolean).join(' ');
+          return [n.first, n.last].filter(Boolean).join(' ') || n.fullName || '';
         }
         return '';
       };
@@ -1184,7 +1290,11 @@
 
       const renderCard = () => {
         const sel = RELATION_OPTIONS.find((o) => o.code === selectedCode) || recommendation;
-        const selName = nameFor(selectedCode) || nameFor(recommendation.code) || relFirstName;
+        const currentData = allNames[selectedCode] || activeRelationData || {};
+        const selName = [currentData.first, currentData.last].filter(Boolean).join(' ') ||
+                        currentData.fullName ||
+                        nameFor(selectedCode) ||
+                        '';
 
         card.innerHTML = `
           <div class="gcds-card-header">
@@ -1192,42 +1302,56 @@
             <span class="gcds-card-title">Relation Recommendation</span>
           </div>
           <div class="gcds-rec-box">
-            <div class="gcds-rec-label">Recommended Relation</div>
+            <div class="gcds-rec-label">Selected Relation</div>
             <div class="gcds-rec-name">${sel.labelBn} (${sel.labelEn})</div>
-            <div class="gcds-rec-name-en">${selName}</div>
+            <div class="gcds-rec-name-en">${selName || '—'}</div>
           </div>
           <div class="gcds-select-row" id="gcds-rel-chips">
             ${visibleOptions.map((o) => `
-              <button class="gcds-rel-chip${o.code === selectedCode ? ' active' : ''}" data-code="${o.code}" title="${nameFor(o.code)}">
+              <button class="gcds-rel-chip${o.code === selectedCode ? ' active' : ''}" data-code="${o.code}" data-testid="rel-chip-${o.code.toLowerCase()}" title="${nameFor(o.code)}">
                 ${o.labelEn}
               </button>
             `).join('')}
           </div>
           <div class="gcds-btn-row">
-            <button class="gcds-btn-confirm" id="gcds-btn-confirm">
+            <button class="gcds-btn-confirm" id="gcds-btn-confirm" data-testid="btn-confirm-fill">
               ✅ Confirm &amp; Fill
             </button>
-            <button class="gcds-btn-skip" id="gcds-btn-skip" title="Skip Section C">
+            <button class="gcds-btn-skip" id="gcds-btn-skip" data-testid="btn-skip-fill" title="Skip Section C">
               Skip
             </button>
           </div>
         `;
 
-        // Chip selection
+        // 1. Chip selection: dynamically swap activeRelationData and trigger transliteration
         card.querySelectorAll('.gcds-rel-chip').forEach((chip) => {
           chip.addEventListener('click', () => {
             selectedCode = chip.dataset.code;
+            activeRelationData = allNames[selectedCode] || {
+              code: selectedCode,
+              first: '',
+              last: '',
+              regionalFirst: '',
+              regionalLast: '',
+            };
+            // Re-trigger transliteration if regional name is missing
+            ensureTransliteration(activeRelationData);
             renderCard();
           });
         });
 
-        // Confirm button
-        card.querySelector('#gcds-btn-confirm').addEventListener('click', () => {
-          const chosenOpt = RELATION_OPTIONS.find((o) => o.code === selectedCode) || recommendation;
-          const chosenName = allNames[selectedCode] || allNames[recommendation.code] || {};
+        // 2. Confirm button: strictly reads currently selected relation's data
+        card.querySelector('#gcds-btn-confirm').addEventListener('click', async () => {
+          const currentCode = selectedCode;
+          const chosenOpt = RELATION_OPTIONS.find((o) => o.code === currentCode) || recommendation;
+          const chosenData = allNames[currentCode] || activeRelationData || {};
+
           card.querySelector('#gcds-btn-confirm').innerHTML =
             '<span class="gcds-spinner"></span> Filling…';
           card.querySelector('#gcds-btn-confirm').disabled = true;
+
+          // Ensure regional transliteration is done before resolving
+          await ensureTransliteration(chosenData);
 
           setTimeout(() => {
             card.remove();
@@ -1235,13 +1359,15 @@
               code: chosenOpt.code,
               labelEn: chosenOpt.labelEn,
               labelBn: chosenOpt.labelBn,
-              firstName: chosenName.first || relFirstName,
-              lastName: chosenName.last || relLastName,
+              firstName: chosenData.first || '',
+              lastName: chosenData.last || '',
+              regionalFirst: chosenData.regionalFirst || '',
+              regionalLast: chosenData.regionalLast || '',
             });
-          }, 350);
+          }, 300);
         });
 
-        // Skip button
+        // 3. Skip button
         card.querySelector('#gcds-btn-skip').addEventListener('click', () => {
           card.remove();
           resolve(null);
@@ -1481,28 +1607,109 @@
     // Priority: Father > Mother > Husband/Wife > Other.
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // 1. Build available-names map (relCode → { first, last })
+    // Helper: extracts and splits relative first/last and regional names
+    function buildRelationRecord(code, firstMiddle, last, full, regFirst, regLast, regFull) {
+      let f = String(firstMiddle || '').trim();
+      let l = String(last || '').trim();
+      const rawFull = String(full || '').trim();
+
+      if (!f && rawFull) {
+        const parts = rawFull.split(/\s+/);
+        if (parts.length > 1) {
+          f = parts.slice(0, -1).join(' ');
+          l = parts[parts.length - 1];
+        } else {
+          f = parts[0];
+        }
+      } else if (f && !l) {
+        const parts = f.split(/\s+/);
+        if (parts.length > 1) {
+          f = parts.slice(0, -1).join(' ');
+          l = parts[parts.length - 1];
+        }
+      }
+
+      let rf = String(regFirst || '').trim();
+      let rl = String(regLast || '').trim();
+      const rawRegFull = String(regFull || '').trim();
+
+      if (!rf && rawRegFull) {
+        const parts = rawRegFull.split(/\s+/);
+        if (parts.length > 1) {
+          rf = parts.slice(0, -1).join(' ');
+          rl = parts[parts.length - 1];
+        } else {
+          rf = parts[0];
+        }
+      } else if (rf && !rl) {
+        const parts = rf.split(/\s+/);
+        if (parts.length > 1) {
+          rf = parts.slice(0, -1).join(' ');
+          rl = parts[parts.length - 1];
+        }
+      }
+
+      if (!f && !l && !rawFull) return null;
+
+      return {
+        code,
+        first: f,
+        last: l,
+        fullName: [f, l].filter(Boolean).join(' ') || rawFull,
+        regionalFirst: rf,
+        regionalLast: rl,
+        regionalName: [rf, rl].filter(Boolean).join(' ') || rawRegFull,
+      };
+    }
+
+    // 1. Build available-names map with dynamic fields from GCDS customer object
     const relAvailableNames = {};
 
-    if (relative.fatherName || relative.fatherFirstMiddleName || data.father_name) {
-      relAvailableNames['FTHR'] = {
-        first: relative.fatherFirstMiddleName || relative.fatherName || data.father_name || '',
-        last:  relative.fatherSurname || '',
-      };
-    }
-    if (relative.motherName || relative.motherFirstMiddleName || data.mother_name) {
-      relAvailableNames['MTHR'] = {
-        first: relative.motherFirstMiddleName || relative.motherName || data.mother_name || '',
-        last:  relative.motherSurname || '',
-      };
-    }
     const rawGenderForRel = String(data.gender || '').trim().toLowerCase();
     const spouseCode = (rawGenderForRel === 'female' || rawGenderForRel === 'f') ? 'HSBN' : 'WIFE';
-    if (relative.spouseName || relative.spouseFirstMiddleName || data.spouse_name) {
-      relAvailableNames[spouseCode] = {
-        first: relative.spouseFirstMiddleName || relative.spouseName || data.spouse_name || '',
-        last:  relative.spouseSurname || '',
-      };
+
+    // Father data mapping
+    const fatherRecord = buildRelationRecord(
+      'FTHR',
+      relative.father_first_name || relative.fatherFirstMiddleName || data.father_first_name,
+      relative.father_last_name || relative.fatherSurname || data.father_last_name,
+      relative.fatherName || data.father_name,
+      relative.fatherRegionalFirstName,
+      relative.fatherRegionalLastName,
+      relative.father_regional_name || data.father_regional_name
+    );
+    if (fatherRecord) {
+      relAvailableNames['FTHR'] = fatherRecord;
+    }
+
+    // Mother data mapping
+    const motherRecord = buildRelationRecord(
+      'MTHR',
+      relative.mother_first_name || relative.motherFirstMiddleName || data.mother_first_name,
+      relative.mother_last_name || relative.motherSurname || data.mother_last_name,
+      relative.motherName || data.mother_name,
+      relative.motherRegionalFirstName,
+      relative.motherRegionalLastName,
+      relative.mother_regional_name || data.mother_regional_name
+    );
+    if (motherRecord) {
+      relAvailableNames['MTHR'] = motherRecord;
+    }
+
+    // Spouse data mapping
+    const spouseRecord = buildRelationRecord(
+      spouseCode,
+      relative.spouse_first_name || relative.spouseFirstMiddleName || data.spouse_first_name,
+      relative.spouse_last_name || relative.spouseSurname || data.spouse_last_name,
+      relative.spouseName || data.spouse_name,
+      relative.spouseRegionalFirstName,
+      relative.spouseRegionalLastName,
+      relative.spouse_regional_name || data.spouse_regional_name
+    );
+    if (spouseRecord) {
+      relAvailableNames[spouseCode] = spouseRecord;
+      relAvailableNames['HSBN'] = { ...spouseRecord, code: 'HSBN' };
+      relAvailableNames['WIFE'] = { ...spouseRecord, code: 'WIFE' };
     }
 
     // 2. Determine recommended relation (priority: Father > Mother > Spouse)
@@ -1524,15 +1731,11 @@
       );
 
       if (confirmed) {
-        const { code: relCode, firstName: relFirst, lastName: relLast } = confirmed;
+        const { code: relCode, firstName: relFirst, lastName: relLast, regionalFirst, regionalLast } = confirmed;
 
-        // 4. Select radio button for chosen relation type
-        const relRadio = document.querySelector(
-          `input[type="radio"][name="relatives"][value="${relCode}"]`
-        );
-        if (relRadio) {
-          setRadioOrCheckbox(relRadio, true);
-          highlightField(relRadio);
+        // 4. Select radio button for chosen relation type (Father/Mother/Husband/Wife/Other)
+        const radioSuccess = selectRelationRadio(relCode);
+        if (radioSuccess) {
           filledCount++;
         } else {
           const labelMap = { FTHR: 'Father', HSBN: 'Husband', MTHR: 'Mother', WIFE: 'Wife', OTHR: 'Other' };
@@ -1554,35 +1757,15 @@
 
         // 6. Regional (Bengali/Devanagari) relative names
         //    CRITICAL GUARD: Only write if we have genuine non-ASCII characters!
-        let regRelFirstVal = relative.regionalFirstName || relative.nativeFirstName || '';
-        let regRelLastVal  = relative.regionalLastName  || relative.nativeLastName  || '';
+        let regRelFirstVal = regionalFirst || '';
+        let regRelLastVal  = regionalLast || '';
 
+        // If regional names still missing, request transliteration now
         if (!regRelFirstVal && relFirst) {
-          try {
-            if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
-              const resp = await new Promise((res) => {
-                chrome.runtime.sendMessage(
-                  { action: 'TRANSLITERATE', payload: { text: relFirst, lang: window.glocale || 'bn' } },
-                  (r) => res(r)
-                );
-              });
-              if (resp && resp.success && resp.text) regRelFirstVal = resp.text;
-            }
-          } catch {}
+          regRelFirstVal = await requestTransliteration(relFirst);
         }
-
         if (!regRelLastVal && relLast) {
-          try {
-            if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
-              const resp = await new Promise((res) => {
-                chrome.runtime.sendMessage(
-                  { action: 'TRANSLITERATE', payload: { text: relLast, lang: window.glocale || 'bn' } },
-                  (r) => res(r)
-                );
-              });
-              if (resp && resp.success && resp.text) regRelLastVal = resp.text;
-            }
-          } catch {}
+          regRelLastVal = await requestTransliteration(relLast);
         }
 
         const regRelNameEl = document.querySelector('input#regRelatName, #regRelatName');
@@ -2018,7 +2201,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.2.0',
+      version: '1.2.1',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
