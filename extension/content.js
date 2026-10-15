@@ -296,6 +296,22 @@
       'input[placeholder*="EPIC" i]',
       'input[placeholder*="Voter ID" i]',
     ],
+
+    // ─── Aadhaar (Section E) ────────────────────────────────────────────────
+    aadhaarCheckbox: [
+      'input[type="checkbox"][value="aadhaarnum"]',
+      'input[aria-label="Aadhaar Number" i]',
+    ],
+    noAadhaarCheckbox: [
+      'input[type="checkbox"][value="noaadhaarnum"]',
+      'input[aria-label*="not able to furnish" i]',
+    ],
+    aadhaarNumber: [
+      'input#aadhaarNumber',
+      'input[name="aadhaarNumber"]',
+      'input#aadhaarNo',
+      'input[placeholder*="Aadhaar" i]',
+    ],
   };
 
   // ─── Inject Highlight Styles ──────────────────────────────────────────────
@@ -1145,6 +1161,164 @@
         margin-right: 6px;
       }
       @keyframes gcds-spin { to { transform: rotate(360deg); } }
+
+      /* ── Section E: Aadhaar Details Floating Action Card ── */
+      #gcds-aadhaar-card {
+        position: fixed;
+        bottom: 28px;
+        right: 28px;
+        z-index: 2147483647;
+        width: 330px;
+        background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
+        border: 1.5px solid #6366f1;
+        border-radius: 14px;
+        padding: 18px 18px 14px;
+        box-shadow: 0 8px 40px rgba(99,102,241,0.35), 0 2px 12px rgba(0,0,0,0.5);
+        font-family: 'Inter', system-ui, sans-serif;
+        color: #f1f5f9;
+        animation: gcds-card-in 0.25s cubic-bezier(0.34,1.56,0.64,1);
+        user-select: none;
+      }
+      #gcds-aadhaar-card .gcds-card-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      #gcds-aadhaar-card .gcds-card-badge {
+        background: #6366f1;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 2px 8px;
+        border-radius: 20px;
+        text-transform: uppercase;
+      }
+      #gcds-aadhaar-card .gcds-card-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #94a3b8;
+      }
+      #gcds-aadhaar-card .gcds-rec-box {
+        background: rgba(99,102,241,0.12);
+        border: 1px solid rgba(99,102,241,0.4);
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 12px;
+      }
+      #gcds-aadhaar-card .gcds-rec-label {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      #gcds-aadhaar-card .gcds-rec-name {
+        font-size: 15px;
+        font-weight: 700;
+        color: #a5b4fc;
+        letter-spacing: -0.01em;
+      }
+      #gcds-aadhaar-card .gcds-rec-desc {
+        font-size: 11.5px;
+        color: #cbd5e1;
+        margin-top: 4px;
+        line-height: 1.4;
+      }
+      #gcds-aadhaar-card .gcds-aadhaar-input-box {
+        margin-bottom: 12px;
+      }
+      #gcds-aadhaar-card .gcds-aadhaar-input {
+        width: 100%;
+        box-sizing: border-box;
+        background: #0f172a;
+        border: 1.5px solid #334155;
+        border-radius: 8px;
+        color: #f8fafc;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        padding: 10px 12px;
+        text-align: center;
+        outline: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+      #gcds-aadhaar-card .gcds-aadhaar-input:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99,102,241,0.25);
+      }
+      #gcds-aadhaar-card .gcds-input-hint {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-top: 4px;
+        text-align: center;
+      }
+      #gcds-aadhaar-card .gcds-input-hint.ready {
+        color: #34d399;
+        font-weight: 600;
+      }
+      #gcds-aadhaar-card .gcds-btn-no-aadhaar {
+        width: 100%;
+        background: rgba(239, 68, 68, 0.12);
+        color: #fca5a5;
+        border: 1.5px solid rgba(239, 68, 68, 0.35);
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 9px 0;
+        cursor: pointer;
+        margin-bottom: 10px;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+        text-align: center;
+      }
+      #gcds-aadhaar-card .gcds-btn-no-aadhaar:hover {
+        background: rgba(239, 68, 68, 0.22);
+        border-color: #ef4444;
+        color: #ffffff;
+      }
+      #gcds-aadhaar-card .gcds-btn-row {
+        display: flex;
+        gap: 8px;
+      }
+      #gcds-aadhaar-card .gcds-btn-confirm {
+        flex: 1;
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        border: none;
+        border-radius: 8px;
+        padding: 9px 0;
+        cursor: pointer;
+        letter-spacing: 0.02em;
+        transition: opacity 0.15s, transform 0.1s;
+        box-shadow: 0 2px 8px rgba(99,102,241,0.4);
+      }
+      #gcds-aadhaar-card .gcds-btn-confirm:hover  { opacity: 0.9; transform: translateY(-1px); }
+      #gcds-aadhaar-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
+      #gcds-aadhaar-card .gcds-btn-confirm:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+      #gcds-aadhaar-card .gcds-btn-skip {
+        background: transparent;
+        color: #64748b;
+        font-size: 12px;
+        border: 1.5px solid #334155;
+        border-radius: 8px;
+        padding: 9px 14px;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s;
+      }
+      #gcds-aadhaar-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
+      #gcds-aadhaar-card .gcds-spinner {
+        display: inline-block;
+        width: 14px; height: 14px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: gcds-spin 0.6s linear infinite;
+        vertical-align: middle;
+        margin-right: 6px;
+      }
     `;
     document.head.appendChild(s);
   }
@@ -1432,6 +1606,154 @@
       if (boxC) {
         try { boxC.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
       }
+    });
+  }
+
+  /**
+   * Shows a floating Action Card for Section E when Aadhaar is missing from GCDS.
+   *
+   * Prompts the operator for manual 12-digit Aadhaar input OR legal declaration
+   * that customer does not have Aadhaar ("No Aadhaar").
+   *
+   * @returns {Promise<{ action: 'AADHAAR', aadhaarNumber: string } | { action: 'NO_AADHAAR' } | { action: 'SKIP' }>}
+   */
+  function waitForAadhaarConfirmation() {
+    return new Promise((resolve) => {
+      injectRelationCardStyles();
+
+      // Remove any stale card
+      const stale = document.getElementById('gcds-aadhaar-card');
+      if (stale) stale.remove();
+
+      const card = document.createElement('div');
+      card.id = 'gcds-aadhaar-card';
+      card.setAttribute('role', 'dialog');
+      card.setAttribute('aria-label', 'Section E Aadhaar Details Confirmation');
+
+      card.innerHTML = `
+        <div class="gcds-card-header">
+          <span class="gcds-card-badge">Section E</span>
+          <span class="gcds-card-title">Aadhaar Details</span>
+        </div>
+        <div class="gcds-rec-box">
+          <div class="gcds-rec-label">Aadhaar Verification</div>
+          <div class="gcds-rec-name">Aadhaar Missing in GCDS</div>
+          <div class="gcds-rec-desc">Aadhaar Number not found in GCDS. Please enter manually or declare No Aadhaar:</div>
+        </div>
+        <div class="gcds-aadhaar-input-box">
+          <input
+            type="text"
+            class="gcds-aadhaar-input"
+            id="gcds-aadhaar-input"
+            placeholder="XXXX XXXX XXXX"
+            maxlength="14"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <div class="gcds-input-hint" id="gcds-aadhaar-hint">Enter 12-digit Aadhaar number</div>
+        </div>
+        <button type="button" class="gcds-btn-no-aadhaar" id="gcds-btn-no-aadhaar" title="Customer does not possess an Aadhaar number">
+          ⚠️ Customer does not have Aadhaar
+        </button>
+        <div class="gcds-btn-row">
+          <button type="button" class="gcds-btn-confirm" id="gcds-btn-apply-aadhaar" disabled title="Enter 12 digits to apply">
+            ✅ Apply &amp; Fill
+          </button>
+          <button type="button" class="gcds-btn-skip" id="gcds-btn-skip-aadhaar" title="Skip Section E">
+            Skip
+          </button>
+        </div>
+      `;
+
+      const input = card.querySelector('#gcds-aadhaar-input');
+      const hint = card.querySelector('#gcds-aadhaar-hint');
+      const btnApply = card.querySelector('#gcds-btn-apply-aadhaar');
+      const btnNoAadhaar = card.querySelector('#gcds-btn-no-aadhaar');
+      const btnSkip = card.querySelector('#gcds-btn-skip-aadhaar');
+
+      // Auto-format Aadhaar with space separation (XXXX XXXX XXXX)
+      input.addEventListener('input', () => {
+        const digits = input.value.replace(/\D/g, '').slice(0, 12);
+        let formatted = '';
+        for (let i = 0; i < digits.length; i++) {
+          if (i > 0 && i % 4 === 0) formatted += ' ';
+          formatted += digits[i];
+        }
+        input.value = formatted;
+
+        if (digits.length === 12) {
+          hint.textContent = '✅ 12 digits ready';
+          hint.classList.add('ready');
+          btnApply.disabled = false;
+        } else if (digits.length === 0) {
+          hint.textContent = 'Enter 12-digit Aadhaar number';
+          hint.classList.remove('ready');
+          btnApply.disabled = true;
+        } else {
+          hint.textContent = `${digits.length}/12 digits entered`;
+          hint.classList.remove('ready');
+          btnApply.disabled = true;
+        }
+      });
+
+      // Enter key submits if 12 digits ready
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !btnApply.disabled) {
+          e.preventDefault();
+          btnApply.click();
+        }
+      });
+
+      // Scenario B: Operator entered 12 digits and clicked Apply
+      btnApply.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const digits = input.value.replace(/\D/g, '');
+        if (digits.length !== 12) return;
+
+        btnApply.innerHTML = '<span class="gcds-spinner"></span> Applying…';
+        btnApply.disabled = true;
+        btnNoAadhaar.disabled = true;
+
+        setTimeout(() => {
+          card.remove();
+          resolve({ action: 'AADHAAR', aadhaarNumber: digits });
+        }, 150);
+      });
+
+      // Scenario C: Customer has no Aadhaar (Legal Declaration)
+      btnNoAadhaar.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        btnNoAadhaar.innerHTML = '<span class="gcds-spinner"></span> Setting No Aadhaar…';
+        btnNoAadhaar.disabled = true;
+        btnApply.disabled = true;
+
+        setTimeout(() => {
+          card.remove();
+          resolve({ action: 'NO_AADHAAR' });
+        }, 150);
+      });
+
+      // Skip button
+      btnSkip.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        card.remove();
+        resolve({ action: 'SKIP' });
+      });
+
+      document.body.appendChild(card);
+
+      // Auto-scroll Section E into view and focus input
+      const boxE = findSectionBox('E');
+      if (boxE) {
+        try { boxE.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+      }
+      setTimeout(() => {
+        try { input.focus(); } catch {}
+      }, 200);
     });
   }
 
@@ -1907,32 +2229,52 @@
     await clickSectionNextButton('D');
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Section E: Aadhaar Details
+    // Section E: Aadhaar Details (3-Tier Decision Tree)
     // ═══════════════════════════════════════════════════════════════════════════
 
-    const rawAadhaar = data.aadhaarNumber || data.aadhaar || data.aadhaar_number || '';
+    const rawAadhaar = data.aadhaarNumber || data.aadhaar || data.aadhaar_number || data.identity?.aadhaar_number || '';
     const cleanAadhaar = String(rawAadhaar).replace(/\D/g, '');
     const hasValidAadhaar = cleanAadhaar.length === 12;
 
+    let aadhaarDecision = null;
     if (hasValidAadhaar) {
-      // 1. Select "Aadhaar Number" checkbox
-      const aadhaarCb = document.querySelector('input[type="checkbox"][value="aadhaarnum"]');
-      if (aadhaarCb && !aadhaarCb.checked) {
-        setRadioOrCheckbox(aadhaarCb, true);
+      // Scenario A: Aadhaar Exists in GCDS
+      aadhaarDecision = { action: 'AADHAAR', aadhaarNumber: cleanAadhaar };
+    } else {
+      // Scenario B / C: Missing in GCDS — prompt operator via floating Kiosk UI card
+      aadhaarDecision = await waitForAadhaarConfirmation();
+    }
+
+    if (aadhaarDecision && aadhaarDecision.action === 'AADHAAR') {
+      const aadhaarNumToFill = aadhaarDecision.aadhaarNumber;
+
+      // 1. Uncheck "noaadhaarnum" declaration if checked
+      const noAadhaarCb = document.querySelector('input[type="checkbox"][value="noaadhaarnum"]');
+      if (noAadhaarCb && noAadhaarCb.checked) {
+        setRadioOrCheckbox(noAadhaarCb, false);
         await sleep(50);
       }
 
-      // 2. Fill 12-digit Aadhaar input
+      // 2. Select "Aadhaar Number" checkbox
+      const aadhaarCb = document.querySelector('input[type="checkbox"][value="aadhaarnum"]');
+      if (aadhaarCb && !aadhaarCb.checked) {
+        setRadioOrCheckbox(aadhaarCb, true);
+        await sleep(80);
+      }
+
+      // 3. Fill 12-digit Aadhaar input
       const aadhaarInp =
         document.querySelector('input#aadhaarNumber') ||
         document.querySelector('input[name="aadhaarNumber"]');
       if (aadhaarInp) {
-        setInputValue(aadhaarInp, cleanAadhaar);
+        setInputValue(aadhaarInp, aadhaarNumToFill);
         highlightField(aadhaarInp);
         filledCount++;
+      } else {
+        await fillTextField('aadhaarNumber', aadhaarNumToFill);
       }
 
-      // 3. Since Section 5 has Aadhaar, setting Aadhaar as supporting document is valid
+      // 4. Since Section 5 has Aadhaar, setting Aadhaar as supporting document is valid
       const ageSelect = document.querySelector('select[name="ageproof"]');
       if (ageSelect) {
         setSelectValue(ageSelect, 'ADHR');
@@ -1942,8 +2284,26 @@
       if (resSelect) {
         setSelectValue(resSelect, 'ADHR');
       }
-    } else {
-      // CRITICAL GUARD: If Aadhaar is NOT provided in Section 5, NEVER set ADHR as supporting document!
+
+      // Auto-advance Section E
+      await clickSectionNextButton('E');
+    } else if (aadhaarDecision && aadhaarDecision.action === 'NO_AADHAAR') {
+      // Scenario C: Customer has no Aadhaar (Legal Declaration)
+
+      // 1. Uncheck "aadhaarnum" checkbox if checked and clear input
+      const aadhaarCb = document.querySelector('input[type="checkbox"][value="aadhaarnum"]');
+      if (aadhaarCb && aadhaarCb.checked) {
+        setRadioOrCheckbox(aadhaarCb, false);
+        await sleep(50);
+      }
+      const aadhaarInp =
+        document.querySelector('input#aadhaarNumber') ||
+        document.querySelector('input[name="aadhaarNumber"]');
+      if (aadhaarInp) {
+        setInputValue(aadhaarInp, '');
+      }
+
+      // 2. CRITICAL LEGAL GUARD: Clear 'ADHR' from supporting docs if declared no Aadhaar
       const ageSelect = document.querySelector('select[name="ageproof"]');
       if (ageSelect && ageSelect.value === 'ADHR') {
         ageSelect.value = '';
@@ -1956,20 +2316,24 @@
         resSelect.dispatchEvent(new Event('change', { bubbles: true }));
       }
 
-      // Select "I do not have Aadhaar" declaration checkbox if present
+      // 3. Select "I am not able to furnish my Aadhaar Number..." legal declaration
       const noAadhaarCb = document.querySelector('input[type="checkbox"][value="noaadhaarnum"]');
-      if (noAadhaarCb && !noAadhaarCb.checked) {
-        setRadioOrCheckbox(noAadhaarCb, true);
+      if (noAadhaarCb) {
+        if (!noAadhaarCb.checked) {
+          setRadioOrCheckbox(noAadhaarCb, true);
+        }
         highlightField(noAadhaarCb);
         filledCount++;
-      } else {
-        skippedCount++;
-        skippedFields.push('aadhaarNumber');
       }
-    }
 
-    // Auto-advance Section E
-    await clickSectionNextButton('E');
+      // Auto-advance Section E
+      await clickSectionNextButton('E');
+    } else {
+      // Operator skipped Section E — leave for manual entry, do NOT auto-advance
+      console.info('[GCDS] Section E skipped by operator.');
+      skippedCount++;
+      skippedFields.push('aadhaarNumber');
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Section F: Gender
@@ -2313,6 +2677,7 @@
     autoConfirmSelectFromImageModal,
     handlePhotoSection,
     waitForRelationConfirmation,
+    waitForAadhaarConfirmation,
     runFill,
     fillForm,
     generateDiagnosticReport,
@@ -2351,8 +2716,10 @@
 
   // Register re-injection cleanup hook
   window.__GCDS_CONTENT_SCRIPT_CLEANUP = () => {
-    const stale = document.getElementById('gcds-rel-card');
-    if (stale) stale.remove();
+    const staleRel = document.getElementById('gcds-rel-card');
+    if (staleRel) staleRel.remove();
+    const staleAadhaar = document.getElementById('gcds-aadhaar-card');
+    if (staleAadhaar) staleAadhaar.remove();
   };
 })();
 
