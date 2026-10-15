@@ -16,7 +16,7 @@
 const DEFAULT_API_URL = 'https://gdsa-opal.vercel.app';
 const SEARCH_ENDPOINT = '/api/extension/customers/search';
 const FORM_FILL_ENDPOINT = '/api/extension/customers'; // /{id}/form-fill
-const EXTENSION_VERSION = '1.2.1';
+const EXTENSION_VERSION = '1.2.2';
 
 // Inactivity security timeout for multi-operator kiosk protection
 const INACTIVITY_TIMEOUT_MINUTES = 30;

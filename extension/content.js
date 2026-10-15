@@ -17,9 +17,9 @@
  */
 
 (() => {
-  // Prevent multiple injections
-  if (window.__GCDS_CONTENT_SCRIPT_LOADED) {
-    return;
+  // Support clean re-injection
+  if (window.__GCDS_CONTENT_SCRIPT_CLEANUP) {
+    try { window.__GCDS_CONTENT_SCRIPT_CLEANUP(); } catch {}
   }
   window.__GCDS_CONTENT_SCRIPT_LOADED = true;
 
@@ -365,9 +365,14 @@
    * Sets a text input value using the React-compatible native setter approach.
    */
   function setInputValue(element, value) {
-    if (!value && value !== 0) return false;
+    if (value === undefined || value === null) return false;
 
     const strValue = String(value);
+
+    // If React's valueTracker is installed, clear tracker to guarantee React triggers onChange
+    if (element && element._valueTracker) {
+      try { element._valueTracker.setValue('__GCDS_RESET__'); } catch {}
+    }
 
     // Use React's native setter trick to bypass synthetic event system
     const nativeSetter = Object.getOwnPropertyDescriptor(
@@ -1159,12 +1164,24 @@
     if (/[^\u0000-\u007F]/.test(trimmed)) return trimmed; // already non-ASCII
     try {
       if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
-        const resp = await new Promise((res) => {
+        let timer;
+        const sendPromise = new Promise((res) => {
           chrome.runtime.sendMessage(
             { action: 'TRANSLITERATE', payload: { text: trimmed, lang: window.glocale || targetLang } },
-            (r) => res(r)
+            (r) => {
+              if (chrome.runtime?.lastError) {
+                res(null);
+                return;
+              }
+              res(r);
+            }
           );
         });
+        const timeoutPromise = new Promise((res) => {
+          timer = setTimeout(() => res(null), 2500);
+        });
+        const resp = await Promise.race([sendPromise, timeoutPromise]);
+        clearTimeout(timer);
         if (resp && resp.success && resp.text) {
           return String(resp.text).trim();
         }
@@ -1205,6 +1222,10 @@
       const radio = document.querySelector(sel);
       if (radio) {
         setRadioOrCheckbox(radio, true);
+        const propKey = Object.keys(radio).find((k) => k.startsWith('__reactProps'));
+        if (propKey && radio[propKey]?.onChange) {
+          try { radio[propKey].onChange({ target: radio }); } catch {}
+        }
         highlightField(radio);
         return true;
       }
@@ -1218,6 +1239,10 @@
         const text = (r.labels?.[0]?.innerText || r.parentElement?.innerText || '').toLowerCase();
         if (text.includes(targetLabel)) {
           setRadioOrCheckbox(r, true);
+          const propKey = Object.keys(r).find((k) => k.startsWith('__reactProps'));
+          if (propKey && r[propKey]?.onChange) {
+            try { r[propKey].onChange({ target: r }); } catch {}
+          }
           highlightField(r);
           return true;
         }
@@ -1280,8 +1305,8 @@
         return '';
       };
 
-      // Visible relation options (only those with data available)
-      const visibleOptions = RELATION_OPTIONS.filter((o) => allNames[o.code]);
+      // Visible relation options: ALWAYS display all standard relation options so the operator can pick any relation
+      const visibleOptions = RELATION_OPTIONS;
 
       const card = document.createElement('div');
       card.id = 'gcds-rel-card';
@@ -1295,6 +1320,9 @@
                         currentData.fullName ||
                         nameFor(selectedCode) ||
                         '';
+        const displaySub = selName
+          ? (currentData.regionalFirst ? `${selName} (${[currentData.regionalFirst, currentData.regionalLast].filter(Boolean).join(' ')})` : selName)
+          : '(No record in GCDS — Enter manually on form)';
 
         card.innerHTML = `
           <div class="gcds-card-header">
@@ -1304,28 +1332,30 @@
           <div class="gcds-rec-box">
             <div class="gcds-rec-label">Selected Relation</div>
             <div class="gcds-rec-name">${sel.labelBn} (${sel.labelEn})</div>
-            <div class="gcds-rec-name-en">${selName || '—'}</div>
+            <div class="gcds-rec-name-en">${displaySub}</div>
           </div>
           <div class="gcds-select-row" id="gcds-rel-chips">
             ${visibleOptions.map((o) => `
-              <button class="gcds-rel-chip${o.code === selectedCode ? ' active' : ''}" data-code="${o.code}" data-testid="rel-chip-${o.code.toLowerCase()}" title="${nameFor(o.code)}">
+              <button type="button" class="gcds-rel-chip${o.code === selectedCode ? ' active' : ''}" data-code="${o.code}" data-testid="rel-chip-${o.code.toLowerCase()}" title="${nameFor(o.code) || 'Select ' + o.labelEn}">
                 ${o.labelEn}
               </button>
             `).join('')}
           </div>
           <div class="gcds-btn-row">
-            <button class="gcds-btn-confirm" id="gcds-btn-confirm" data-testid="btn-confirm-fill">
+            <button type="button" class="gcds-btn-confirm" id="gcds-btn-confirm" data-testid="btn-confirm-fill">
               ✅ Confirm &amp; Fill
             </button>
-            <button class="gcds-btn-skip" id="gcds-btn-skip" data-testid="btn-skip-fill" title="Skip Section C">
+            <button type="button" class="gcds-btn-skip" id="gcds-btn-skip" data-testid="btn-skip-fill" title="Skip Section C">
               Skip
             </button>
           </div>
         `;
 
-        // 1. Chip selection: dynamically swap activeRelationData and trigger transliteration
+        // 1. Chip selection: dynamically swap activeRelationData, select live radio, and trigger transliteration
         card.querySelectorAll('.gcds-rel-chip').forEach((chip) => {
-          chip.addEventListener('click', () => {
+          chip.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             selectedCode = chip.dataset.code;
             activeRelationData = allNames[selectedCode] || {
               code: selectedCode,
@@ -1334,14 +1364,30 @@
               regionalFirst: '',
               regionalLast: '',
             };
-            // Re-trigger transliteration if regional name is missing
-            ensureTransliteration(activeRelationData);
+
+            // Instant live feedback on Form 6 portal radio
+            selectRelationRadio(selectedCode);
+
             renderCard();
+
+            // Re-trigger transliteration if regional name is missing
+            if (activeRelationData.first && !activeRelationData.regionalFirst) {
+              await ensureTransliteration(activeRelationData);
+              const recNameEnEl = card.querySelector('.gcds-rec-name-en');
+              if (recNameEnEl && selectedCode === chip.dataset.code) {
+                const updatedName = [activeRelationData.first, activeRelationData.last].filter(Boolean).join(' ') || activeRelationData.fullName;
+                if (activeRelationData.regionalFirst) {
+                  recNameEnEl.textContent = `${updatedName} (${[activeRelationData.regionalFirst, activeRelationData.regionalLast].filter(Boolean).join(' ')})`;
+                }
+              }
+            }
           });
         });
 
         // 2. Confirm button: strictly reads currently selected relation's data
-        card.querySelector('#gcds-btn-confirm').addEventListener('click', async () => {
+        card.querySelector('#gcds-btn-confirm').addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
           const currentCode = selectedCode;
           const chosenOpt = RELATION_OPTIONS.find((o) => o.code === currentCode) || recommendation;
           const chosenData = allNames[currentCode] || activeRelationData || {};
@@ -1350,8 +1396,10 @@
             '<span class="gcds-spinner"></span> Filling…';
           card.querySelector('#gcds-btn-confirm').disabled = true;
 
-          // Ensure regional transliteration is done before resolving
-          await ensureTransliteration(chosenData);
+          // Ensure regional transliteration is done before resolving if name is present
+          if (chosenData.first) {
+            await ensureTransliteration(chosenData);
+          }
 
           setTimeout(() => {
             card.remove();
@@ -1364,11 +1412,13 @@
               regionalFirst: chosenData.regionalFirst || '',
               regionalLast: chosenData.regionalLast || '',
             });
-          }, 300);
+          }, 200);
         });
 
         // 3. Skip button
-        card.querySelector('#gcds-btn-skip').addEventListener('click', () => {
+        card.querySelector('#gcds-btn-skip').addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
           card.remove();
           resolve(null);
         });
@@ -1714,79 +1764,106 @@
 
     // 2. Determine recommended relation (priority: Father > Mother > Spouse)
     const relPriorityOrder = ['FTHR', 'MTHR', spouseCode, 'WIFE', 'OTHR'];
-    const recommendedCode = relPriorityOrder.find((c) => relAvailableNames[c]) || null;
+    const recommendedCode = relPriorityOrder.find((c) => relAvailableNames[c]) || 'FTHR';
 
-    if (recommendedCode) {
-      const recommendedOpt = RELATION_OPTIONS.find((o) => o.code === recommendedCode) || {
-        code: recommendedCode, labelEn: recommendedCode, labelBn: recommendedCode
-      };
-      const defaultNames = relAvailableNames[recommendedCode];
+    const recommendedOpt = RELATION_OPTIONS.find((o) => o.code === recommendedCode) || {
+      code: recommendedCode, labelEn: recommendedCode, labelBn: recommendedCode
+    };
+    const defaultNames = relAvailableNames[recommendedCode] || { first: '', last: '' };
 
-      // 3. ── HITL: Show floating Action Card and await operator confirmation ──
-      const confirmed = await waitForRelationConfirmation(
-        recommendedOpt,
-        defaultNames.first,
-        defaultNames.last,
-        relAvailableNames
-      );
+    // 3. ── HITL: Show floating Action Card and await operator confirmation ──
+    const confirmed = await waitForRelationConfirmation(
+      recommendedOpt,
+      defaultNames.first,
+      defaultNames.last,
+      relAvailableNames
+    );
 
-      if (confirmed) {
-        const { code: relCode, firstName: relFirst, lastName: relLast, regionalFirst, regionalLast } = confirmed;
+    if (confirmed) {
+      const { code: relCode, firstName: relFirst, lastName: relLast, regionalFirst, regionalLast } = confirmed;
 
-        // 4. Select radio button for chosen relation type (Father/Mother/Husband/Wife/Other)
-        const radioSuccess = selectRelationRadio(relCode);
-        if (radioSuccess) {
-          filledCount++;
-        } else {
-          const labelMap = { FTHR: 'Father', HSBN: 'Husband', MTHR: 'Mother', WIFE: 'Wife', OTHR: 'Other' };
-          await fillSelectField('relationType', labelMap[relCode] || 'Father');
-        }
+      // 4. Select radio button for chosen relation type (Father/Mother/Husband/Wife/Other)
+      const radioSuccess = selectRelationRadio(relCode);
+      if (radioSuccess) {
+        filledCount++;
+      } else {
+        const labelMap = { FTHR: 'Father', HSBN: 'Husband', MTHR: 'Mother', WIFE: 'Wife', OTHR: 'Other' };
+        await fillSelectField('relationType', labelMap[relCode] || 'Father');
+      }
 
-        await sleep(50);
+      await sleep(50);
 
-        // 5. Fill relative first name and surname
+      // 5. Target the Section C DOM elements directly
+      const fNameSurEl = document.querySelector('input#fNameSur, #fNameSur, input[name="applicantRelativeName"]');
+      const fNameSurnameEl = document.querySelector('input#fNameSurname, #fNameSurname, input[name="applicantRelativeSurname"]');
+      const regRelNameEl = document.querySelector('input#regRelatName, #regRelatName');
+      const regRelSurEl = document.querySelector('input#regRelatSurName, #regRelatSurName');
+
+      // Relative First Name: set value or clear so previous relation data never lingers
+      if (fNameSurEl) {
+        setInputValue(fNameSurEl, relFirst || '');
         if (relFirst) {
-          await fillTextField('relativeFirstName', relFirst);
-        } else {
-          skippedCount++;
-          skippedFields.push('relativeFirstName');
+          highlightField(fNameSurEl);
+          filledCount++;
         }
+      } else if (relFirst) {
+        await fillTextField('relativeFirstName', relFirst);
+      }
+
+      // Relative Surname: set value or clear
+      if (fNameSurnameEl) {
+        setInputValue(fNameSurnameEl, relLast || '');
         if (relLast) {
-          await fillTextField('relativeLastName', relLast);
+          highlightField(fNameSurnameEl);
+          filledCount++;
         }
+      } else if (relLast) {
+        await fillTextField('relativeLastName', relLast);
+      }
 
-        // 6. Regional (Bengali/Devanagari) relative names
-        //    CRITICAL GUARD: Only write if we have genuine non-ASCII characters!
-        let regRelFirstVal = regionalFirst || '';
-        let regRelLastVal  = regionalLast || '';
+      // 6. Regional (Bengali/Devanagari) relative names
+      let regRelFirstVal = regionalFirst || '';
+      let regRelLastVal  = regionalLast || '';
 
-        // If regional names still missing, request transliteration now
-        if (!regRelFirstVal && relFirst) {
-          regRelFirstVal = await requestTransliteration(relFirst);
-        }
-        if (!regRelLastVal && relLast) {
-          regRelLastVal = await requestTransliteration(relLast);
-        }
+      if (!regRelFirstVal && relFirst) {
+        regRelFirstVal = await requestTransliteration(relFirst);
+      }
+      if (!regRelLastVal && relLast) {
+        regRelLastVal = await requestTransliteration(relLast);
+      }
 
-        const regRelNameEl = document.querySelector('input#regRelatName, #regRelatName');
-        if (regRelNameEl && regRelFirstVal && /[^\u0000-\u007F]/.test(regRelFirstVal)) {
+      // Regional First Name: set only genuine non-ASCII, otherwise clear
+      if (regRelNameEl) {
+        if (regRelFirstVal && /[^\u0000-\u007F]/.test(regRelFirstVal)) {
           setInputValue(regRelNameEl, regRelFirstVal);
+          highlightField(regRelNameEl);
+        } else {
+          setInputValue(regRelNameEl, '');
         }
-        const regRelSurEl = document.querySelector('input#regRelatSurName, #regRelatSurName');
-        if (regRelSurEl && regRelLastVal && /[^\u0000-\u007F]/.test(regRelLastVal)) {
-          setInputValue(regRelSurEl, regRelLastVal);
-        }
+      }
 
-        // 7. Auto-advance Section C only after confirmed fill
+      // Regional Surname: set only genuine non-ASCII, otherwise clear
+      if (regRelSurEl) {
+        if (regRelLastVal && /[^\u0000-\u007F]/.test(regRelLastVal)) {
+          setInputValue(regRelSurEl, regRelLastVal);
+          highlightField(regRelSurEl);
+        } else {
+          setInputValue(regRelSurEl, '');
+        }
+      }
+
+      // 7. Auto-advance Section C only if we have relative first name populated.
+      // If the chosen relation has no name in GCDS, focus the name input for manual entry!
+      if (relFirst) {
         await clickSectionNextButton('C');
       } else {
-        // Operator chose to skip Section C — do NOT auto-advance; leave for manual entry
-        console.info('[GCDS] Section C skipped by operator.');
-        skippedCount++;
-        skippedFields.push('relationType');
+        if (fNameSurEl) {
+          try { fNameSurEl.focus(); } catch {}
+        }
       }
     } else {
-      // No relative data at all — skip gracefully
+      // Operator chose to skip Section C — do NOT auto-advance; leave for manual entry
+      console.info('[GCDS] Section C skipped by operator.');
       skippedCount++;
       skippedFields.push('relationType');
     }
@@ -2201,7 +2278,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.2.1',
+      version: '1.2.2',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
@@ -2271,4 +2348,11 @@
       }
     });
   }
+
+  // Register re-injection cleanup hook
+  window.__GCDS_CONTENT_SCRIPT_CLEANUP = () => {
+    const stale = document.getElementById('gcds-rel-card');
+    if (stale) stale.remove();
+  };
 })();
+
