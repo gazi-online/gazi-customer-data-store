@@ -69,6 +69,9 @@
       'input[placeholder*="Middle Name" i]',
     ],
     photoInput: [
+      'input[type="file"]#upload-image',
+      '#upload-image',
+      'input[type="file"][name="upload photo"]',
       'input[type="file"]#fileToUpload',
       '#fileToUpload',
       'input[type="file"][name*="photo" i]',
@@ -849,7 +852,7 @@
 
     // Locate the file input: inside Section B card first, then global fallback
     const boxB = findSectionBox('B');
-    const input = boxB?.querySelector('input[type="file"]') || document.querySelector('input[type="file"]#fileToUpload, input#fileToUpload, input[type="file"]');
+    const input = boxB?.querySelector('input[type="file"]') || document.querySelector('input[type="file"]#upload-image, input#upload-image, input[name="upload photo"], input[type="file"]#fileToUpload, input#fileToUpload, input[type="file"]');
     if (!input) {
       console.warn('[GCDS Photo] Section B file upload input not found in DOM.');
       return false;
