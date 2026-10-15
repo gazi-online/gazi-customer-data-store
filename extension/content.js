@@ -2232,13 +2232,23 @@
     // Section E: Aadhaar Details (3-Tier Decision Tree)
     // ═══════════════════════════════════════════════════════════════════════════
 
-    const rawAadhaar = data.aadhaarNumber || data.aadhaar || data.aadhaar_number || data.identity?.aadhaar_number || '';
+    // Stale card cleanup if present
+    const staleAadhaarCard = document.getElementById('gcds-aadhaar-card');
+    if (staleAadhaarCard) staleAadhaarCard.remove();
+
+    const rawAadhaar =
+      data.aadhaar_number ||
+      data.aadhaarNumber ||
+      data.aadhaar ||
+      data.identity?.aadhaar_number ||
+      data.identity?.aadhaar ||
+      '';
     const cleanAadhaar = String(rawAadhaar).replace(/\D/g, '');
     const hasValidAadhaar = cleanAadhaar.length === 12;
 
     let aadhaarDecision = null;
     if (hasValidAadhaar) {
-      // Scenario A: Aadhaar Exists in GCDS
+      // Scenario A: Aadhaar Exists in GCDS — bypass manual prompt & auto-fill
       aadhaarDecision = { action: 'AADHAAR', aadhaarNumber: cleanAadhaar };
     } else {
       // Scenario B / C: Missing in GCDS — prompt operator via floating Kiosk UI card

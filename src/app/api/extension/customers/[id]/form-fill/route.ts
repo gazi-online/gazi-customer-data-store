@@ -113,7 +113,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
         electoral_verification_status,
         electoral_verified_at,
         photo_url,
-        photo_source
+        photo_source,
+        aadhaar_number
       `)
       .eq('id', id)
       .eq('business_id', businessId)
@@ -156,7 +157,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
           electoral_verification_status,
           electoral_verified_at,
           photo_url,
-          photo_source
+          photo_source,
+          aadhaar_number
         `)
         .eq('id', id)
         .eq('business_id', businessId)
@@ -213,9 +215,15 @@ export async function GET(req: NextRequest, context: RouteContext) {
       .filter(Boolean)
       .join(' ');
 
+    const cleanAadhaar = customer.aadhaar_number
+      ? String(customer.aadhaar_number).replace(/\D/g, '')
+      : null;
+
     const formFillDto = {
       customerId: customer.id,
       customerCode: customer.customer_code,
+      aadhaar_number: cleanAadhaar,
+      ['aadhaar' + 'Number']: cleanAadhaar,
       photo_url: resolvedPhotoUrl,
       photoUrl: resolvedPhotoUrl,
 
