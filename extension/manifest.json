@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "GAZI SMART FORM FILLER",
+  "short_name": "GCDS Filler",
+  "version": "1.1.0",
+  "description": "Securely auto-fills ECI Voter Form 6 with customer data from GCDS (Gazi Customer Data Store). No PII logging. Human review mandatory before submission.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://gdsa-opal.vercel.app/*",
+    "https://voters.eci.gov.in/*",
+    "https://inputtools.google.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "GAZI SMART FORM FILLER"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
