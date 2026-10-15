@@ -68,6 +68,13 @@
       '#middleName',
       'input[placeholder*="Middle Name" i]',
     ],
+    photoInput: [
+      'input[type="file"]#fileToUpload',
+      '#fileToUpload',
+      'input[type="file"][name*="photo" i]',
+      'input[type="file"][accept*="image" i]',
+      'input[type="file"]',
+    ],
 
     // ─── Date of Birth (Section G) ───────────────────────────────────────────
     dateOfBirth: [
@@ -762,6 +769,137 @@
     }
   }
 
+  // ─── Automated Photo Upload (Section B) ───────────────────────────────────
+
+  /**
+   * Helper to inject a binary file Blob into the portal's file input using the DataTransfer API.
+   * Dispatches input, change, and blur events so Angular & React detect the file upload.
+   *
+   * @param {HTMLInputElement|string} target - File input element or CSS selector
+   * @param {Blob} fileBlob - Binary image blob
+   * @param {string} fileName - Destination file name (e.g. 'firstname_photo.jpg')
+   * @returns {Promise<boolean>}
+   */
+  async function injectFileToPortal(target, fileBlob, fileName = 'customer_photo.jpg') {
+    const input = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!input) {
+      console.warn('[GCDS Photo] Photo input field not found on portal.');
+      return false;
+    }
+
+    // Portal rule: document size maximum 2MB
+    if (fileBlob.size > 2 * 1024 * 1024) {
+      console.warn(`[GCDS Photo] Photo exceeds ECI 2MB limit: ${fileBlob.size} bytes`);
+      return false;
+    }
+
+    try {
+      // Ensure file type is image/jpeg per ECI specification
+      const file = new File([fileBlob], fileName, { type: 'image/jpeg' });
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+
+      input.files = dataTransfer.files;
+
+      // Visual highlight for the operator
+      const parent = input.parentElement || input;
+      parent.style.transition = 'border 250ms ease, box-shadow 250ms ease';
+      parent.style.border = '2px dashed #1e40af';
+
+      // Trigger necessary events for the portal's framework
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      input.dispatchEvent(new Event('blur', { bubbles: true }));
+
+      setTimeout(() => {
+        parent.style.border = '2px solid #34d399';
+        parent.style.boxShadow = '0 0 10px rgba(52, 211, 153, 0.35)';
+      }, 200);
+
+      // Handle any immediate crop modal confirmation if present
+      setTimeout(() => {
+        try {
+          const cropBtn = document.querySelector('button.crop-btn, button[aria-label*="Crop" i], .modal button.btn-primary');
+          if (cropBtn) cropBtn.click();
+        } catch {}
+      }, 350);
+
+      console.log(`✅ Photo injected: ${fileName}`);
+      return true;
+    } catch (err) {
+      console.error('[GCDS Photo] Failed to inject photo via DataTransfer:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Orchestrates customer photograph retrieval from GCDS and automated injection into Section B.
+   *
+   * @param {Object} customer - Form-fill customer DTO
+   * @returns {Promise<boolean>}
+   */
+  async function handlePhotoSection(customer) {
+    const photoUrl = customer.photo_url || customer.photoUrl || customer.photo || customer.photo_source;
+    const customerId = customer.customerId || customer.id;
+
+    if (!photoUrl && !customerId) {
+      console.warn('[GCDS Photo] No photo URL or customer ID available for this customer.');
+      return false;
+    }
+
+    // Locate the file input: inside Section B card first, then global fallback
+    const boxB = findSectionBox('B');
+    const input = boxB?.querySelector('input[type="file"]') || document.querySelector('input[type="file"]#fileToUpload, input#fileToUpload, input[type="file"]');
+    if (!input) {
+      console.warn('[GCDS Photo] Section B file upload input not found in DOM.');
+      return false;
+    }
+
+    // Visual highlight for the operator
+    const uploadLabel = input.parentElement;
+    if (uploadLabel) {
+      uploadLabel.style.border = '2px dashed #1e40af';
+    }
+
+    return new Promise((resolve) => {
+      try {
+        // Request background script to fetch the blob (to bypass CORS)
+        chrome.runtime.sendMessage(
+          {
+            action: 'FETCH_IMAGE_BLOB',
+            url: photoUrl,
+            customerId: customerId,
+          },
+          async (response) => {
+            if (chrome.runtime.lastError || !response || !response.blobData) {
+              console.warn('[GCDS Photo] Photo fetch failed:', chrome.runtime.lastError?.message || response?.error);
+              resolve(false);
+              return;
+            }
+
+            try {
+              // Convert DataURL/BlobData back to blob
+              const res = await fetch(response.blobData);
+              const blob = await res.blob();
+
+              const firstName = customer.first_name || customer.firstName || customer.name?.firstName || 'customer';
+              const fileName = `${firstName}_photo.jpg`;
+
+              const success = await injectFileToPortal(input, blob, fileName);
+              resolve(success);
+            } catch (convErr) {
+              console.error('[GCDS Photo] Blob conversion error:', convErr);
+              resolve(false);
+            }
+          }
+        );
+      } catch (sendErr) {
+        console.error('[GCDS Photo] chrome.runtime.sendMessage error:', sendErr);
+        resolve(false);
+      }
+    });
+  }
+
   // ─── Main Fill Engine ─────────────────────────────────────────────────────
 
   /**
@@ -959,6 +1097,17 @@
     const regSurEl = document.querySelector('input#regSName, #regSName');
     if (regSurEl && regLastVal && /[^\u0000-\u007F]/.test(regLastVal)) {
       setInputValue(regSurEl, regLastVal);
+    }
+
+    // Photograph Upload (Section B)
+    try {
+      const photoSuccess = await handlePhotoSection(data);
+      if (photoSuccess) {
+        filledCount++;
+        await sleep(350);
+      }
+    } catch (photoErr) {
+      console.warn('[GCDS Fill Engine] Section B photo upload skipped:', photoErr);
     }
 
     // Auto-advance Section B
@@ -1508,6 +1657,8 @@
     getOptionsSafe,
     clickSectionNextButton,
     findSectionBox,
+    injectFileToPortal,
+    handlePhotoSection,
     runFill,
     fillForm,
     generateDiagnosticReport,

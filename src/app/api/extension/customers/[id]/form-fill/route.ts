@@ -111,7 +111,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
         electoral_part_number,
         electoral_serial_number,
         electoral_verification_status,
-        electoral_verified_at
+        electoral_verified_at,
+        photo_url,
+        photo_source
       `)
       .eq('id', id)
       .eq('business_id', businessId)
@@ -152,7 +154,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
           electoral_part_number,
           electoral_serial_number,
           electoral_verification_status,
-          electoral_verified_at
+          electoral_verified_at,
+          photo_url,
+          photo_source
         `)
         .eq('id', id)
         .eq('business_id', businessId)
@@ -186,6 +190,24 @@ export async function GET(req: NextRequest, context: RouteContext) {
       );
     }
 
+    // Resolve customer photo URL (sign storage path if needed)
+    let resolvedPhotoUrl = (customer.photo_url || '').trim() || null;
+    const photoSource = (customer.photo_source || '').trim();
+    if (!resolvedPhotoUrl && photoSource) {
+      try {
+        const isCanonical = photoSource.startsWith('customers/');
+        const bucketUsed = isCanonical ? 'customer_photos' : 'customer-profiles';
+        const { data: signedData } = await db.storage
+          .from(bucketUsed)
+          .createSignedUrl(photoSource, 3600);
+        if (signedData?.signedUrl) {
+          resolvedPhotoUrl = signedData.signedUrl;
+        }
+      } catch (storageErr) {
+        console.warn('[form-fill] Signed photo URL generation skipped:', storageErr);
+      }
+    }
+
     // 6. Map to exact Form Fill DTO with verified Electoral V3 columns
     const fullName = [customer.first_name, customer.middle_name, customer.last_name]
       .filter(Boolean)
@@ -194,6 +216,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const formFillDto = {
       customerId: customer.id,
       customerCode: customer.customer_code,
+      photo_url: resolvedPhotoUrl,
+      photoUrl: resolvedPhotoUrl,
 
       name: {
         firstName: customer.first_name,

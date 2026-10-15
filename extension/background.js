@@ -362,6 +362,97 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch((err) => sendResponse({ success: false, error: err.message }));
       return true;
 
+    case 'FETCH_IMAGE_BLOB':
+      (async () => {
+        try {
+          const rawUrl = message.url || payload?.url;
+          const customerId = message.customerId || payload?.customerId;
+
+          let fetchUrl = rawUrl;
+
+          // If no direct URL provided, but customerId is available, resolve from GCDS photo API
+          if (!fetchUrl && customerId) {
+            const photoRes = await apiGet(`${FORM_FILL_ENDPOINT}/${customerId}/photo`);
+            if (photoRes.ok && photoRes.data?.hasPhoto && photoRes.data?.photo?.dataUrl) {
+              sendResponse({
+                success: true,
+                blobData: photoRes.data.photo.dataUrl,
+                sizeBytes: photoRes.data.photo.sizeBytes,
+                mimeType: photoRes.data.photo.mimeType || 'image/jpeg',
+              });
+              return;
+            } else if (photoRes.ok && photoRes.data?.photo?.signedUrl) {
+              fetchUrl = photoRes.data.photo.signedUrl;
+            }
+          }
+
+          if (!fetchUrl) {
+            sendResponse({ success: false, error: 'No image URL or customer ID provided' });
+            return;
+          }
+
+          // If it is already a Data URL, return directly
+          if (fetchUrl.startsWith('data:')) {
+            sendResponse({ success: true, blobData: fetchUrl });
+            return;
+          }
+
+          // Relative path resolution to GCDS API if needed
+          const settings = await getSettings();
+          if (fetchUrl.startsWith('/')) {
+            fetchUrl = `${settings.apiUrl}${fetchUrl}`;
+          }
+
+          const fetchOptions = {};
+          // If fetching from GCDS API, attach Bearer auth token
+          if (settings.authToken && (fetchUrl.includes('/api/extension/') || fetchUrl.startsWith(settings.apiUrl))) {
+            fetchOptions.headers = {
+              Authorization: `Bearer ${settings.authToken}`,
+            };
+          }
+
+          const res = await fetch(fetchUrl, fetchOptions);
+          if (!res.ok) {
+            sendResponse({ success: false, error: `Image fetch failed with HTTP ${res.status}` });
+            return;
+          }
+
+          const blob = await res.blob();
+
+          // Portal size constraint: maximum 2MB (.jpg, .jpeg)
+          const MAX_PHOTO_SIZE_BYTES = 2 * 1024 * 1024;
+          if (blob.size > MAX_PHOTO_SIZE_BYTES) {
+            sendResponse({
+              success: false,
+              error: `Customer photograph (${(blob.size / 1024 / 1024).toFixed(2)} MB) exceeds ECI maximum 2MB limit.`,
+              sizeBytes: blob.size,
+            });
+            return;
+          }
+
+          // Convert blob to DataURL in MV3
+          const arrayBuffer = await blob.arrayBuffer();
+          const uint8 = new Uint8Array(arrayBuffer);
+          let binary = '';
+          for (let i = 0; i < uint8.byteLength; i++) {
+            binary += String.fromCharCode(uint8[i]);
+          }
+          const base64 = btoa(binary);
+          const mimeType = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
+          const blobData = `data:${mimeType};base64,${base64}`;
+
+          sendResponse({
+            success: true,
+            blobData,
+            sizeBytes: blob.size,
+            mimeType,
+          });
+        } catch (err) {
+          sendResponse({ success: false, error: err.message || 'Failed to fetch image blob' });
+        }
+      })();
+      return true;
+
     case 'INJECT_AND_FILL':
       // Inject content script into the active ECI tab, then send fill data
       (async () => {

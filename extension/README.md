@@ -41,6 +41,7 @@ graph LR
 | Feature | Implementation |
 |---------|---------------|
 | **Auth** | SHA-256 hashed pairing tokens (`gcds_ext_...`), Bearer auth |
+| **Photo Injection** | Section B automated upload via `DataTransfer` API (max 2MB, `image/jpeg`) |
 | **Inactivity Timeout** | 30-minute multi-operator kiosk protection (`chrome.alarms` + session/local purge) |
 | **Diagnostics** | Privacy-safe DOM report generator (auto-scrubs Aadhaar, phone, EPIC, names) |
 | **CORS** | Origin-whitelisted (`chrome-extension://...`), no wildcard `*` |
