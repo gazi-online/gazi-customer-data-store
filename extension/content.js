@@ -2537,6 +2537,439 @@
   }
 
   /**
+   * Shows a floating Smart Address-Proof Document Picker for Section H.
+   *
+   * Displays all 7 standard ECI Address Proof document options:
+   * 1. Water/Electricity/Gas Bill (WEGB)
+   * 2. Registered Sale Deed (RSD)
+   * 3. Registered Rent Lease Deed (RRLD)
+   * 4. Land Owning Records (RDLR)
+   * 5. Indian Passport (IPSP)
+   * 6. Passbook of Bank/Post Office (CPNS)
+   * 7. Aadhaar Card (ADHR)
+   *
+   * Highlights documents available in GCDS with 1-click auto-upload capability.
+   * If an unavailable document is selected, sets the portal dropdown and
+   * switches to Manual Upload mode with the 2-second upload guard.
+   *
+   * @param {Object} options
+   * @param {Array} options.candidates - List of address proof candidates from GCDS DTO
+   * @param {string} [options.customerId] - Customer ID for binary fetch
+   * @param {HTMLInputElement} [options.fileInput] - Target file input on portal DOM (#currentAddressProof)
+   * @param {HTMLSelectElement} [options.selectElement] - Target select element on portal DOM (select[name="currentAddressProofType"])
+   * @param {HTMLInputElement} [options.radioElement] - Target radio element for AddressProofDocument
+   * @param {HTMLElement} [options.boxH] - Section H box container
+   * @returns {Promise<{ action: 'UPLOADED'|'CONFIRMED'|'SKIP', code?: string, label?: string }>}
+   */
+  function waitForAddressProofSmartPicker({
+    candidates = [],
+    customerId = null,
+    fileInput = null,
+    selectElement = null,
+    radioElement = null,
+    boxH = null,
+  }) {
+    return new Promise((resolve) => {
+      injectRelationCardStyles();
+
+      // Remove any stale doc card
+      const stale = document.getElementById('gcds-doc-card');
+      if (stale) stale.remove();
+
+      const card = document.createElement('div');
+      card.id = 'gcds-doc-card';
+      card.setAttribute('role', 'dialog');
+      card.setAttribute('aria-label', 'Section H Smart Address-Proof Document Picker');
+
+      const ECI_ADDRESS_OPTIONS = [
+        { code: 'WEGB', label: 'Water/Electricity/Gas Bill', category: 'UTILITY_BILL', portalText: 'Water/Electricity/Gas connection Bill', icon: '💡' },
+        { code: 'RSD', label: 'Registered Sale Deed', category: 'SALE_DEED', portalText: 'Registered Sale Deed(In case of own house)', icon: '🏠' },
+        { code: 'RRLD', label: 'Registered Rent Lease Deed', category: 'RENT_DEED', portalText: 'Registered Rent Lease Deed(In case of tenant)', icon: '📑' },
+        { code: 'RDLR', label: "Land Owning Records", category: 'LAND_RECORD', portalText: "Revenue Department's Land Owning records", icon: '🌾' },
+        { code: 'IPSP', label: 'Indian Passport', category: 'PASSPORT', portalText: 'Indian Passport', icon: '🛂' },
+        { code: 'CPNS', label: 'Bank / Post Office Passbook', category: 'BANK_PASSBOOK', portalText: 'Current passbook of Nationalized', icon: '🏦' },
+        { code: 'ADHR', label: 'Aadhaar Card', category: 'AADHAAR_CARD', portalText: 'Aadhaar Card', icon: '🆔' },
+      ];
+
+      // Match each ECI option with available candidates from GCDS
+      const enrichedOptions = ECI_ADDRESS_OPTIONS.map((opt) => {
+        const found = candidates.find((c) => {
+          if (!c) return false;
+          if (c.code === opt.code) return true;
+          if (c.category && c.category === opt.category) return true;
+          const t = `${c.documentType || ''} ${c.fileName || ''} ${c.type || ''} ${c.label || ''}`.toLowerCase();
+          if (opt.code === 'WEGB' && (t.includes('water') || t.includes('electric') || t.includes('gas') || t.includes('utility') || (t.includes('bill') && !t.includes('rent')))) return true;
+          if (opt.code === 'RSD' && (t.includes('sale deed') || t.includes('saledeed') || t.includes('registry') || (t.includes('deed') && !t.includes('rent')))) return true;
+          if (opt.code === 'RRLD' && (/\b(rent|rental|lease|tenant)\b/i.test(t) || t.includes('lease') || t.includes('tenant') || t.includes('rental'))) return true;
+          if (opt.code === 'RDLR' && (t.includes('land') || t.includes('kisan') || t.includes('porcha') || t.includes('khatian') || t.includes('khajna') || t.includes('patta'))) return true;
+          if (opt.code === 'IPSP' && t.includes('passport')) return true;
+          if (opt.code === 'CPNS' && (t.includes('passbook') || t.includes('bank') || t.includes('statement') || t.includes('post office'))) return true;
+          if (opt.code === 'ADHR' && (t.includes('aadhaar') || t.includes('aadhar') || t.includes('uidai'))) return true;
+          return false;
+        });
+
+        return {
+          ...opt,
+          isAvailable: Boolean(found && (found.url || found.signedUrl)),
+          candidate: found
+            ? {
+                ...found,
+                url: found.url || found.signedUrl,
+              }
+            : null,
+        };
+      });
+
+      const availableCount = enrichedOptions.filter((o) => o.isAvailable).length;
+
+      let fileWatchInterval = null;
+      const cleanupListeners = () => {
+        if (fileWatchInterval) {
+          clearInterval(fileWatchInterval);
+          fileWatchInterval = null;
+        }
+      };
+
+      // Helper to select option in portal DOM
+      const applyOptionToPortal = (opt) => {
+        const rad =
+          radioElement ||
+          (boxH || document).querySelector('input[type="radio"][name="AddressProofDocument"][value="Y"]') ||
+          findElement(SELECTOR_MAP.addressProofRadio);
+        if (rad && !rad.checked) {
+          setRadioOrCheckbox(rad, true);
+          rad.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        const sel =
+          selectElement ||
+          (boxH || document).querySelector('select[name="currentAddressProofType"], select#currentAddressProofType') ||
+          findElement(SELECTOR_MAP.addressProofType);
+        if (sel) {
+          const applied =
+            setSelectValue(sel, opt.code) ||
+            setSelectValue(sel, opt.portalText) ||
+            setSelectValue(sel, opt.label);
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          return applied;
+        }
+        return false;
+      };
+
+      // ─── Mode 1: Render Picker View ─────────────────────────────────────────
+      const renderPickerView = () => {
+        cleanupListeners();
+
+        const descText =
+          availableCount > 0
+            ? `Found <strong style="color: #34d399;">${availableCount} document(s)</strong> in GCDS. Click an option to auto-upload or upload manually:`
+            : 'No Address Proof documents found in GCDS. Select a document type to upload manually in portal:';
+
+        card.innerHTML = `
+          <div class="gcds-card-header">
+            <span class="gcds-card-badge">Section H</span>
+            <span class="gcds-card-title">Smart Address-Proof Picker</span>
+          </div>
+          <div class="gcds-rec-box">
+            <div class="gcds-rec-label">Address Proof Document</div>
+            <div class="gcds-rec-name">Select Document Type</div>
+            <div class="gcds-rec-desc">${descText}</div>
+          </div>
+          <div class="gcds-doc-picker-list" id="gcds-address-picker-list">
+            ${enrichedOptions
+              .map(
+                (opt) => `
+              <button
+                type="button"
+                class="gcds-doc-option ${opt.isAvailable ? 'available' : 'unavailable'}"
+                data-code="${opt.code}"
+                title="${opt.isAvailable ? 'Auto-upload ' + opt.label + ' from GCDS' : 'Select ' + opt.label + ' for manual upload'}"
+              >
+                <div class="gcds-doc-opt-left">
+                  <div class="gcds-doc-opt-title">
+                    <span>${opt.icon}</span>
+                    <span>${opt.label}</span>
+                  </div>
+                  <div class="gcds-doc-opt-sub">
+                    ${opt.isAvailable ? `📄 ${escapeHtml(opt.candidate?.fileName || 'Attached in GCDS')}` : 'Manual upload required'}
+                  </div>
+                </div>
+                <div class="gcds-doc-badge ${opt.isAvailable ? 'ready' : 'manual'}">
+                  ${opt.isAvailable ? '⚡ Auto-Upload' : '⚪ Manual'}
+                </div>
+              </button>
+            `
+              )
+              .join('')}
+          </div>
+          <div class="gcds-btn-row">
+            <button type="button" class="gcds-btn-skip" id="gcds-btn-skip-address-doc" style="width: 100%;" title="Skip Address Proof without auto-advancing">
+              Skip Address Proof
+            </button>
+          </div>
+        `;
+
+        // Bind Option clicks
+        card.querySelectorAll('.gcds-doc-option').forEach((btn) => {
+          btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const code = btn.dataset.code;
+            const opt = enrichedOptions.find((o) => o.code === code);
+            if (!opt) return;
+
+            if (opt.isAvailable && opt.candidate?.url) {
+              await handleAutoUpload(opt);
+            } else {
+              handleManualMode(opt);
+            }
+          });
+        });
+
+        // Skip Button
+        const skipBtn = card.querySelector('#gcds-btn-skip-address-doc');
+        if (skipBtn) {
+          skipBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            cleanupListeners();
+            card.remove();
+            resolve({ action: 'SKIP' });
+          });
+        }
+      };
+
+      // ─── Mode 2: Auto-Upload Execution ──────────────────────────────────────
+      const handleAutoUpload = async (opt) => {
+        cleanupListeners();
+
+        card.innerHTML = `
+          <div class="gcds-card-header">
+            <span class="gcds-card-badge">Section H</span>
+            <span class="gcds-card-title">Auto-Uploading Address Proof</span>
+          </div>
+          <div class="gcds-rec-box">
+            <div class="gcds-rec-label">Target Document</div>
+            <div class="gcds-rec-name">${opt.icon} ${escapeHtml(opt.label)}</div>
+            <div class="gcds-rec-desc">Preparing file upload to portal…</div>
+          </div>
+          <div class="gcds-doc-status-box" id="gcds-upload-status-box">
+            <span class="gcds-spinner"></span>
+            <span style="font-size: 13px; color: #94a3b8;" id="gcds-upload-status-text">Fetching file from GCDS storage…</span>
+          </div>
+          <div class="gcds-btn-row">
+            <button type="button" class="gcds-btn-skip" id="gcds-btn-cancel-upload" style="width: 100%;">
+              Cancel
+            </button>
+          </div>
+        `;
+
+        const cancelBtn = card.querySelector('#gcds-btn-cancel-upload');
+        if (cancelBtn) {
+          cancelBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            renderPickerView();
+          });
+        }
+
+        const statusBox = card.querySelector('#gcds-upload-status-box');
+        const statusText = card.querySelector('#gcds-upload-status-text');
+        const statusDesc = card.querySelector('.gcds-rec-desc');
+
+        try {
+          // 1. Set radio & dropdown
+          applyOptionToPortal(opt);
+          await sleep(500);
+
+          // 2. Fetch blob & inject file
+          const blob = await fetchFileBlob(opt.candidate.url, customerId);
+          if (!blob) throw new Error('File download failed');
+
+          if (statusText) statusText.textContent = `Injecting ${opt.label} into portal…`;
+          const inp =
+            fileInput ||
+            (boxH || document).querySelector('input[type="file"]#currentAddressProof, input[type="file"][name="currentAddressProof"]') ||
+            findElement(SELECTOR_MAP.addressProofFile);
+          if (!inp) throw new Error('Portal addressProof file input not found');
+
+          const injected = await injectFileToPortal(inp, blob, opt.candidate.fileName, false);
+          if (!injected || !inp.files || inp.files.length === 0) {
+            throw new Error('Portal rejected programmatic file injection');
+          }
+
+          // Check for rejection alert / text-danger in portal
+          let detectedError = null;
+          const portalAlerts = document.querySelectorAll('.alert-danger, .invalid-feedback, .text-danger');
+          for (const alert of portalAlerts) {
+            if (alert.offsetParent !== null && alert.innerText && alert.innerText.trim().length > 3) {
+              detectedError = alert.innerText.trim();
+              break;
+            }
+          }
+
+          if (detectedError) {
+            statusBox.style.borderColor = '#ef4444';
+            statusBox.style.background = 'rgba(239, 68, 68, 0.15)';
+            statusDesc.style.color = '#f87171';
+            statusDesc.style.fontWeight = '700';
+            statusDesc.innerHTML = `⚠️ Portal Error: <strong>${escapeHtml(detectedError)}</strong>`;
+            if (statusText) statusText.innerHTML = `⚠️ Upload rejected by portal. Choose another file or upload manually:`;
+            handleManualMode(opt, `Portal rejected upload (${detectedError}). Please upload manually:`);
+            return;
+          }
+
+          // 3. Heartbeat / Activity ping
+          try {
+            if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
+              chrome.runtime.sendMessage({ action: 'RESET_INACTIVITY_TIMER' });
+            }
+          } catch {}
+
+          // 4. Visual confirmation with 2s upload guard
+          highlightField(inp);
+          statusBox.style.borderColor = '#10b981';
+          statusBox.style.background = 'rgba(16, 185, 129, 0.15)';
+          statusDesc.style.color = '#34d399';
+          statusDesc.style.fontWeight = '700';
+          const attachedName = inp.files?.[0]?.name || opt.candidate.fileName || 'file';
+          const attachedSize = inp.files?.[0]?.size ? ` (${(inp.files[0].size / 1024).toFixed(1)} KB)` : '';
+          statusDesc.innerHTML = `✅ Attached: <strong>${escapeHtml(attachedName)}</strong>${attachedSize}`;
+          if (statusText) statusText.innerHTML = `✅ ${opt.label} registered. <strong>Waiting 2s for portal to sync…</strong>`;
+
+          await sleep(2000);
+          cleanupListeners();
+          card.remove();
+          resolve({ action: 'UPLOADED', code: opt.code, label: opt.label });
+          return;
+        } catch (err) {
+          console.warn('[GCDS Section H] Auto-upload error, switching to manual mode:', err);
+          handleManualMode(opt, `Auto-injection could not complete (${err.message || 'Error'}). Please upload manually:`);
+        }
+      };
+
+      // ─── Mode 3: Manual Upload Mode ─────────────────────────────────────────
+      const handleManualMode = (opt, customNotice = null) => {
+        cleanupListeners();
+
+        // 1. Instantly set the portal dropdown to this document type
+        applyOptionToPortal(opt);
+
+        const safeDocName = escapeHtml(opt.label);
+        const noticeDesc = customNotice
+          ? escapeHtml(customNotice)
+          : `Document not found in GCDS. Please upload <strong>${safeDocName}</strong> manually in the portal below:`;
+
+        card.innerHTML = `
+          <div class="gcds-card-header">
+            <span class="gcds-card-badge">Section H</span>
+            <span class="gcds-card-title">Manual Upload Required</span>
+          </div>
+          <button type="button" class="gcds-btn-back" id="gcds-btn-back-address-picker">
+            ⬅ Back to Document Picker
+          </button>
+          <div class="gcds-rec-box">
+            <div class="gcds-rec-label">Manual Upload Required</div>
+            <div class="gcds-rec-name">${opt.icon} ${safeDocName}</div>
+            <div class="gcds-rec-desc">${noticeDesc}</div>
+          </div>
+          <div class="gcds-doc-status-box" id="gcds-manual-address-status-box">
+            <span style="font-size: 13px; color: #94a3b8;" id="gcds-manual-address-status-text">⏳ Waiting for file selection in portal…</span>
+          </div>
+          <div class="gcds-btn-row">
+            <button type="button" class="gcds-btn-confirm" id="gcds-btn-confirm-address-doc" disabled title="Upload a document file in the portal to proceed">
+              ✅ Confirm &amp; Proceed
+            </button>
+            <button type="button" class="gcds-btn-skip" id="gcds-btn-skip-address-doc-manual" title="Skip this section without advancing">
+              Skip
+            </button>
+          </div>
+        `;
+
+        const statusBox = card.querySelector('#gcds-manual-address-status-box');
+        const statusText = card.querySelector('#gcds-manual-address-status-text');
+        const btnConfirm = card.querySelector('#gcds-btn-confirm-address-doc');
+        const btnSkip = card.querySelector('#gcds-btn-skip-address-doc-manual');
+        const btnBack = card.querySelector('#gcds-btn-back-address-picker');
+
+        btnBack.addEventListener('click', (e) => {
+          e.preventDefault();
+          renderPickerView();
+        });
+
+        const updateFileStatus = () => {
+          const inp =
+            fileInput ||
+            (boxH || document).querySelector('input[type="file"]#currentAddressProof, input[type="file"][name="currentAddressProof"]') ||
+            findElement(SELECTOR_MAP.addressProofFile);
+          const hasFile = inp && inp.files && inp.files.length > 0;
+          if (hasFile) {
+            const f = inp.files[0];
+            statusBox.style.borderColor = '#10b981';
+            statusBox.style.background = 'rgba(16, 185, 129, 0.1)';
+            statusText.style.color = '#34d399';
+            statusText.style.fontWeight = '600';
+            statusText.innerHTML = `✅ Attached: <strong>${escapeHtml(f.name)}</strong> (${(f.size / 1024).toFixed(1)} KB)`;
+            btnConfirm.disabled = false;
+          } else {
+            statusBox.style.borderColor = '#334155';
+            statusBox.style.background = '#0f172a';
+            statusText.style.color = '#94a3b8';
+            statusText.style.fontWeight = 'normal';
+            statusText.innerHTML = '⏳ Waiting for file selection in portal…';
+            btnConfirm.disabled = true;
+          }
+        };
+
+        const inp =
+          fileInput ||
+          (boxH || document).querySelector('input[type="file"]#currentAddressProof, input[type="file"][name="currentAddressProof"]') ||
+          findElement(SELECTOR_MAP.addressProofFile);
+        if (inp) {
+          inp.addEventListener('change', updateFileStatus);
+        }
+        fileWatchInterval = setInterval(updateFileStatus, 350);
+        updateFileStatus();
+
+        btnConfirm.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cleanupListeners();
+          if (inp) inp.removeEventListener('change', updateFileStatus);
+
+          btnConfirm.innerHTML = '<span class="gcds-spinner"></span> 2s Guard…';
+          btnConfirm.disabled = true;
+          btnSkip.disabled = true;
+          btnBack.disabled = true;
+
+          await sleep(2000);
+          card.remove();
+          resolve({ action: 'CONFIRMED', code: opt.code, label: opt.label });
+        });
+
+        btnSkip.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cleanupListeners();
+          if (inp) inp.removeEventListener('change', updateFileStatus);
+          card.remove();
+          resolve({ action: 'SKIP' });
+        });
+      };
+
+      // Initial View
+      renderPickerView();
+      document.body.appendChild(card);
+
+      // Auto-scroll Section H box into view
+      if (boxH) {
+        try {
+          boxH.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch {}
+      }
+    });
+  }
+
+  /**
    * Parses single-line comma-separated Indian addresses into structured components:
    * [Village/Locality], [Post Office], [Tehsil/Block/City], [District], [PIN Code]
    *
@@ -3946,7 +4379,7 @@
       nextBtnH.removeAttribute('disabled');
     }
 
-    // ─── Section H: Address Proof Document Upload ──────────────────────────────
+    // ─── Section H: Address Proof Document Upload (Smart Picker) ──────────────
     // 1. Radio: Select "Document for proof of Residence"
     const resRadio = (boxH || document).querySelector('input[type="radio"][name="AddressProofDocument"][value="Y"]')
       || findElement(SELECTOR_MAP.addressProofRadio);
@@ -3955,76 +4388,66 @@
       resRadio.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    // 2. Dropdown: Select document type
-    const addrDocCode = data.addressProofType || data.documents?.addressProof?.portalDocType || (hasValidAadhaar ? 'ADHR' : 'WEGB');
+    // 2. Dropdown & File input targets
     const resSelect = (boxH || document).querySelector('select[name="currentAddressProofType"]')
       || findElement(SELECTOR_MAP.addressProofType);
-    if (resSelect) {
-      setSelectValue(resSelect, addrDocCode);
-      resSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-
-    // 3. Document File Input: Locate and verify
     const addrFileInput = (boxH || document).querySelector('input[type="file"]#currentAddressProof, input[type="file"][name="currentAddressProof"]')
       || findElement(SELECTOR_MAP.addressProofFile);
 
-    const ADDRESS_DOC_NAMES = {
-      ADHR: 'Aadhaar Card',
-      WEGB: 'Water / Electricity / Gas Connection Bill',
-      PC: 'PAN Card',
-      IPSP: 'Indian Passport',
-      PBCB: 'Current Passbook (Bank / Post Office)',
-      ROD: 'Revenue / Registered Sale Deed',
-      RLA: 'Registered Rent / Lease Agreement',
-    };
-    const addrDocName = ADDRESS_DOC_NAMES[addrDocCode] || data.documents?.addressProof?.type || 'Address Proof Document';
-    const addrDocUrl = data.addressProofUrl || data.documents?.addressProof?.url || null;
-    const addrDocFileName = data.documents?.addressProof?.fileName || 'address-proof-document.pdf';
-
-    let addressUploaded = false;
-
-    if (addrDocUrl && addrFileInput) {
-      try {
-        console.log(`[GCDS Section H] Fetching Address Proof document from GCDS: ${addrDocUrl}`);
-        const addrBlob = await fetchFileBlob(addrDocUrl, data.id || data._id);
-        if (addrBlob && addrBlob.size > 0) {
-          const injected = await injectFileToPortal(addrFileInput, addrBlob, addrDocFileName, false);
-          if (injected && addrFileInput.files && addrFileInput.files.length > 0) {
-            addressUploaded = true;
-            highlightField(addrFileInput);
-            filledCount++;
-            console.log('✅ [GCDS Section H] Address Proof file injected successfully. Waiting 2s guard before Next...');
-            await sleep(2000);
-          } else {
-            console.warn('[GCDS Section H] File injection into currentAddressProof input did not register files.');
-          }
-        } else {
-          console.warn('[GCDS Section H] Failed to fetch valid blob for Address Proof document.');
-        }
-      } catch (err) {
-        console.error('[GCDS Section H] Error injecting Address Proof document:', err);
-      }
+    // 3. Collect Address Proof Candidates from DTO
+    let addrCandidates = [];
+    if (Array.isArray(data.addressProofCandidates) && data.addressProofCandidates.length > 0) {
+      addrCandidates = data.addressProofCandidates;
+    } else if (Array.isArray(data.address_proof_candidates) && data.address_proof_candidates.length > 0) {
+      addrCandidates = data.address_proof_candidates;
+    } else if (data.documents?.addressProofCandidates && Array.isArray(data.documents.addressProofCandidates)) {
+      addrCandidates = data.documents.addressProofCandidates;
+    } else if (data.documents?.address_proof_candidates && Array.isArray(data.documents.address_proof_candidates)) {
+      addrCandidates = data.documents.address_proof_candidates;
+    } else if (data.addressProofUrl || data.documents?.addressProof?.url) {
+      // Legacy fallback: single candidate
+      addrCandidates = [
+        {
+          code: data.addressProofType || data.documents?.addressProof?.portalDocType || (hasValidAadhaar ? 'ADHR' : 'WEGB'),
+          category: data.addressProofType === 'ADHR' ? 'AADHAAR_CARD' : 'UTILITY_BILL',
+          label: data.addressProofType === 'ADHR' ? 'Aadhaar Card' : 'Utility Bill',
+          url: data.addressProofUrl || data.documents?.addressProof?.url,
+          fileName: data.documents?.addressProof?.fileName || 'address_proof.jpg',
+          mimeType: data.documents?.addressProof?.mimeType || 'image/jpeg',
+          documentType: data.documents?.addressProof?.type || 'Address Proof',
+        },
+      ];
     }
 
-    // 4. If upload not confirmed, trigger Manual Upload Fallback Card
-    if (!addressUploaded) {
-      console.log('[GCDS Section H] Address Proof document missing or unconfirmed. Showing Manual Upload prompt...');
-      const manualResult = await waitForManualDocumentUpload({
-        section: 'H',
-        title: 'Present Address (Address Proof)',
-        docTypeName: addrDocName,
-        fileInput: addrFileInput,
-      });
+    // 4. Launch Smart Address-Proof Picker Action Card
+    const addrPickerResult = await waitForAddressProofSmartPicker({
+      candidates: addrCandidates,
+      customerId: data.id || data._id || data.customerId,
+      fileInput: addrFileInput,
+      selectElement: resSelect,
+      radioElement: resRadio,
+      boxH,
+    });
 
-      if (manualResult.action === 'CONFIRMED') {
-        addressUploaded = true;
-        filledCount++;
-        await sleep(1000);
-      } else {
-        console.log('[GCDS Section H] Operator skipped manual upload. Will not auto-advance Section H.');
-        skippedCount++;
-        skippedFields.push('addressProof');
-      }
+    let addressUploaded = false;
+    if (addrPickerResult.action === 'UPLOADED' || addrPickerResult.action === 'CONFIRMED') {
+      addressUploaded = true;
+      filledCount++;
+    } else {
+      console.log('[GCDS Section H] Operator skipped Address Proof upload. Will not auto-advance Section H.');
+      skippedCount++;
+      skippedFields.push('addressProof');
+    }
+
+    // Safety net: check if file is already present on the input
+    const curAddrFileInput =
+      addrFileInput ||
+      (boxH || document).querySelector('input[type="file"]#currentAddressProof, input[type="file"][name="currentAddressProof"]') ||
+      findElement(SELECTOR_MAP.addressProofFile);
+    if (!addressUploaded && curAddrFileInput && curAddrFileInput.files && curAddrFileInput.files.length > 0) {
+      console.log('[GCDS Section H] File detected on file input directly. Setting addressUploaded = true.');
+      addressUploaded = true;
+      filledCount++;
     }
 
     // 5. Auto-advance Section H ONLY if upload confirmed!
@@ -4205,7 +4628,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.2.4-stable',
+      version: '1.2.6-stable',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
@@ -4243,6 +4666,7 @@
     waitForRelationConfirmation,
     waitForAadhaarConfirmation,
     waitForAgeProofSmartPicker,
+    waitForAddressProofSmartPicker,
     waitForHouseNumberInput,
     waitForManualDocumentUpload,
     parseAddressComponents,

@@ -224,6 +224,16 @@ export async function GET(req: NextRequest, context: RouteContext) {
     let ageProofDoc: { url: string; type: string; fileName: string; mimeType: string } | null = null;
     let addressProofDoc: { url: string; type: string; fileName: string; mimeType: string } | null = null;
 
+    const addressProofCandidates: Array<{
+      code: string;
+      category: string;
+      label: string;
+      url: string;
+      fileName: string;
+      mimeType: string;
+      documentType: string;
+    }> = [];
+
     try {
       const { data: customerDocs } = await db
         .from('customer_documents')
@@ -308,36 +318,79 @@ export async function GET(req: NextRequest, context: RouteContext) {
         };
       }
 
-      // Match Address Proof (Aadhaar, Electricity, Gas, Rent, Passbook, Water)
-      const addressCandidate = activeDocs.find((d: any) => {
-        const t = (d.document_type || '').toLowerCase();
-        return t.includes('aadhaar') || t.includes('electric') || t.includes('gas') || t.includes('bill') || t.includes('rent') || t.includes('passbook');
-      });
-
-      if (addressCandidate?.file_url) {
-        let addrUrl: string | null = null;
-        try {
-          const { data: sData } = await db.storage
-            .from('customer_documents')
-            .createSignedUrl(addressCandidate.file_url, 3600);
-          addrUrl = sData?.signedUrl || null;
-        } catch {}
-
-        if (addrUrl) {
-          const t = (addressCandidate.document_type || '').toLowerCase();
-          let docCode = 'ADHR';
-          if (t.includes('water') || t.includes('electric') || t.includes('gas')) docCode = 'WEGB';
-          else if (t.includes('rent')) docCode = 'RRLD';
-          else if (t.includes('passbook')) docCode = 'CPNS';
-          else if (t.includes('passport')) docCode = 'IPSP';
-
-          addressProofDoc = {
-            url: addrUrl,
-            type: docCode,
-            fileName: addressCandidate.file_name || 'address_proof.jpg',
-            mimeType: addressCandidate.mime_type || 'image/jpeg',
-          };
+      // Matcher for the 7 standard ECI Address Proof categories
+      const matchAddressCategory = (d: any): { code: string; category: string; label: string } | null => {
+        const t = `${d.document_type || ''} ${d.document_name || ''} ${d.source_filename || ''} ${d.file_name || ''}`.toLowerCase();
+        // 1. Water / Electricity / Gas Connection Bill
+        if (t.includes('water') || t.includes('electric') || t.includes('electricity') || t.includes('gas') || t.includes('utility') || (t.includes('bill') && !t.includes('rent'))) {
+          return { code: 'WEGB', category: 'UTILITY_BILL', label: 'Water/Electricity/Gas connection Bill' };
         }
+        // 2. Registered Sale Deed
+        if (t.includes('sale deed') || t.includes('saledeed') || t.includes('sale_deed') || t.includes('registry') || (t.includes('deed') && !t.includes('rent') && !t.includes('lease'))) {
+          return { code: 'RSD', category: 'SALE_DEED', label: 'Registered Sale Deed' };
+        }
+        // 3. Registered Rent Lease Deed
+        if (/\b(rent|rental|lease|tenant)\b/i.test(t) || t.includes('lease') || t.includes('tenant') || t.includes('rental')) {
+          return { code: 'RRLD', category: 'RENT_DEED', label: 'Registered Rent Lease Deed' };
+        }
+        // 4. Revenue Department's Land Owning records
+        if (t.includes('land') || t.includes('kisan') || t.includes('porcha') || t.includes('khatian') || t.includes('khajna') || t.includes('patta') || t.includes('revenue')) {
+          return { code: 'RDLR', category: 'LAND_RECORD', label: "Revenue Department's Land Owning records" };
+        }
+        // 5. Indian Passport
+        if (t.includes('passport')) {
+          return { code: 'IPSP', category: 'PASSPORT', label: 'Indian Passport' };
+        }
+        // 6. Current passbook of Bank/Post Office
+        if (t.includes('passbook') || t.includes('bank') || t.includes('statement') || t.includes('post office')) {
+          return { code: 'CPNS', category: 'BANK_PASSBOOK', label: 'Current passbook of Bank/Post Office' };
+        }
+        // 7. Aadhaar Card
+        if (t.includes('aadhaar') || t.includes('aadhar') || t.includes('uidai') || t.includes('adhaar')) {
+          return { code: 'ADHR', category: 'AADHAAR_CARD', label: 'Aadhaar Card' };
+        }
+        return null;
+      };
+
+      // Scan all active docs for address candidates
+      for (const doc of activeDocs) {
+        if (!doc.file_url) continue;
+        const matched = matchAddressCategory(doc);
+        if (!matched) continue;
+
+        // Keep newest active document per code
+        if (!addressProofCandidates.some((c) => c.code === matched.code)) {
+          let signedUrl: string | null = null;
+          try {
+            const { data: sData } = await db.storage
+              .from('customer_documents')
+              .createSignedUrl(doc.file_url, 3600);
+            signedUrl = sData?.signedUrl || null;
+          } catch {}
+
+          if (signedUrl) {
+            addressProofCandidates.push({
+              code: matched.code,
+              category: matched.category,
+              label: matched.label,
+              url: signedUrl,
+              fileName: doc.file_name || doc.source_filename || `${matched.code.toLowerCase()}_proof.jpg`,
+              mimeType: doc.mime_type || 'image/jpeg',
+              documentType: doc.document_type || matched.label,
+            });
+          }
+        }
+      }
+
+      // Default primary address proof: Prefer Aadhaar if present, else first available candidate
+      const primaryAddressCandidate = addressProofCandidates.find((c) => c.code === 'ADHR') || addressProofCandidates[0] || null;
+      if (primaryAddressCandidate) {
+        addressProofDoc = {
+          url: primaryAddressCandidate.url,
+          type: primaryAddressCandidate.code,
+          fileName: primaryAddressCandidate.fileName,
+          mimeType: primaryAddressCandidate.mimeType,
+        };
       }
     } catch (docsErr) {
       console.warn('[form-fill] Document lookup skipped:', docsErr);
@@ -395,8 +448,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
         ageProof: ageProofDoc,
         addressProof: addressProofDoc,
         ageProofCandidates,
+        addressProofCandidates,
+        address_proof_candidates: addressProofCandidates,
       },
       ageProofCandidates,
+      addressProofCandidates,
+      address_proof_candidates: addressProofCandidates,
       ageProof: ageProofDoc,
       addressProof: addressProofDoc,
       ageProofUrl: ageProofDoc?.url || null,
