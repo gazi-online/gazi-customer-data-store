@@ -352,6 +352,38 @@ export async function GET(req: NextRequest, context: RouteContext) {
       ? String(customer.aadhaar_number).replace(/\D/g, '')
       : null;
 
+    // Address fragmentation fallback for single-line customer.address
+    let parsedVillage: string | null = null;
+    let parsedPostOffice: string | null = null;
+    let parsedTehsil: string | null = null;
+    let parsedDistrict: string | null = null;
+    let parsedPincode: string | null = null;
+
+    if (customer.address) {
+      const tokens = customer.address
+        .split(/[,;\n]+/)
+        .map((s: string) => s.trim().replace(/^(vill|village|po|p\.o\.|ps|p\.s\.|dist|district|pin|pincode)\s*[:.-]?\s*/i, ''))
+        .filter(Boolean);
+
+      for (let i = tokens.length - 1; i >= 0; i--) {
+        const pinMatch = tokens[i].match(/\b\d{6}\b/);
+        if (pinMatch) {
+          parsedPincode = pinMatch[0];
+          tokens[i] = tokens[i].replace(/\b\d{6}\b/, '').trim();
+          break;
+        }
+      }
+      const cleanTokens = tokens.filter((t: string) => t.length > 0 && !/^\d{6}$/.test(t));
+      if (cleanTokens.length >= 1) parsedVillage = cleanTokens[0];
+      if (cleanTokens.length >= 2) parsedPostOffice = cleanTokens[1];
+      if (cleanTokens.length >= 3) parsedTehsil = cleanTokens[2];
+      if (cleanTokens.length >= 4) parsedDistrict = cleanTokens[3];
+    }
+
+    const resolvedVillage = (customer as any).village || parsedVillage || null;
+    const resolvedPostOffice = customer.post_office || parsedPostOffice || null;
+    const resolvedTehsil = (customer as any).tehsil || parsedTehsil || customer.city || null;
+
     const formFillDto = {
       customerId: customer.id,
       customerCode: customer.customer_code,
@@ -371,6 +403,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
       ageProofType: ageProofDoc?.type || null,
       addressProofUrl: addressProofDoc?.url || null,
       addressProofType: addressProofDoc?.type || null,
+
+      village: resolvedVillage,
+      post_office: resolvedPostOffice,
+      tehsil: resolvedTehsil,
 
       name: {
         firstName: customer.first_name,
@@ -420,10 +456,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
       address: {
         streetAddress: customer.address || '',
-        cityTownVillage: customer.city || null,
-        postOffice: customer.post_office || null,
-        pincode: customer.pincode || null,
-        district: customer.district || null,
+        village: resolvedVillage,
+        cityTownVillage: customer.city || resolvedVillage || null,
+        postOffice: resolvedPostOffice,
+        pincode: customer.pincode || parsedPincode || null,
+        tehsil: resolvedTehsil,
+        district: customer.district || parsedDistrict || null,
         state: customer.state || null,
         country: customer.country || 'India',
       },

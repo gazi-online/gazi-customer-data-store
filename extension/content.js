@@ -175,6 +175,7 @@
     houseNo: [
       'input#doorD',
       'input[name="houseNo"]',
+      'input#houseNo',
       '#doorD',
       'input[formcontrolname="houseNo"]',
       '#houseNo',
@@ -183,7 +184,9 @@
     ],
     street: [
       'input#areasD',
+      'input#streetArea',
       'input[name="street"]',
+      'input[name="streetArea"]',
       '#areasD',
       'input[formcontrolname="street"]',
       '#street',
@@ -199,7 +202,9 @@
     ],
     cityTownVillage: [
       'input#villageD',
+      'input#villageTown',
       'input[name="village"]',
+      'input[name="villageTown"]',
       '#villageD',
       'input[formcontrolname="townVillageCity"]',
       'input[name="townVillageCity"]',
@@ -212,6 +217,7 @@
     ],
     postOffice: [
       'input#postH',
+      'input#postOffice',
       'input[name="postOffice"]',
       '#postH',
       'input[formcontrolname="postOffice"]',
@@ -231,7 +237,9 @@
     ],
     tehsil: [
       'input#areasH',
+      'input#tehsil',
       'input[name="currentAddressTeh"]',
+      'input[name="tehsil"]',
       '#areasH',
       'input[formcontrolname="currentAddressTeh"]',
       'input[formcontrolname="tehsil"]',
@@ -2466,6 +2474,44 @@
   }
 
   /**
+   * Parses single-line comma-separated Indian addresses into structured components:
+   * [Village/Locality], [Post Office], [Tehsil/Block/City], [District], [PIN Code]
+   *
+   * @param {string} rawAddress
+   * @returns {{ village?: string, postOffice?: string, tehsil?: string, district?: string, pincode?: string }}
+   */
+  function parseAddressComponents(rawAddress) {
+    if (!rawAddress || typeof rawAddress !== 'string') return {};
+    const tokens = rawAddress
+      .split(/[,;\n]+/)
+      .map((s) => s.trim().replace(/^(vill|village|po|p\.o\.|ps|p\.s\.|dist|district|pin|pincode)\s*[:.-]?\s*/i, ''))
+      .filter(Boolean);
+    if (tokens.length === 0) return {};
+
+    const result = {};
+    let pinFound = null;
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      const pinMatch = tokens[i].match(/\b\d{6}\b/);
+      if (pinMatch) {
+        pinFound = pinMatch[0];
+        tokens[i] = tokens[i].replace(/\b\d{6}\b/, '').trim();
+        break;
+      }
+    }
+    if (pinFound) {
+      result.pincode = pinFound;
+    }
+
+    const cleanTokens = tokens.filter((t) => t.length > 0 && !/^\d{6}$/.test(t));
+    if (cleanTokens.length >= 1) result.village = cleanTokens[0];
+    if (cleanTokens.length >= 2) result.postOffice = cleanTokens[1];
+    if (cleanTokens.length >= 3) result.tehsil = cleanTokens[2];
+    if (cleanTokens.length >= 4) result.district = cleanTokens[3];
+
+    return result;
+  }
+
+  /**
    * Prompts operator with a floating modal card to manually enter House / Building / Apartment No. in portal.
    * Pauses Section H automation until operator enters House No. and clicks "Confirm & Fill Remaining".
    *
@@ -3544,11 +3590,35 @@
       await sleep(300);
     }
 
+    // Helper: Fill input and dispatch input, change, and blur events
+    function fillAndDispatch(el, val) {
+      if (!el || val === undefined || val === null) return false;
+      setInputValue(el, val);
+      el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+      el.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
+      highlightField(el);
+      return true;
+    }
+
+    // Parse address fallback from raw string if individual components are missing
+    const rawAddrStr = (
+      addr.streetAddress ||
+      addr.street ||
+      addr.address ||
+      data.address ||
+      ''
+    ).trim();
+    const parsedAddr = parseAddressComponents(rawAddrStr);
+
     // 1. House/Building/Apartment No (Manual Entry):
-    // Action: Leave this field BLANK initially
-    const houseInput = (boxH || document).querySelector('input#doorD, input[name="houseNo"]') || findElement(SELECTOR_MAP.houseNo);
-    if (houseInput && !houseInput.value) {
+    // Action: Leave this field BLANK. Operator will type manually.
+    const houseInput = (boxH || document).querySelector('input#doorD, input#houseNo, input[name="houseNo"]') || findElement(SELECTOR_MAP.houseNo);
+    if (houseInput) {
       setInputValue(houseInput, '');
+      houseInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      houseInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+      houseInput.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
     }
 
     // Operator Interaction: Show floating UI card "Manual Input Required" and PAUSE automation
@@ -3561,71 +3631,88 @@
       skippedFields.push('houseNo');
     }
 
-    // 2. Street/Area/Locality & Village/Town:
-    // Logic: In BOTH of these fields, ONLY fill the Village/Town Name from GCDS.
-    const villageTownVal = (addr.cityTownVillage || data.cityTownVillage || data.village || data.village_town || data.town_village_city || data.town || '').trim();
-    let regVillageVal = (addr.regionalVillage || addr.regionalCityTownVillage || '').trim();
-    if (!regVillageVal && villageTownVal) {
-      regVillageVal = await requestTransliteration(villageTownVal);
+    // 2. Village Name (Double Mapping to BOTH Street/Area and Village/Town):
+    let villageVal = (
+      data.village ||
+      addr.village ||
+      addr.villageTown ||
+      parsedAddr.village ||
+      ''
+    ).trim();
+
+    if (!villageVal) {
+      const candidate = (addr.cityTownVillage || data.cityTownVillage || data.village_town || data.town_village_city || data.town || '').trim();
+      if (candidate && !candidate.includes(' - ')) {
+        villageVal = candidate;
+      } else if (candidate) {
+        villageVal = candidate.split(' - ')[0].trim();
+      }
     }
 
-    if (villageTownVal) {
-      // (a) Street/Area input (#areasD)
-      const streetInput = (boxH || document).querySelector('input#areasD, input[name="street"]') || findElement(SELECTOR_MAP.street);
+    let regVillageVal = (addr.regionalVillage || addr.regionalCityTownVillage || '').trim();
+    if (!regVillageVal && villageVal) {
+      regVillageVal = await requestTransliteration(villageVal);
+    }
+
+    if (villageVal) {
+      // (a) Street/Area input (#areasD, input#streetArea, input[name="street"])
+      const streetInput = (boxH || document).querySelector('input#areasD, input#streetArea, input[name="street"], input[name="streetArea"]') || findElement(SELECTOR_MAP.street);
       if (streetInput) {
-        setInputValue(streetInput, villageTownVal);
-        highlightField(streetInput);
+        fillAndDispatch(streetInput, villageVal);
         filledCount++;
       } else {
-        await fillTextField('street', villageTownVal);
+        await fillTextField('street', villageVal);
       }
 
-      // Regional Street input (#regAreasD)
-      const regStreetInput = (boxH || document).querySelector('input#regAreasD');
+      // Regional Street input (#regAreasD, input#regStreetArea)
+      const regStreetInput = (boxH || document).querySelector('input#regAreasD, input#regStreetArea');
       if (regStreetInput && regVillageVal) {
-        setInputValue(regStreetInput, regVillageVal);
-        highlightField(regStreetInput);
+        fillAndDispatch(regStreetInput, regVillageVal);
       }
 
-      // (b) Village/Town input (#villageD)
-      const villageInput = (boxH || document).querySelector('input#villageD, input[name="village"]') || findElement(SELECTOR_MAP.cityTownVillage);
+      // (b) Village/Town input (#villageD, input#villageTown, input[name="village"])
+      const villageInput = (boxH || document).querySelector('input#villageD, input#villageTown, input[name="village"], input[name="villageTown"]') || findElement(SELECTOR_MAP.cityTownVillage);
       if (villageInput) {
-        setInputValue(villageInput, villageTownVal);
-        highlightField(villageInput);
+        fillAndDispatch(villageInput, villageVal);
         filledCount++;
       } else {
-        await fillTextField('cityTownVillage', villageTownVal);
+        await fillTextField('cityTownVillage', villageVal);
       }
 
-      // Regional Village input (#regVillageD)
-      const regVillageInput = (boxH || document).querySelector('input#regVillageD');
+      // Regional Village input (#regVillageD, input#regVillageTown)
+      const regVillageInput = (boxH || document).querySelector('input#regVillageD, input#regVillageTown');
       if (regVillageInput && regVillageVal) {
-        setInputValue(regVillageInput, regVillageVal);
-        highlightField(regVillageInput);
+        fillAndDispatch(regVillageInput, regVillageVal);
       }
     } else {
       skippedCount += 2;
       skippedFields.push('street', 'cityTownVillage');
     }
 
-    // Post Office input (#postH)
-    const postOfficeVal = (addr.postOffice || data.post_office || data.postOffice || '').trim();
+    // 3. Post Office input (#postH, input#postOffice, input[name="postOffice"])
+    const postOfficeVal = (
+      data.post_office ||
+      data.postOffice ||
+      addr.postOffice ||
+      addr.post_office ||
+      parsedAddr.postOffice ||
+      ''
+    ).trim();
+
     if (postOfficeVal) {
-      const postInput = (boxH || document).querySelector('input#postH, input[name="postOffice"]') || findElement(SELECTOR_MAP.postOffice);
+      const postInput = (boxH || document).querySelector('input#postH, input#postOffice, input[name="postOffice"]') || findElement(SELECTOR_MAP.postOffice);
       if (postInput) {
-        setInputValue(postInput, postOfficeVal);
-        highlightField(postInput);
+        fillAndDispatch(postInput, postOfficeVal);
         filledCount++;
       } else {
         await fillTextField('postOffice', postOfficeVal);
       }
 
-      const regPostInput = (boxH || document).querySelector('input#regPostH');
+      const regPostInput = (boxH || document).querySelector('input#regPostH, input#regPostOffice');
       if (regPostInput) {
         const regPostVal = await requestTransliteration(postOfficeVal);
         if (regPostVal) {
-          setInputValue(regPostInput, regPostVal);
-          highlightField(regPostInput);
+          fillAndDispatch(regPostInput, regPostVal);
         }
       }
     } else {
@@ -3633,13 +3720,20 @@
       skippedFields.push('postOffice');
     }
 
-    // PIN Code input (#pinCode)
-    const pinVal = (addr.pincode || data.pincode || data.pin_code || '').trim();
+    // 4. PIN Code input (#pinCode, input[name="pinCode"])
+    const pinVal = (
+      data.pincode ||
+      data.pin_code ||
+      addr.pincode ||
+      addr.pin_code ||
+      parsedAddr.pincode ||
+      ''
+    ).replace(/\D/g, '').slice(0, 6);
+
     if (pinVal) {
       const pinInput = (boxH || document).querySelector('input#pinCode, input[name="pinCode"]') || findElement(SELECTOR_MAP.pincode);
       if (pinInput) {
-        setInputValue(pinInput, pinVal);
-        highlightField(pinInput);
+        fillAndDispatch(pinInput, pinVal);
         filledCount++;
       } else {
         await fillTextField('pincode', pinVal);
@@ -3649,24 +3743,38 @@
       skippedFields.push('pincode');
     }
 
-    // 3. Tehsil/Taluqa/Mandal: Fill this field with the City name from GCDS (or administrative block name)
-    const cityForTehsil = (data.city || addr.city || addr.subDistrict || addr.tehsil || '').trim();
-    if (cityForTehsil) {
-      const tehsilInput = (boxH || document).querySelector('input#areasH, input[name="currentAddressTeh"]') || findElement(SELECTOR_MAP.tehsil);
+    // 5. Tehsil/Taluqa/Mandal: Fill this field with Tehsil or City from GCDS (clean administrative block suffixes)
+    let tehsilVal = (
+      data.tehsil ||
+      addr.tehsil ||
+      parsedAddr.tehsil ||
+      data.city ||
+      addr.city ||
+      addr.subDistrict ||
+      ''
+    ).trim();
+
+    // Prefer parsed Tehsil if city contains administrative block suffix like "Basirhat - I"
+    if (parsedAddr.tehsil && (tehsilVal.includes(' - ') || !tehsilVal)) {
+      tehsilVal = parsedAddr.tehsil;
+    } else if (tehsilVal.includes(' - ')) {
+      tehsilVal = tehsilVal.split(' - ')[0].trim();
+    }
+
+    if (tehsilVal) {
+      const tehsilInput = (boxH || document).querySelector('input#areasH, input#tehsil, input[name="currentAddressTeh"], input[name="tehsil"]') || findElement(SELECTOR_MAP.tehsil);
       if (tehsilInput) {
-        setInputValue(tehsilInput, cityForTehsil);
-        highlightField(tehsilInput);
+        fillAndDispatch(tehsilInput, tehsilVal);
         filledCount++;
       } else {
-        await fillTextField('tehsil', cityForTehsil);
+        await fillTextField('tehsil', tehsilVal);
       }
 
-      const regTehsilInput = (boxH || document).querySelector('input#regAreasH');
+      const regTehsilInput = (boxH || document).querySelector('input#regAreasH, input#regTehsil');
       if (regTehsilInput) {
-        const regTehsilVal = await requestTransliteration(cityForTehsil);
+        const regTehsilVal = await requestTransliteration(tehsilVal);
         if (regTehsilVal) {
-          setInputValue(regTehsilInput, regTehsilVal);
-          highlightField(regTehsilInput);
+          fillAndDispatch(regTehsilInput, regTehsilVal);
         }
       }
     } else {
@@ -3674,11 +3782,19 @@
       skippedFields.push('tehsil');
     }
 
-    // 4. District Dropdown: Select correct district from portal dropdown using selectDropdownSafe
-    const secHDistrictVal = (addr.district || data.district || data.address_district || districtVal || '').trim();
+    // 6. District Dropdown: Select correct district from portal dropdown using selectDropdownSafe
+    const secHDistrictVal = (
+      data.district ||
+      addr.district ||
+      data.address_district ||
+      parsedAddr.district ||
+      districtVal ||
+      ''
+    ).trim();
+
     if (secHDistrictVal) {
       const districtSelected = await selectDropdownSafe(
-        ['select#districtCd', 'select[name="districtCd"]', ...SELECTOR_MAP.district],
+        ['select#districtCd', 'select#district', 'select[name="districtCd"]', 'select[name="district"]', ...SELECTOR_MAP.district],
         secHDistrictVal,
         10
       );
@@ -3812,10 +3928,10 @@
     if (placeVal) {
       await fillTextField('declarationPlace', placeVal);
     }
-    const rawVillage = addr.cityTownVillage || data.city || '';
-    const villageVal = rawVillage.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (villageVal) {
-      await fillTextField('declarationVillage', villageVal);
+    const rawVillage = villageVal || addr.cityTownVillage || data.city || '';
+    const decVillageVal = rawVillage.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (decVillageVal) {
+      await fillTextField('declarationVillage', decVillageVal);
     }
 
     // Set Section K State, District, and Declaration Date strictly within Section K box
@@ -3997,6 +4113,7 @@
     waitForAgeProofSmartPicker,
     waitForHouseNumberInput,
     waitForManualDocumentUpload,
+    parseAddressComponents,
     runFill,
     fillForm,
     generateDiagnosticReport,
