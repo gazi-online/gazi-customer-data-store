@@ -1294,8 +1294,8 @@
       }
       @keyframes gcds-spin { to { transform: rotate(360deg); } }
 
-      /* ── Section E & Document Upload Floating Action Cards ── */
-      #gcds-aadhaar-card, #gcds-doc-card {
+      /* ── Section E, G & H Floating Action Cards ── */
+      #gcds-aadhaar-card, #gcds-doc-card, #gcds-house-card {
         position: fixed;
         bottom: 28px;
         right: 28px;
@@ -1311,13 +1311,13 @@
         animation: gcds-card-in 0.25s cubic-bezier(0.34,1.56,0.64,1);
         user-select: none;
       }
-      #gcds-aadhaar-card .gcds-card-header, #gcds-doc-card .gcds-card-header {
+      #gcds-aadhaar-card .gcds-card-header, #gcds-doc-card .gcds-card-header, #gcds-house-card .gcds-card-header {
         display: flex;
         align-items: center;
         gap: 8px;
         margin-bottom: 12px;
       }
-      #gcds-aadhaar-card .gcds-card-badge, #gcds-doc-card .gcds-card-badge {
+      #gcds-aadhaar-card .gcds-card-badge, #gcds-doc-card .gcds-card-badge, #gcds-house-card .gcds-card-badge {
         background: #6366f1;
         color: #fff;
         font-size: 10px;
@@ -1327,32 +1327,32 @@
         border-radius: 20px;
         text-transform: uppercase;
       }
-      #gcds-aadhaar-card .gcds-card-title, #gcds-doc-card .gcds-card-title {
+      #gcds-aadhaar-card .gcds-card-title, #gcds-doc-card .gcds-card-title, #gcds-house-card .gcds-card-title {
         font-size: 13px;
         font-weight: 600;
         color: #94a3b8;
       }
-      #gcds-aadhaar-card .gcds-rec-box, #gcds-doc-card .gcds-rec-box {
+      #gcds-aadhaar-card .gcds-rec-box, #gcds-doc-card .gcds-rec-box, #gcds-house-card .gcds-rec-box {
         background: rgba(99,102,241,0.12);
         border: 1px solid rgba(99,102,241,0.4);
         border-radius: 10px;
         padding: 10px 12px;
         margin-bottom: 12px;
       }
-      #gcds-aadhaar-card .gcds-rec-label, #gcds-doc-card .gcds-rec-label {
+      #gcds-aadhaar-card .gcds-rec-label, #gcds-doc-card .gcds-rec-label, #gcds-house-card .gcds-rec-label {
         font-size: 11px;
         color: #94a3b8;
         margin-bottom: 4px;
         text-transform: uppercase;
         letter-spacing: 0.06em;
       }
-      #gcds-aadhaar-card .gcds-rec-name, #gcds-doc-card .gcds-rec-name {
+      #gcds-aadhaar-card .gcds-rec-name, #gcds-doc-card .gcds-rec-name, #gcds-house-card .gcds-rec-name {
         font-size: 15px;
         font-weight: 700;
         color: #a5b4fc;
         letter-spacing: -0.01em;
       }
-      #gcds-aadhaar-card .gcds-rec-desc, #gcds-doc-card .gcds-rec-desc {
+      #gcds-aadhaar-card .gcds-rec-desc, #gcds-doc-card .gcds-rec-desc, #gcds-house-card .gcds-rec-desc {
         font-size: 11.5px;
         color: #cbd5e1;
         margin-top: 4px;
@@ -1417,11 +1417,11 @@
         border-color: #ef4444;
         color: #ffffff;
       }
-      #gcds-aadhaar-card .gcds-btn-row, #gcds-doc-card .gcds-btn-row {
+      #gcds-aadhaar-card .gcds-btn-row, #gcds-doc-card .gcds-btn-row, #gcds-house-card .gcds-btn-row {
         display: flex;
         gap: 8px;
       }
-      #gcds-aadhaar-card .gcds-btn-confirm, #gcds-doc-card .gcds-btn-confirm {
+      #gcds-aadhaar-card .gcds-btn-confirm, #gcds-doc-card .gcds-btn-confirm, #gcds-house-card .gcds-btn-confirm {
         flex: 1;
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
         color: #fff;
@@ -1435,10 +1435,10 @@
         transition: opacity 0.15s, transform 0.1s;
         box-shadow: 0 2px 8px rgba(99,102,241,0.4);
       }
-      #gcds-aadhaar-card .gcds-btn-confirm:hover, #gcds-doc-card .gcds-btn-confirm:hover { opacity: 0.9; transform: translateY(-1px); }
-      #gcds-aadhaar-card .gcds-btn-confirm:active, #gcds-doc-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
-      #gcds-aadhaar-card .gcds-btn-confirm:disabled, #gcds-doc-card .gcds-btn-confirm:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-      #gcds-aadhaar-card .gcds-btn-skip, #gcds-doc-card .gcds-btn-skip {
+      #gcds-aadhaar-card .gcds-btn-confirm:hover, #gcds-doc-card .gcds-btn-confirm:hover, #gcds-house-card .gcds-btn-confirm:hover { opacity: 0.9; transform: translateY(-1px); }
+      #gcds-aadhaar-card .gcds-btn-confirm:active, #gcds-doc-card .gcds-btn-confirm:active, #gcds-house-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
+      #gcds-aadhaar-card .gcds-btn-confirm:disabled, #gcds-doc-card .gcds-btn-confirm:disabled, #gcds-house-card .gcds-btn-confirm:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+      #gcds-aadhaar-card .gcds-btn-skip, #gcds-doc-card .gcds-btn-skip, #gcds-house-card .gcds-btn-skip {
         background: transparent;
         color: #64748b;
         font-size: 12px;
@@ -1448,8 +1448,8 @@
         cursor: pointer;
         transition: color 0.15s, border-color 0.15s;
       }
-      #gcds-aadhaar-card .gcds-btn-skip:hover, #gcds-doc-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
-      #gcds-aadhaar-card .gcds-spinner, #gcds-doc-card .gcds-spinner {
+      #gcds-aadhaar-card .gcds-btn-skip:hover, #gcds-doc-card .gcds-btn-skip:hover, #gcds-house-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
+      #gcds-aadhaar-card .gcds-spinner, #gcds-doc-card .gcds-spinner, #gcds-house-card .gcds-spinner {
         display: inline-block;
         width: 14px; height: 14px;
         border: 2px solid rgba(255,255,255,0.3);
@@ -2466,6 +2466,124 @@
   }
 
   /**
+   * Prompts operator with a floating modal card to manually enter House / Building / Apartment No. in portal.
+   * Pauses Section H automation until operator enters House No. and clicks "Confirm & Fill Remaining".
+   *
+   * @returns {Promise<{ action: 'CONFIRMED'|'SKIP', houseNo: string }>}
+   */
+  function waitForHouseNumberInput() {
+    return new Promise((resolve) => {
+      injectRelationCardStyles();
+
+      // Remove any stale card
+      const stale = document.getElementById('gcds-house-card');
+      if (stale) stale.remove();
+
+      const card = document.createElement('div');
+      card.id = 'gcds-house-card';
+      card.setAttribute('role', 'dialog');
+      card.setAttribute('aria-label', 'Section H Manual House Number Required');
+
+      card.innerHTML = `
+        <div class="gcds-card-header">
+          <span class="gcds-card-badge">Section H</span>
+          <span class="gcds-card-title">Manual Input Required</span>
+        </div>
+        <div class="gcds-rec-box">
+          <div class="gcds-rec-label">House / Building / Apartment No.</div>
+          <div class="gcds-rec-name">Enter House No. Manually</div>
+          <div class="gcds-rec-desc">Please enter House/Building No. manually in the portal below to prevent incorrect kiosk data entry:</div>
+        </div>
+        <div class="gcds-doc-status-box" id="gcds-house-status-box" style="margin-bottom: 12px; border-color: #6366f1; background: rgba(99,102,241,0.1);">
+          <span style="font-size: 13px; color: #a5b4fc;" id="gcds-house-status-text">⏳ Waiting for House No. entry in portal…</span>
+        </div>
+        <div class="gcds-btn-row">
+          <button type="button" class="gcds-btn-confirm" id="gcds-btn-confirm-house" title="Confirm House No. and fill remaining address fields">
+            Confirm &amp; Fill Remaining
+          </button>
+          <button type="button" class="gcds-btn-skip" id="gcds-btn-skip-house" title="Skip House No. and continue filling remaining fields">
+            Skip
+          </button>
+        </div>
+      `;
+
+      const statusBox = card.querySelector('#gcds-house-status-box');
+      const statusText = card.querySelector('#gcds-house-status-text');
+      const btnConfirm = card.querySelector('#gcds-btn-confirm-house');
+      const btnSkip = card.querySelector('#gcds-btn-skip-house');
+
+      // Locate portal houseNo input
+      const boxH = findSectionBox('H');
+      const doorInput = (boxH || document).querySelector('input#doorD, input[name="houseNo"]') || findElement(SELECTOR_MAP.houseNo);
+
+      // Focus portal input and scroll to Section H
+      if (doorInput) {
+        highlightField(doorInput);
+        try { doorInput.focus(); } catch {}
+      }
+      if (boxH) {
+        try { boxH.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+      }
+
+      // Live monitoring of the portal's houseNo input
+      const updateHousePreview = () => {
+        const val = doorInput ? doorInput.value.trim() : '';
+        if (val) {
+          statusBox.style.borderColor = '#10b981';
+          statusBox.style.background = 'rgba(16, 185, 129, 0.15)';
+          statusText.style.color = '#34d399';
+          statusText.style.fontWeight = '700';
+          statusText.innerHTML = `✅ House No: <strong>${escapeHtml(val)}</strong>`;
+        } else {
+          statusBox.style.borderColor = '#6366f1';
+          statusBox.style.background = 'rgba(99,102,241,0.1)';
+          statusText.style.color = '#a5b4fc';
+          statusText.style.fontWeight = 'normal';
+          statusText.innerHTML = '⏳ Waiting for House No. entry in portal…';
+        }
+      };
+
+      if (doorInput) {
+        doorInput.addEventListener('input', updateHousePreview);
+        doorInput.addEventListener('change', updateHousePreview);
+      }
+      const pollTimer = setInterval(updateHousePreview, 300);
+      updateHousePreview();
+
+      const cleanup = () => {
+        clearInterval(pollTimer);
+        if (doorInput) {
+          doorInput.removeEventListener('input', updateHousePreview);
+          doorInput.removeEventListener('change', updateHousePreview);
+        }
+      };
+
+      btnConfirm.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        cleanup();
+        const currentVal = doorInput ? doorInput.value.trim() : '';
+        btnConfirm.innerHTML = '<span class="gcds-spinner"></span> Filling Remaining…';
+        btnConfirm.disabled = true;
+        setTimeout(() => {
+          card.remove();
+          resolve({ action: 'CONFIRMED', houseNo: currentVal });
+        }, 150);
+      });
+
+      btnSkip.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        cleanup();
+        card.remove();
+        resolve({ action: 'SKIP', houseNo: '' });
+      });
+
+      document.body.appendChild(card);
+    });
+  }
+
+  /**
    * Prompts the operator with a floating modal card when a supporting document
    * (Section G Age Proof or Section H Address Proof) is missing from GCDS or requires
    * manual file selection. Watches the portal's file input live and enables confirmation
@@ -3417,38 +3535,170 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Section H: Present Address Details
+    // Section H: Present Address Details (Refined Workflow)
     // ═══════════════════════════════════════════════════════════════════════════
 
-    const addressStr = addr.streetAddress || data.address || '';
-    const addressParts = addressStr.split(',').map((p) => p.trim()).filter(Boolean);
-
-    if (addressParts.length >= 2) {
-      await fillTextField('houseNo', addressParts[0]);
-      await fillTextField('street', addressParts.slice(1).join(', '));
-    } else if (addressParts.length === 1) {
-      await fillTextField('houseNo', addressParts[0]);
+    const boxH = findSectionBox('H');
+    if (boxH) {
+      try { boxH.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+      await sleep(300);
     }
 
-    await fillTextField('cityTownVillage', addr.cityTownVillage || data.city || data.town_village_city);
-    await fillTextField('postOffice', addr.postOffice || data.post_office);
-    await fillTextField('pincode', addr.pincode || data.pincode || data.pin_code);
-
-    const rawTehsil = addr.subDistrict || addr.tehsil || addr.district || data.district || '';
-    const tehsilVal = rawTehsil.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (tehsilVal) {
-      await fillTextField('tehsil', tehsilVal);
+    // 1. House/Building/Apartment No (Manual Entry):
+    // Action: Leave this field BLANK initially
+    const houseInput = (boxH || document).querySelector('input#doorD, input[name="houseNo"]') || findElement(SELECTOR_MAP.houseNo);
+    if (houseInput && !houseInput.value) {
+      setInputValue(houseInput, '');
     }
 
-    // Section H state dropdown if present
-    const secHState = document.querySelector('select#currentStateCd[name="currentStateCd"]');
-    if (secHState && stateVal) {
-      setSelectValue(secHState, stateVal);
+    // Operator Interaction: Show floating UI card "Manual Input Required" and PAUSE automation
+    console.log('[GCDS Section H] Pausing for manual House Number entry by operator...');
+    const houseResult = await waitForHouseNumberInput();
+    if (houseResult.action === 'CONFIRMED' && houseResult.houseNo) {
+      filledCount++;
+    } else {
+      skippedCount++;
+      skippedFields.push('houseNo');
+    }
+
+    // 2. Street/Area/Locality & Village/Town:
+    // Logic: In BOTH of these fields, ONLY fill the Village/Town Name from GCDS.
+    const villageTownVal = (addr.cityTownVillage || data.cityTownVillage || data.village || data.village_town || data.town_village_city || data.town || '').trim();
+    let regVillageVal = (addr.regionalVillage || addr.regionalCityTownVillage || '').trim();
+    if (!regVillageVal && villageTownVal) {
+      regVillageVal = await requestTransliteration(villageTownVal);
+    }
+
+    if (villageTownVal) {
+      // (a) Street/Area input (#areasD)
+      const streetInput = (boxH || document).querySelector('input#areasD, input[name="street"]') || findElement(SELECTOR_MAP.street);
+      if (streetInput) {
+        setInputValue(streetInput, villageTownVal);
+        highlightField(streetInput);
+        filledCount++;
+      } else {
+        await fillTextField('street', villageTownVal);
+      }
+
+      // Regional Street input (#regAreasD)
+      const regStreetInput = (boxH || document).querySelector('input#regAreasD');
+      if (regStreetInput && regVillageVal) {
+        setInputValue(regStreetInput, regVillageVal);
+        highlightField(regStreetInput);
+      }
+
+      // (b) Village/Town input (#villageD)
+      const villageInput = (boxH || document).querySelector('input#villageD, input[name="village"]') || findElement(SELECTOR_MAP.cityTownVillage);
+      if (villageInput) {
+        setInputValue(villageInput, villageTownVal);
+        highlightField(villageInput);
+        filledCount++;
+      } else {
+        await fillTextField('cityTownVillage', villageTownVal);
+      }
+
+      // Regional Village input (#regVillageD)
+      const regVillageInput = (boxH || document).querySelector('input#regVillageD');
+      if (regVillageInput && regVillageVal) {
+        setInputValue(regVillageInput, regVillageVal);
+        highlightField(regVillageInput);
+      }
+    } else {
+      skippedCount += 2;
+      skippedFields.push('street', 'cityTownVillage');
+    }
+
+    // Post Office input (#postH)
+    const postOfficeVal = (addr.postOffice || data.post_office || data.postOffice || '').trim();
+    if (postOfficeVal) {
+      const postInput = (boxH || document).querySelector('input#postH, input[name="postOffice"]') || findElement(SELECTOR_MAP.postOffice);
+      if (postInput) {
+        setInputValue(postInput, postOfficeVal);
+        highlightField(postInput);
+        filledCount++;
+      } else {
+        await fillTextField('postOffice', postOfficeVal);
+      }
+
+      const regPostInput = (boxH || document).querySelector('input#regPostH');
+      if (regPostInput) {
+        const regPostVal = await requestTransliteration(postOfficeVal);
+        if (regPostVal) {
+          setInputValue(regPostInput, regPostVal);
+          highlightField(regPostInput);
+        }
+      }
+    } else {
+      skippedCount++;
+      skippedFields.push('postOffice');
+    }
+
+    // PIN Code input (#pinCode)
+    const pinVal = (addr.pincode || data.pincode || data.pin_code || '').trim();
+    if (pinVal) {
+      const pinInput = (boxH || document).querySelector('input#pinCode, input[name="pinCode"]') || findElement(SELECTOR_MAP.pincode);
+      if (pinInput) {
+        setInputValue(pinInput, pinVal);
+        highlightField(pinInput);
+        filledCount++;
+      } else {
+        await fillTextField('pincode', pinVal);
+      }
+    } else {
+      skippedCount++;
+      skippedFields.push('pincode');
+    }
+
+    // 3. Tehsil/Taluqa/Mandal: Fill this field with the City name from GCDS (or administrative block name)
+    const cityForTehsil = (data.city || addr.city || addr.subDistrict || addr.tehsil || '').trim();
+    if (cityForTehsil) {
+      const tehsilInput = (boxH || document).querySelector('input#areasH, input[name="currentAddressTeh"]') || findElement(SELECTOR_MAP.tehsil);
+      if (tehsilInput) {
+        setInputValue(tehsilInput, cityForTehsil);
+        highlightField(tehsilInput);
+        filledCount++;
+      } else {
+        await fillTextField('tehsil', cityForTehsil);
+      }
+
+      const regTehsilInput = (boxH || document).querySelector('input#regAreasH');
+      if (regTehsilInput) {
+        const regTehsilVal = await requestTransliteration(cityForTehsil);
+        if (regTehsilVal) {
+          setInputValue(regTehsilInput, regTehsilVal);
+          highlightField(regTehsilInput);
+        }
+      }
+    } else {
+      skippedCount++;
+      skippedFields.push('tehsil');
+    }
+
+    // 4. District Dropdown: Select correct district from portal dropdown using selectDropdownSafe
+    const secHDistrictVal = (addr.district || data.district || data.address_district || districtVal || '').trim();
+    if (secHDistrictVal) {
+      const districtSelected = await selectDropdownSafe(
+        ['select#districtCd', 'select[name="districtCd"]', ...SELECTOR_MAP.district],
+        secHDistrictVal,
+        10
+      );
+      if (districtSelected) {
+        filledCount++;
+      } else {
+        skippedCount++;
+        skippedFields.push('district');
+      }
+    }
+
+    // Section H State dropdown (select#currentStateCd) using selectDropdownSafe
+    if (stateVal) {
+      const secHState = (boxH || document).querySelector('select#currentStateCd[name="currentStateCd"]');
+      if (secHState) {
+        await selectDropdownSafe(secHState, stateVal, 5);
+      }
     }
 
     // ─── Section H: Address Proof Document Upload ──────────────────────────────
-    const boxH = findSectionBox('H');
-
     // 1. Radio: Select "Document for proof of Residence"
     const resRadio = (boxH || document).querySelector('input[type="radio"][name="AddressProofDocument"][value="Y"]')
       || findElement(SELECTOR_MAP.addressProofRadio);
@@ -3745,6 +3995,7 @@
     waitForRelationConfirmation,
     waitForAadhaarConfirmation,
     waitForAgeProofSmartPicker,
+    waitForHouseNumberInput,
     waitForManualDocumentUpload,
     runFill,
     fillForm,
@@ -3790,6 +4041,8 @@
     if (staleAadhaar) staleAadhaar.remove();
     const staleDoc = document.getElementById('gcds-doc-card');
     if (staleDoc) staleDoc.remove();
+    const staleHouse = document.getElementById('gcds-house-card');
+    if (staleHouse) staleHouse.remove();
   };
 })();
 
