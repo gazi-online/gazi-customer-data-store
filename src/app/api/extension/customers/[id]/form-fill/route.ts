@@ -210,49 +210,102 @@ export async function GET(req: NextRequest, context: RouteContext) {
       }
     }
 
-    // 5b. Resolve Age Proof and Address Proof documents from customer_documents
+    // 5b. Resolve Age Proof candidates and Address Proof documents from customer_documents
+    const ageProofCandidates: Array<{
+      code: string;
+      category: string;
+      label: string;
+      url: string;
+      fileName: string;
+      mimeType: string;
+      documentType: string;
+    }> = [];
+
     let ageProofDoc: { url: string; type: string; fileName: string; mimeType: string } | null = null;
     let addressProofDoc: { url: string; type: string; fileName: string; mimeType: string } | null = null;
 
     try {
       const { data: customerDocs } = await db
         .from('customer_documents')
-        .select('id, document_type, file_url, file_name, mime_type, status')
+        .select('id, document_type, document_name, source_filename, file_url, file_name, mime_type, status')
         .eq('customer_id', customer.id)
         .order('created_at', { ascending: false });
 
       const activeDocs = (customerDocs || []).filter((d: any) => d.status === 'active' || !d.status);
 
-      // Match Age Proof (Aadhaar, PAN, Birth Certificate, Passport, Class X/XII)
-      const ageCandidate = activeDocs.find((d: any) => {
-        const t = (d.document_type || '').toLowerCase();
-        return t.includes('aadhaar') || t.includes('pan') || t.includes('birth') || t.includes('passport') || t.includes('certificate');
-      });
-
-      if (ageCandidate?.file_url) {
-        let ageUrl: string | null = null;
-        try {
-          const { data: sData } = await db.storage
-            .from('customer_documents')
-            .createSignedUrl(ageCandidate.file_url, 3600);
-          ageUrl = sData?.signedUrl || null;
-        } catch {}
-
-        if (ageUrl) {
-          const t = (ageCandidate.document_type || '').toLowerCase();
-          let docCode = 'ADHR';
-          if (t.includes('pan')) docCode = 'PC';
-          else if (t.includes('passport')) docCode = 'IPSP';
-          else if (t.includes('birth')) docCode = 'BCMR';
-          else if (t.includes('driving')) docCode = 'DL';
-
-          ageProofDoc = {
-            url: ageUrl,
-            type: docCode,
-            fileName: ageCandidate.file_name || 'age_proof.jpg',
-            mimeType: ageCandidate.mime_type || 'image/jpeg',
-          };
+      // Matcher for the 6 standard ECI Age Proof categories
+      const matchAgeCategory = (d: any): { code: string; category: string; label: string } | null => {
+        const t = `${d.document_type || ''} ${d.document_name || ''} ${d.source_filename || ''} ${d.file_name || ''}`.toLowerCase();
+        if (t.includes('birth')) {
+          return { code: 'BCMR', category: 'BIRTH_CERTIFICATE', label: 'Birth Certificate' };
         }
+        if (t.includes('aadhaar')) {
+          return { code: 'ADHR', category: 'AADHAAR_CARD', label: 'Aadhaar Card' };
+        }
+        if (t.includes('pan')) {
+          return { code: 'PC', category: 'PAN_CARD', label: 'PAN Card' };
+        }
+        if (t.includes('driving') || t.includes('license') || t.includes(' dl ') || t.endsWith(' dl') || t.startsWith('dl ')) {
+          return { code: 'DL', category: 'DRIVING_LICENSE', label: 'Driving License' };
+        }
+        if (t.includes('passport')) {
+          return { code: 'IPSP', category: 'PASSPORT', label: 'Indian Passport' };
+        }
+        if (
+          t.includes('class') ||
+          t.includes('school') ||
+          t.includes('mark') ||
+          t.includes('matric') ||
+          t.includes('secondary') ||
+          t.includes('board') ||
+          t.includes('cbsc') ||
+          t.includes('icse') ||
+          (t.includes('certificate') && !t.includes('trade') && !t.includes('gst'))
+        ) {
+          return { code: 'CCIS', category: 'MARK_SHEET / SCHOOL_CERTIFICATE', label: 'Certificates of Class X or XII' };
+        }
+        return null;
+      };
+
+      // Scan all active docs for age candidates
+      for (const doc of activeDocs) {
+        if (!doc.file_url) continue;
+        const matched = matchAgeCategory(doc);
+        if (!matched) continue;
+
+        // Keep newest active document per code
+        if (!ageProofCandidates.some((c) => c.code === matched.code)) {
+          let signedUrl: string | null = null;
+          try {
+            const { data: sData } = await db.storage
+              .from('customer_documents')
+              .createSignedUrl(doc.file_url, 3600);
+            signedUrl = sData?.signedUrl || null;
+          } catch {}
+
+          if (signedUrl) {
+            ageProofCandidates.push({
+              code: matched.code,
+              category: matched.category,
+              label: matched.label,
+              url: signedUrl,
+              fileName: doc.file_name || doc.source_filename || `${matched.code.toLowerCase()}_proof.jpg`,
+              mimeType: doc.mime_type || 'image/jpeg',
+              documentType: doc.document_type || matched.label,
+            });
+          }
+        }
+      }
+
+      // Default primary age proof: Prefer Aadhaar if present, else first available candidate
+      const primaryCandidate = ageProofCandidates.find((c) => c.code === 'ADHR') || ageProofCandidates[0] || null;
+      if (primaryCandidate) {
+        ageProofDoc = {
+          url: primaryCandidate.url,
+          type: primaryCandidate.code,
+          fileName: primaryCandidate.fileName,
+          mimeType: primaryCandidate.mimeType,
+        };
       }
 
       // Match Address Proof (Aadhaar, Electricity, Gas, Rent, Passbook, Water)
@@ -309,7 +362,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
       documents: {
         ageProof: ageProofDoc,
         addressProof: addressProofDoc,
+        ageProofCandidates,
       },
+      ageProofCandidates,
       ageProof: ageProofDoc,
       addressProof: addressProofDoc,
       ageProofUrl: ageProofDoc?.url || null,
