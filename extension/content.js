@@ -2265,23 +2265,78 @@
 
           const injected = await injectFileToPortal(inp, blob, opt.candidate.fileName || 'age_proof.jpg', false);
 
-          if (injected && inp && inp.files && inp.files.length > 0) {
-            highlightField(inp);
-            statusBox.style.borderColor = '#10b981';
-            statusBox.style.background = 'rgba(16, 185, 129, 0.15)';
-            statusDesc.style.color = '#34d399';
-            statusDesc.style.fontWeight = '700';
-            statusDesc.innerHTML = `✅ Uploaded: <strong>${escapeHtml(inp.files[0].name)}</strong> (${(inp.files[0].size / 1024).toFixed(1)} KB)`;
-            if (statusText) statusText.innerHTML = `✅ ${opt.label} registered. <strong>2-Second Upload Guard active…</strong>`;
+          // 1. Upload Presence Check: Wait up to 5 seconds for portal to register the file
+          if (statusDesc) statusDesc.textContent = '⚡ Waiting for portal to sync…';
+          if (statusText) statusText.innerHTML = '<span class="gcds-spinner"></span> Waiting for portal to sync…';
 
-            await sleep(2000);
-            cleanupListeners();
-            card.remove();
-            resolve({ action: 'UPLOADED', code: opt.code, label: opt.label });
-            return;
-          } else {
-            throw new Error('File input did not register injected file.');
+          let hasFile = false;
+          const uploadPresenceStart = Date.now();
+          while (Date.now() - uploadPresenceStart < 5000) {
+            if (inp && inp.files && inp.files.length > 0) {
+              hasFile = true;
+              break;
+            }
+            // Re-detect file input in case Angular re-attached it
+            const refreshedInp =
+              (boxG || document).querySelector('input[type="file"]#ageProof, input[type="file"][name="ageProof"]') ||
+              findElement(SELECTOR_MAP.ageProofFile);
+            if (refreshedInp && refreshedInp.files && refreshedInp.files.length > 0) {
+              hasFile = true;
+              break;
+            }
+            await sleep(250);
           }
+
+          if (!hasFile) {
+            throw new Error('File input did not register injected file within 5 seconds.');
+          }
+
+          // 2. Portal Error Detection: Check for "File size exceeds" or validation errors
+          const currentBoxG = boxG || findSectionBox('G');
+          const errorEls = Array.from((currentBoxG || document).querySelectorAll('.alert, .text-danger, .invalid-feedback, .error-message'));
+          let detectedError = null;
+          for (const el of errorEls) {
+            const errText = (el.innerText || el.textContent || '').trim();
+            if (/size exceeds|less than 2\s*mb|invalid file|upload failed|error/i.test(errText)) {
+              detectedError = errText;
+              break;
+            }
+          }
+
+          if (detectedError) {
+            statusBox.style.borderColor = '#ef4444';
+            statusBox.style.background = 'rgba(239, 68, 68, 0.15)';
+            statusDesc.style.color = '#f87171';
+            statusDesc.style.fontWeight = '700';
+            statusDesc.innerHTML = `⚠️ Portal Error: <strong>${escapeHtml(detectedError)}</strong>`;
+            if (statusText) statusText.innerHTML = `⚠️ Upload rejected by portal. Choose another file or upload manually:`;
+            handleManualMode(opt, `Portal rejected upload (${detectedError}). Please upload manually:`);
+            return;
+          }
+
+          // 3. Heartbeat / Activity ping
+          try {
+            if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
+              chrome.runtime.sendMessage({ action: 'RESET_INACTIVITY_TIMER' });
+            }
+          } catch {}
+
+          // 4. Visual confirmation with "Waiting for portal to sync..."
+          highlightField(inp);
+          statusBox.style.borderColor = '#10b981';
+          statusBox.style.background = 'rgba(16, 185, 129, 0.15)';
+          statusDesc.style.color = '#34d399';
+          statusDesc.style.fontWeight = '700';
+          const attachedName = inp.files?.[0]?.name || opt.candidate.fileName || 'file';
+          const attachedSize = inp.files?.[0]?.size ? ` (${(inp.files[0].size / 1024).toFixed(1)} KB)` : '';
+          statusDesc.innerHTML = `✅ Attached: <strong>${escapeHtml(attachedName)}</strong>${attachedSize}`;
+          if (statusText) statusText.innerHTML = `✅ ${opt.label} registered. <strong>Waiting for portal to sync…</strong>`;
+
+          await sleep(2000);
+          cleanupListeners();
+          card.remove();
+          resolve({ action: 'UPLOADED', code: opt.code, label: opt.label });
+          return;
         } catch (err) {
           console.warn('[GCDS Section G] Auto-upload error, switching to manual mode:', err);
           handleManualMode(opt, `Auto-injection could not complete (${err.message || 'Error'}). Please upload manually:`);
@@ -2584,7 +2639,12 @@
         return;
       }
 
-      const el = findElement(candidates);
+      let el = findElement(candidates);
+      if (!el) {
+        // Wait 500ms for accordion/DOM transition
+        await sleep(500);
+        el = findElement(candidates);
+      }
       if (!el) {
         skippedCount++;
         skippedFields.push(fieldKey);
@@ -2619,7 +2679,11 @@
         return;
       }
 
-      const el = findElement(candidates);
+      let el = findElement(candidates);
+      if (!el) {
+        await sleep(500);
+        el = findElement(candidates);
+      }
       if (!el) {
         skippedCount++;
         skippedFields.push(fieldKey);
@@ -3263,9 +3327,93 @@
       skippedFields.push('ageProof');
     }
 
+    /**
+     * Stability Guard: Transitions safely from Section G to Section H using a Click & Verify loop.
+     * Prevents race conditions where Angular validates the uploaded file asynchronously or collapses/re-renders DOM.
+     */
+    async function transitionSectionGToSectionH(maxAttempts = 4) {
+      console.log('[GCDS Section G->H] Starting Click & Verify transition loop to Section H...');
+
+      const isSectionHActive = () => {
+        // 1. Check if Section H box is in DOM and expanded/visible
+        const boxH = findSectionBox('H');
+        if (boxH && boxH.offsetHeight > 100) {
+          const houseNoInput = boxH.querySelector('input#houseNo, input[name="houseNo"], input');
+          if (houseNoInput) return true;
+        }
+
+        // 2. Check sidebar indicator: Section G complete, Section H current/completed
+        const sidebarItems = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
+          .filter((x) => x.innerText && /^[A-L]\./.test(x.innerText.trim()));
+        const itemH = sidebarItems.find((it) => it.innerText.trim().startsWith('H.'));
+        if (itemH && (itemH.className.includes('sidenavclassstart') || itemH.className.includes('sidenavclass'))) {
+          const itemG = sidebarItems.find((it) => it.innerText.trim().startsWith('G.'));
+          if (itemG && itemG.className.includes('sidenavclassstart')) {
+            return true;
+          }
+        }
+
+        // 3. Check global houseNo or street input visibility
+        const houseNo = document.querySelector('input#houseNo');
+        if (houseNo && houseNo.offsetParent !== null) {
+          return true;
+        }
+
+        return false;
+      };
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (isSectionHActive()) {
+          console.log(`[GCDS Section G->H] Section H is already active (attempt ${attempt}).`);
+          break;
+        }
+
+        console.log(`[GCDS Section G->H] Clicking Next on Section G (attempt ${attempt}/${maxAttempts})...`);
+        await clickSectionNextButton('G');
+
+        // Wait 2 seconds for Angular validation and DOM transition
+        await sleep(2000);
+
+        if (isSectionHActive()) {
+          console.log(`[GCDS Section G->H] Section H transition confirmed on attempt ${attempt}.`);
+          break;
+        }
+
+        // Check if Section G displays a validation error
+        const currentBoxG = findSectionBox('G');
+        const errEl = currentBoxG?.querySelector('.text-danger, .invalid-feedback, .alert');
+        if (errEl && errEl.innerText && errEl.innerText.trim()) {
+          console.warn('[GCDS Section G->H] Section G validation error blocking Next:', errEl.innerText.trim());
+          await sleep(1000);
+        }
+
+        // Sidebar click fallback on attempt 2+
+        if (attempt >= 2) {
+          console.log('[GCDS Section G->H] Triggering Section H sidebar navigation fallback...');
+          const sidebarItems = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
+            .filter((x) => x.innerText && /^[A-L]\./.test(x.innerText.trim()));
+          const itemH = sidebarItems.find((it) => it.innerText.trim().startsWith('H.'));
+          if (itemH) {
+            try {
+              itemH.click();
+              itemH.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+              await sleep(1500);
+            } catch {}
+          }
+        }
+      }
+
+      // Smooth scroll Section H into view
+      const boxH = findSectionBox('H');
+      if (boxH) {
+        try { boxH.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+        await sleep(350);
+      }
+    }
+
     // 5. Auto-advance Section G ONLY if upload confirmed!
     if (ageUploaded) {
-      await clickSectionNextButton('G');
+      await transitionSectionGToSectionH();
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -3322,7 +3470,16 @@
     const addrFileInput = (boxH || document).querySelector('input[type="file"]#currentAddressProof, input[type="file"][name="currentAddressProof"]')
       || findElement(SELECTOR_MAP.addressProofFile);
 
-    const addrDocName = DOC_NAMES[addrDocCode] || data.documents?.addressProof?.type || 'Address Proof Document';
+    const ADDRESS_DOC_NAMES = {
+      ADHR: 'Aadhaar Card',
+      WEGB: 'Water / Electricity / Gas Connection Bill',
+      PC: 'PAN Card',
+      IPSP: 'Indian Passport',
+      PBCB: 'Current Passbook (Bank / Post Office)',
+      ROD: 'Revenue / Registered Sale Deed',
+      RLA: 'Registered Rent / Lease Agreement',
+    };
+    const addrDocName = ADDRESS_DOC_NAMES[addrDocCode] || data.documents?.addressProof?.type || 'Address Proof Document';
     const addrDocUrl = data.addressProofUrl || data.documents?.addressProof?.url || null;
     const addrDocFileName = data.documents?.addressProof?.fileName || 'address-proof-document.pdf';
 

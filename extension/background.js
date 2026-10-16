@@ -352,6 +352,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       recordActivityAndResetTimer().then(() => sendResponse({ success: true }));
       return true;
 
+    case 'HEARTBEAT':
+      recordActivityAndResetTimer().then(() => sendResponse({ success: true, status: 'ALIVE' }));
+      return true;
+
     case 'CLEAR_SESSION':
       handleSessionTimeout().then(() => sendResponse({ success: true }));
       return true;
