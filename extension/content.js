@@ -381,7 +381,11 @@
    * Returns null if none found.
    */
   function findElement(selectorCandidates) {
-    for (const sel of selectorCandidates) {
+    if (!selectorCandidates) return null;
+    const candidates = Array.isArray(selectorCandidates) ? selectorCandidates : [selectorCandidates];
+    for (const sel of candidates) {
+      if (!sel) continue;
+      if (sel instanceof HTMLElement || (sel && sel.nodeType === 1)) return sel;
       try {
         const el = document.querySelector(sel);
         if (el) return el;
@@ -502,6 +506,7 @@
     if (!options || options.length === 0) return false;
 
     const normalizedTarget = String(targetValue).trim().toUpperCase();
+    const cleanTarget = normalizedTarget.replace(/[^A-Z0-9]/g, '');
 
     // Strategy 1: Exact match on option text (trimmed, uppercase)
     let target = options.find((opt) => {
@@ -509,7 +514,15 @@
       return text === normalizedTarget;
     });
 
-    // Strategy 2: Substring includes match on option text
+    // Strategy 2: Normalized alphanumeric match
+    if (!target && cleanTarget) {
+      target = options.find((opt) => {
+        const textClean = (opt.text || opt.textContent || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return textClean && (textClean === cleanTarget);
+      });
+    }
+
+    // Strategy 3: Substring includes match on option text
     if (!target) {
       target = options.find((opt) => {
         const text = (opt.text || opt.textContent || '').trim().toUpperCase();
@@ -517,7 +530,7 @@
       });
     }
 
-    // Strategy 3: Match option value directly
+    // Strategy 4: Match option value directly
     if (!target) {
       target = options.find((opt) => {
         const val = String(opt.value || '').trim().toUpperCase();
@@ -528,9 +541,10 @@
     if (target) {
       selectElement.value = target.value;
       // Essential Framework Events for Angular / React
-      selectElement.dispatchEvent(new Event('input', { bubbles: true }));
-      selectElement.dispatchEvent(new Event('change', { bubbles: true }));
-      selectElement.dispatchEvent(new Event('blur', { bubbles: true }));
+      selectElement.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      selectElement.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+      selectElement.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
+      highlightField(selectElement);
       return true;
     }
 
@@ -542,9 +556,9 @@
    * Waits for dynamic dropdown options to populate via portal API, converts options
    * safely via Array.from(el.options || []), matches target, and fires framework events.
    *
-   * @param {string|string[]} selectorOrCandidates - CSS selector or array of candidate selectors
+   * @param {HTMLElement|string|string[]} selectorOrCandidates - Select element, CSS selector, or array of candidate selectors
    * @param {string} searchText - Text to find in dropdown options
-   * @param {number} maxRetries - Max retry attempts (default 10, 1000ms each)
+   * @param {number} maxRetries - Max retry attempts (default 10, 500ms each)
    * @returns {Promise<boolean>}
    */
   async function selectDropdownSafe(selectorOrCandidates, searchText, maxRetries = 10) {
@@ -552,36 +566,51 @@
     const searchStr = String(searchText).trim();
     if (!searchStr) return false;
 
-    const candidates = Array.isArray(selectorOrCandidates)
-      ? selectorOrCandidates
-      : [selectorOrCandidates];
-
     let el = null;
+    if (selectorOrCandidates && (selectorOrCandidates instanceof HTMLElement || selectorOrCandidates.nodeType === 1)) {
+      el = selectorOrCandidates;
+    } else {
+      const candidates = Array.isArray(selectorOrCandidates)
+        ? selectorOrCandidates
+        : [selectorOrCandidates];
 
-    // 1. Wait for options to populate (maxRetries * 1000ms)
-    for (let i = 0; i < maxRetries; i++) {
-      el = findElement(candidates);
-      if (el) {
-        const opts = getOptionsSafe(el);
-        if (opts.length > 1) break;
+      // 1. Wait for element to exist and options to populate
+      for (let i = 0; i < maxRetries; i++) {
+        el = findElement(candidates);
+        if (el) {
+          const opts = getOptionsSafe(el);
+          if (opts.length > 1 || (opts.length === 1 && opts[0].value && opts[0].value !== '')) break;
+        }
+        await sleep(500);
       }
-      await sleep(1000);
+      el = findElement(candidates);
     }
 
-    el = findElement(candidates);
     if (!el) return false;
 
-    // 2. Safe Array Conversion
+    // 2. Wait for options on el to populate if only 0 or 1 placeholder option exists
+    for (let i = 0; i < maxRetries; i++) {
+      const opts = getOptionsSafe(el);
+      if (opts.length > 1 || (opts.length === 1 && opts[0].value && opts[0].value !== '')) break;
+      await sleep(500);
+    }
+
+    // 3. Safe Array Conversion
     const options = getOptionsSafe(el);
     if (!options || options.length === 0) return false;
 
     const targetUpper = searchStr.toUpperCase();
+    const targetClean = targetUpper.replace(/[^A-Z0-9]/g, '');
 
-    // Find target option (exact text match first, then includes, then value)
+    // Find target option (exact text match first, then normalized alphanumeric, then includes, then value)
     const target =
       options.find((opt) => {
         const text = (opt.text || opt.textContent || '').trim().toUpperCase();
         return text === targetUpper;
+      }) ||
+      options.find((opt) => {
+        const textClean = (opt.text || opt.textContent || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return textClean && targetClean && (textClean === targetClean);
       }) ||
       options.find((opt) => {
         const text = (opt.text || opt.textContent || '').trim().toUpperCase();
@@ -598,10 +627,10 @@
 
     if (target) {
       el.value = target.value;
-      // 3. Essential Framework Events (Angular / React)
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('blur', { bubbles: true }));
+      // Essential Framework Events (Angular / React)
+      el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+      el.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
       highlightField(el);
       return true;
     }
@@ -2915,7 +2944,9 @@
         await sleep(500);
 
         if (districtVal) {
-          const districtFilled = await selectDropdownSafe(SELECTOR_MAP.district, districtVal, 10);
+          const boxA = findSectionBox('A');
+          const secADistSelect = boxA ? boxA.querySelector('select#districtCd, select[name="districtCd"]') : null;
+          const districtFilled = await selectDropdownSafe(secADistSelect || SELECTOR_MAP.district, districtVal, 10);
           if (districtFilled) {
             filledCount++;
 
@@ -3823,7 +3854,16 @@
       skippedFields.push('tehsil');
     }
 
-    // 6. District Dropdown: Select correct district from portal dropdown using selectDropdownSafe
+    // Section H State dropdown (select#currentStateCd) using selectDropdownSafe
+    if (stateVal) {
+      const secHState = (boxH || document).querySelector('select#currentStateCd, select[name="currentStateCd"]');
+      if (secHState && !secHState.disabled && secHState.value !== stateVal) {
+        await selectDropdownSafe(secHState, stateVal, 5);
+        await sleep(500);
+      }
+    }
+
+    // 6. District Dropdown (District *): Select correct district from portal dropdown strictly scoped to Section H
     const secHDistrictVal = (
       data.district ||
       addr.district ||
@@ -3834,24 +3874,32 @@
     ).trim();
 
     if (secHDistrictVal) {
-      const districtSelected = await selectDropdownSafe(
-        ['select#districtCd', 'select#district', 'select[name="districtCd"]', 'select[name="district"]', ...SELECTOR_MAP.district],
-        secHDistrictVal,
-        10
-      );
+      let secHDistSelect = null;
+      if (boxH) {
+        secHDistSelect = boxH.querySelector('select#districtCd, select[name="districtCd"], select#district');
+      }
+      if (!secHDistSelect) {
+        const allDist = Array.from(document.querySelectorAll('select#districtCd, select[name="districtCd"], select[aria-label="District"]'));
+        secHDistSelect = allDist.length > 1 ? allDist[1] : allDist[0];
+      }
+
+      let districtSelected = false;
+      if (secHDistSelect) {
+        console.log(`[GCDS Section H] Selecting District * on scoped element:`, secHDistSelect, `Target: "${secHDistrictVal}"`);
+        districtSelected = await selectDropdownSafe(secHDistSelect, secHDistrictVal, 10);
+      } else {
+        districtSelected = await selectDropdownSafe(
+          ['select#districtCd', 'select#district', 'select[name="districtCd"]', 'select[name="district"]', ...SELECTOR_MAP.district],
+          secHDistrictVal,
+          10
+        );
+      }
+
       if (districtSelected) {
         filledCount++;
       } else {
         skippedCount++;
         skippedFields.push('district');
-      }
-    }
-
-    // Section H State dropdown (select#currentStateCd) using selectDropdownSafe
-    if (stateVal) {
-      const secHState = (boxH || document).querySelector('select#currentStateCd[name="currentStateCd"]');
-      if (secHState) {
-        await selectDropdownSafe(secHState, stateVal, 5);
       }
     }
 
