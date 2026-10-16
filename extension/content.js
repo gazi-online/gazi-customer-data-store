@@ -733,18 +733,39 @@
    * @returns {HTMLElement|null}
    */
   function findSectionBox(letter) {
-    const prefix = `${letter.toUpperCase()}.`;
-    const allBoxes = document.querySelectorAll('.box');
+    const lUpper = (letter || '').toUpperCase();
+    const prefix = `${lUpper}.`;
+    const numPrefix = {
+      A: '1.', B: '2.', C: '3.', D: '4.', E: '5.', F: '6.', G: '7.', H: '8.', I: '9.', J: '10.', K: '11.', L: '12.'
+    }[lUpper];
+    const sectionKeywords = {
+      H: ['Present Address', 'Address Details', 'বর্তমান ঠিকানা'],
+      G: ['Date of Birth', 'DOB', 'জন্মতারিখ'],
+      C: ['Relative', 'আত্মীয়'],
+      B: ['Personal Details', 'Name of Applicant', 'ব্যক্তিগত'],
+      A: ['Select State', 'District', 'AC', 'রাজ্য'],
+      I: ['Disability', 'প্রতিবন্ধী'],
+      J: ['Family Member', 'EPIC', 'পরিবার'],
+      K: ['Declaration', 'ঘোষণাপত্র'],
+    }[lUpper] || [];
+
+    const allBoxes = document.querySelectorAll('.box, .card, .accordion-item');
     for (const box of allBoxes) {
       const title = box.querySelector('.form-title, h1, h2, h3, h4, h5, h6, strong')?.textContent?.trim() || '';
-      if (title.toUpperCase().startsWith(prefix)) {
+      if (title.toUpperCase().startsWith(prefix) || (numPrefix && title.startsWith(numPrefix))) {
         return box;
+      }
+      for (const kw of sectionKeywords) {
+        if (title.includes(kw)) return box;
       }
     }
     for (const box of allBoxes) {
       const text = (box.innerText || box.textContent || '').trim();
-      if (text.toUpperCase().startsWith(prefix)) {
+      if (text.toUpperCase().startsWith(prefix) || (numPrefix && text.startsWith(numPrefix))) {
         return box;
+      }
+      for (const kw of sectionKeywords) {
+        if (text.includes(kw)) return box;
       }
     }
     return null;
@@ -3499,27 +3520,47 @@
       console.log('[GCDS Section G->H] Starting Click & Verify transition loop to Section H...');
 
       const isSectionHActive = () => {
-        // 1. Check if Section H box is in DOM and expanded/visible
-        const boxH = findSectionBox('H');
-        if (boxH && boxH.offsetHeight > 100) {
-          const houseNoInput = boxH.querySelector('input#houseNo, input[name="houseNo"], input');
-          if (houseNoInput) return true;
-        }
-
-        // 2. Check sidebar indicator: Section G complete, Section H current/completed
-        const sidebarItems = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
-          .filter((x) => x.innerText && /^[A-L]\./.test(x.innerText.trim()));
-        const itemH = sidebarItems.find((it) => it.innerText.trim().startsWith('H.'));
-        if (itemH && (itemH.className.includes('sidenavclassstart') || itemH.className.includes('sidenavclass'))) {
-          const itemG = sidebarItems.find((it) => it.innerText.trim().startsWith('G.'));
-          if (itemG && itemG.className.includes('sidenavclassstart')) {
+        // 1. Detection: Detect the header "H. Present Address Details" / "8. Present Address Details"
+        const secHTitle = Array.from(document.querySelectorAll('.form-title, h1, h2, h3, h4, h5, strong, div')).find(
+          (el) => {
+            const t = (el.innerText || el.textContent || '').trim();
+            return (
+              t.includes('H. Present Address Details') ||
+              t.includes('8. Present Address Details') ||
+              t.includes('Present Address Details') ||
+              t.includes('বর্তমান ঠিকানা')
+            );
+          }
+        );
+        if (secHTitle) {
+          const parentBox = secHTitle.closest('.box, .card, div');
+          if (parentBox && (parentBox.offsetHeight > 80 || parentBox.offsetParent !== null)) {
             return true;
           }
         }
 
-        // 3. Check global houseNo or street input visibility
-        const houseNo = document.querySelector('input#houseNo');
+        // 2. Check if Section H box is in DOM and expanded/visible
+        const boxH = findSectionBox('H');
+        if (boxH && (boxH.offsetHeight > 80 || boxH.offsetParent !== null)) {
+          const input = boxH.querySelector('input#doorD, input#houseNo, input[name="houseNo"], input#areasD, input[name="street"]');
+          if (input) return true;
+        }
+
+        // 3. Check sidebar indicator: Section G complete, Section H current/completed
+        const sidebarItems = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
+          .filter((x) => x.innerText && /^[A-L]\./.test(x.innerText.trim()));
+        const itemH = sidebarItems.find((it) => it.innerText.trim().startsWith('H.'));
+        if (itemH && (itemH.className.includes('sidenavclassstart') || itemH.className.includes('sidenavclass'))) {
+          return true;
+        }
+
+        // 4. Check global doorD/houseNo or areasD/street input visibility
+        const houseNo = document.querySelector('input#doorD, input#houseNo, input[name="houseNo"]');
         if (houseNo && houseNo.offsetParent !== null) {
+          return true;
+        }
+        const streetInput = document.querySelector('input#areasD, input#streetArea, input[name="street"]');
+        if (streetInput && streetInput.offsetParent !== null) {
           return true;
         }
 
@@ -3812,6 +3853,51 @@
       if (secHState) {
         await selectDropdownSafe(secHState, stateVal, 5);
       }
+    }
+
+    // ─── Final Validation Check for Section H ──────────────────────────────────
+    const curH = findSectionBox('H') || document;
+    const fHouse = curH.querySelector('input#doorD, input#houseNo, input[name="houseNo"]')?.value?.trim();
+    const fStreet = curH.querySelector('input#areasD, input#streetArea, input[name="street"]')?.value?.trim();
+    const fVillage = curH.querySelector('input#villageD, input#villageTown, input[name="village"]')?.value?.trim();
+    const fPost = curH.querySelector('input#postH, input#postOffice, input[name="postOffice"]')?.value?.trim();
+    const fPin = curH.querySelector('input#pinCode, input[name="pinCode"]')?.value?.trim();
+    const fTehsil = curH.querySelector('input#areasH, input#tehsil, input[name="currentAddressTeh"]')?.value?.trim();
+    const fDist = curH.querySelector('select#districtCd, select[name="districtCd"]')?.value?.trim();
+
+    const secHValid = {
+      houseNo: !!fHouse,
+      street: !!fStreet,
+      village: !!fVillage,
+      postOffice: !!fPost,
+      pincode: /^\d{6}$/.test(fPin || ''),
+      tehsil: !!fTehsil,
+      district: !!fDist,
+    };
+
+    const isSecHComplete = Object.values(secHValid).every(Boolean);
+    console.log('📋 [GCDS Section H Final Validation]', secHValid, 'Complete:', isSecHComplete);
+
+    // Dispatch full synthetic events on all Section H inputs to ensure React/Angular acceptance
+    [
+      curH.querySelector('input#doorD, input#houseNo, input[name="houseNo"]'),
+      curH.querySelector('input#areasD, input#streetArea, input[name="street"]'),
+      curH.querySelector('input#villageD, input#villageTown, input[name="village"]'),
+      curH.querySelector('input#postH, input#postOffice, input[name="postOffice"]'),
+      curH.querySelector('input#pinCode, input[name="pinCode"]'),
+      curH.querySelector('input#areasH, input#tehsil, input[name="currentAddressTeh"]'),
+      curH.querySelector('select#districtCd, select[name="districtCd"]'),
+    ].filter(Boolean).forEach((inp) => {
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+      inp.dispatchEvent(new Event('blur', { bubbles: true }));
+    });
+
+    // Unlock the Section H Next button so operator can click Next manually
+    const nextBtnH = curH.querySelector('button.next-btn');
+    if (nextBtnH) {
+      nextBtnH.classList.remove('buttonDisable');
+      nextBtnH.removeAttribute('disabled');
     }
 
     // ─── Section H: Address Proof Document Upload ──────────────────────────────
