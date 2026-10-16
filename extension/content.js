@@ -809,13 +809,28 @@
    */
   async function clickSectionNextButton(letter) {
     try {
+      const lUpper = (letter || '').toUpperCase();
+      const letterIndex = lUpper.charCodeAt(0) - 'A'.charCodeAt(0);
+      const nextLetter = String.fromCharCode('A'.charCodeAt(0) + letterIndex + 1);
+
       const box = findSectionBox(letter);
-      if (!box) {
-        return false;
+      let nextBtn = box ? box.querySelector('button.next-btn, button[aria-label*="Next" i]') : null;
+
+      // Fallback 1: match by aria-label containing nextLetter (e.g. "Move to Part H , Next")
+      if (!nextBtn) {
+        nextBtn = document.querySelector(
+          `button[aria-label*="Move to Part ${nextLetter}" i], button[aria-label*="Part ${nextLetter}" i], button[aria-label*="Move to Part ${letterIndex + 2}" i]`
+        );
       }
 
-      const nextBtn = box.querySelector('button.next-btn, button[aria-label*="Next" i]');
+      // Fallback 2: match from all .next-btn by section index
       if (!nextBtn) {
+        const allNextBtns = Array.from(document.querySelectorAll('button.next-btn'));
+        nextBtn = allNextBtns[letterIndex] || null;
+      }
+
+      if (!nextBtn) {
+        console.warn(`[GCDS Next Button] Next button for Section ${letter} not found.`);
         return false;
       }
 
@@ -861,8 +876,6 @@
 
       // 5. Sidebar progression backup:
       // If the current section is complete and the next section exists, trigger next section activation
-      const letterIndex = letter.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
-      const nextLetter = String.fromCharCode('A'.charCodeAt(0) + letterIndex + 1);
       const sidebarItems = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
         .filter((x) => x.innerText && /^[A-L]\./.test(x.innerText.trim()));
       const nextSidebar = sidebarItems.find((it) => it.innerText.trim().startsWith(nextLetter + '.'));
@@ -3543,6 +3556,17 @@
       skippedFields.push('ageProof');
     }
 
+    // Safety net: check if file is already present on the input
+    const curFileInput =
+      ageFileInput ||
+      (boxG || document).querySelector('input[type="file"]#ageProof, input[type="file"][name="ageProof"]') ||
+      findElement(SELECTOR_MAP.ageProofFile);
+    if (!ageUploaded && curFileInput && curFileInput.files && curFileInput.files.length > 0) {
+      console.log('[GCDS Section G] File detected on file input directly. Setting ageUploaded = true.');
+      ageUploaded = true;
+      filledCount++;
+    }
+
     /**
      * Stability Guard: Transitions safely from Section G to Section H using a Click & Verify loop.
      * Prevents race conditions where Angular validates the uploaded file asynchronously or collapses/re-renders DOM.
@@ -3551,67 +3575,56 @@
       console.log('[GCDS Section G->H] Starting Click & Verify transition loop to Section H...');
 
       const isSectionHActive = () => {
-        // 1. Detection: Detect the header "H. Present Address Details" / "8. Present Address Details"
-        const secHTitle = Array.from(document.querySelectorAll('.form-title, h1, h2, h3, h4, h5, strong, div')).find(
-          (el) => {
-            const t = (el.innerText || el.textContent || '').trim();
-            return (
-              t.includes('H. Present Address Details') ||
-              t.includes('8. Present Address Details') ||
-              t.includes('Present Address Details') ||
-              t.includes('বর্তমান ঠিকানা')
-            );
-          }
-        );
-        if (secHTitle) {
-          const parentBox = secHTitle.closest('.box, .card, div');
-          if (parentBox && (parentBox.offsetHeight > 80 || parentBox.offsetParent !== null)) {
-            return true;
-          }
-        }
-
-        // 2. Check if Section H box is in DOM and expanded/visible
-        const boxH = findSectionBox('H');
-        if (boxH && (boxH.offsetHeight > 80 || boxH.offsetParent !== null)) {
-          const input = boxH.querySelector('input#doorD, input#houseNo, input[name="houseNo"], input#areasD, input[name="street"]');
-          if (input) return true;
-        }
-
-        // 3. Check sidebar indicator: Section G complete, Section H current/completed
+        // In the portal's sidebar:
+        // Section G complete -> 'sidenavclassstart'
+        // Section H active -> 'sidenavclass' or 'sidenavclassstart'
         const sidebarItems = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
           .filter((x) => x.innerText && /^[A-L]\./.test(x.innerText.trim()));
+        const itemG = sidebarItems.find((it) => it.innerText.trim().startsWith('G.'));
         const itemH = sidebarItems.find((it) => it.innerText.trim().startsWith('H.'));
+
+        if (itemG && itemG.className.includes('sidenavclassstart')) {
+          return true;
+        }
         if (itemH && (itemH.className.includes('sidenavclassstart') || itemH.className.includes('sidenavclass'))) {
           return true;
         }
-
-        // 4. Check global doorD/houseNo or areasD/street input visibility
-        const houseNo = document.querySelector('input#doorD, input#houseNo, input[name="houseNo"]');
-        if (houseNo && houseNo.offsetParent !== null) {
-          return true;
-        }
-        const streetInput = document.querySelector('input#areasD, input#streetArea, input[name="street"]');
-        if (streetInput && streetInput.offsetParent !== null) {
-          return true;
-        }
-
         return false;
       };
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        if (isSectionHActive()) {
-          console.log(`[GCDS Section G->H] Section H is already active (attempt ${attempt}).`);
-          break;
-        }
-
         console.log(`[GCDS Section G->H] Clicking Next on Section G (attempt ${attempt}/${maxAttempts})...`);
-        await clickSectionNextButton('G');
+        const clicked = await clickSectionNextButton('G');
+        console.log(`[GCDS Section G->H] Section G clickSectionNextButton result: ${clicked}`);
 
-        // Wait 2 seconds for Angular validation and DOM transition
-        await sleep(2000);
+        // Wait 1.5 seconds for Angular/React validation and transition
+        await sleep(1500);
 
         if (isSectionHActive()) {
           console.log(`[GCDS Section G->H] Section H transition confirmed on attempt ${attempt}.`);
+          break;
+        }
+
+        // Direct sidebar click fallback
+        console.log(`[GCDS Section G->H] Triggering Section H sidebar navigation fallback...`);
+        const sidebarItems = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
+          .filter((x) => x.innerText && /^[A-L]\./.test(x.innerText.trim()));
+        const itemH = sidebarItems.find((it) => it.innerText.trim().startsWith('H.'));
+        if (itemH) {
+          try {
+            itemH.click();
+            itemH.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            const innerLink = itemH.querySelector('.content_sidenav');
+            if (innerLink) {
+              innerLink.click();
+              innerLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            }
+            await sleep(1500);
+          } catch {}
+        }
+
+        if (isSectionHActive()) {
+          console.log(`[GCDS Section G->H] Section H transition confirmed via sidebar on attempt ${attempt}.`);
           break;
         }
 
@@ -3621,21 +3634,6 @@
         if (errEl && errEl.innerText && errEl.innerText.trim()) {
           console.warn('[GCDS Section G->H] Section G validation error blocking Next:', errEl.innerText.trim());
           await sleep(1000);
-        }
-
-        // Sidebar click fallback on attempt 2+
-        if (attempt >= 2) {
-          console.log('[GCDS Section G->H] Triggering Section H sidebar navigation fallback...');
-          const sidebarItems = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
-            .filter((x) => x.innerText && /^[A-L]\./.test(x.innerText.trim()));
-          const itemH = sidebarItems.find((it) => it.innerText.trim().startsWith('H.'));
-          if (itemH) {
-            try {
-              itemH.click();
-              itemH.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-              await sleep(1500);
-            } catch {}
-          }
         }
       }
 
