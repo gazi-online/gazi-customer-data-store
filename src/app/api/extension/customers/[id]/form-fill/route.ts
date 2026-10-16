@@ -210,6 +210,86 @@ export async function GET(req: NextRequest, context: RouteContext) {
       }
     }
 
+    // 5b. Resolve Age Proof and Address Proof documents from customer_documents
+    let ageProofDoc: { url: string; type: string; fileName: string; mimeType: string } | null = null;
+    let addressProofDoc: { url: string; type: string; fileName: string; mimeType: string } | null = null;
+
+    try {
+      const { data: customerDocs } = await db
+        .from('customer_documents')
+        .select('id, document_type, file_url, file_name, mime_type, status')
+        .eq('customer_id', customer.id)
+        .order('created_at', { ascending: false });
+
+      const activeDocs = (customerDocs || []).filter((d: any) => d.status === 'active' || !d.status);
+
+      // Match Age Proof (Aadhaar, PAN, Birth Certificate, Passport, Class X/XII)
+      const ageCandidate = activeDocs.find((d: any) => {
+        const t = (d.document_type || '').toLowerCase();
+        return t.includes('aadhaar') || t.includes('pan') || t.includes('birth') || t.includes('passport') || t.includes('certificate');
+      });
+
+      if (ageCandidate?.file_url) {
+        let ageUrl: string | null = null;
+        try {
+          const { data: sData } = await db.storage
+            .from('customer_documents')
+            .createSignedUrl(ageCandidate.file_url, 3600);
+          ageUrl = sData?.signedUrl || null;
+        } catch {}
+
+        if (ageUrl) {
+          const t = (ageCandidate.document_type || '').toLowerCase();
+          let docCode = 'ADHR';
+          if (t.includes('pan')) docCode = 'PC';
+          else if (t.includes('passport')) docCode = 'IPSP';
+          else if (t.includes('birth')) docCode = 'BCMR';
+          else if (t.includes('driving')) docCode = 'DL';
+
+          ageProofDoc = {
+            url: ageUrl,
+            type: docCode,
+            fileName: ageCandidate.file_name || 'age_proof.jpg',
+            mimeType: ageCandidate.mime_type || 'image/jpeg',
+          };
+        }
+      }
+
+      // Match Address Proof (Aadhaar, Electricity, Gas, Rent, Passbook, Water)
+      const addressCandidate = activeDocs.find((d: any) => {
+        const t = (d.document_type || '').toLowerCase();
+        return t.includes('aadhaar') || t.includes('electric') || t.includes('gas') || t.includes('bill') || t.includes('rent') || t.includes('passbook');
+      });
+
+      if (addressCandidate?.file_url) {
+        let addrUrl: string | null = null;
+        try {
+          const { data: sData } = await db.storage
+            .from('customer_documents')
+            .createSignedUrl(addressCandidate.file_url, 3600);
+          addrUrl = sData?.signedUrl || null;
+        } catch {}
+
+        if (addrUrl) {
+          const t = (addressCandidate.document_type || '').toLowerCase();
+          let docCode = 'ADHR';
+          if (t.includes('water') || t.includes('electric') || t.includes('gas')) docCode = 'WEGB';
+          else if (t.includes('rent')) docCode = 'RRLD';
+          else if (t.includes('passbook')) docCode = 'CPNS';
+          else if (t.includes('passport')) docCode = 'IPSP';
+
+          addressProofDoc = {
+            url: addrUrl,
+            type: docCode,
+            fileName: addressCandidate.file_name || 'address_proof.jpg',
+            mimeType: addressCandidate.mime_type || 'image/jpeg',
+          };
+        }
+      }
+    } catch (docsErr) {
+      console.warn('[form-fill] Document lookup skipped:', docsErr);
+    }
+
     // 6. Map to exact Form Fill DTO with verified Electoral V3 columns
     const fullName = [customer.first_name, customer.middle_name, customer.last_name]
       .filter(Boolean)
@@ -226,6 +306,16 @@ export async function GET(req: NextRequest, context: RouteContext) {
       ['aadhaar' + 'Number']: cleanAadhaar,
       photo_url: resolvedPhotoUrl,
       photoUrl: resolvedPhotoUrl,
+      documents: {
+        ageProof: ageProofDoc,
+        addressProof: addressProofDoc,
+      },
+      ageProof: ageProofDoc,
+      addressProof: addressProofDoc,
+      ageProofUrl: ageProofDoc?.url || null,
+      ageProofType: ageProofDoc?.type || null,
+      addressProofUrl: addressProofDoc?.url || null,
+      addressProofType: addressProofDoc?.type || null,
 
       name: {
         firstName: customer.first_name,

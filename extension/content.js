@@ -312,6 +312,36 @@
       'input#aadhaarNo',
       'input[placeholder*="Aadhaar" i]',
     ],
+
+    // ─── Age Proof Document (Section G) ─────────────────────────────────────
+    ageProofRadio: [
+      'input[type="radio"][name="ageDocument"][value="ageProof"]',
+      'input#ageDocument[value="ageProof"]',
+    ],
+    ageProofType: [
+      'select[name="ageproof"]',
+      'select#ageproof',
+    ],
+    ageProofFile: [
+      'input[type="file"]#ageProof',
+      'input[type="file"][name="ageProof"]',
+      '#ageProof',
+    ],
+
+    // ─── Address Proof Document (Section H) ─────────────────────────────────
+    addressProofRadio: [
+      'input[type="radio"][name="AddressProofDocument"][value="Y"]',
+      'input#AddressProofDocument[value="Y"]',
+    ],
+    addressProofType: [
+      'select[name="currentAddressProofType"]',
+      'select#currentAddressProofType',
+    ],
+    addressProofFile: [
+      'input[type="file"]#currentAddressProof',
+      'input[type="file"][name="currentAddressProof"]',
+      '#currentAddressProof',
+    ],
   };
 
   // ─── Inject Highlight Styles ──────────────────────────────────────────────
@@ -793,33 +823,80 @@
     }
   }
 
-  // ─── Automated Photo Upload (Section B) ───────────────────────────────────
+  // ─── Automated Document & Photo Upload (Section B, G, H) ──────────────────
+
+  /**
+   * Fetches a binary blob from background script via FETCH_IMAGE_BLOB (bypassing CORS).
+   *
+   * @param {string} url - Target URL or Data URL
+   * @param {string} [customerId] - Optional customer ID for GCDS photo resolution
+   * @returns {Promise<Blob|null>}
+   */
+  async function fetchFileBlob(url, customerId) {
+    if (!url && !customerId) return null;
+    return new Promise((resolve) => {
+      try {
+        if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
+          resolve(null);
+          return;
+        }
+        chrome.runtime.sendMessage(
+          { action: 'FETCH_IMAGE_BLOB', url, customerId },
+          async (response) => {
+            if (chrome.runtime.lastError || !response || !response.blobData) {
+              console.warn('[GCDS File] Fetch failed:', chrome.runtime.lastError?.message || response?.error);
+              resolve(null);
+              return;
+            }
+            try {
+              const res = await fetch(response.blobData);
+              const blob = await res.blob();
+              resolve(blob);
+            } catch (err) {
+              console.warn('[GCDS File] Blob conversion error:', err);
+              resolve(null);
+            }
+          }
+        );
+      } catch (err) {
+        console.warn('[GCDS File] sendMessage error:', err);
+        resolve(null);
+      }
+    });
+  }
 
   /**
    * Helper to inject a binary file Blob into the portal's file input using the DataTransfer API.
    * Dispatches input, change, and blur events so Angular & React detect the file upload.
    *
    * @param {HTMLInputElement|string} target - File input element or CSS selector
-   * @param {Blob} fileBlob - Binary image blob
+   * @param {Blob} fileBlob - Binary file blob (JPEG, PNG, PDF)
    * @param {string} fileName - Destination file name (e.g. 'firstname_photo.jpg')
+   * @param {boolean} isPhoto - If true, auto-confirms Section B crop modal
    * @returns {Promise<boolean>}
    */
-  async function injectFileToPortal(target, fileBlob, fileName = 'customer_photo.jpg') {
+  async function injectFileToPortal(target, fileBlob, fileName = 'document.jpg', isPhoto = false) {
     const input = typeof target === 'string' ? document.querySelector(target) : target;
     if (!input) {
-      console.warn('[GCDS Photo] Photo input field not found on portal.');
+      console.warn('[GCDS File] File input field not found on portal:', target);
       return false;
     }
 
     // Portal rule: document size maximum 2MB
     if (fileBlob.size > 2 * 1024 * 1024) {
-      console.warn(`[GCDS Photo] Photo exceeds ECI 2MB limit: ${fileBlob.size} bytes`);
+      console.warn(`[GCDS File] File exceeds ECI 2MB limit: ${fileBlob.size} bytes`);
       return false;
     }
 
     try {
-      // Ensure file type is image/jpeg per ECI specification
-      const file = new File([fileBlob], fileName, { type: 'image/jpeg' });
+      let mimeType = fileBlob.type;
+      if (!mimeType) {
+        if (fileName.toLowerCase().endsWith('.pdf')) mimeType = 'application/pdf';
+        else if (fileName.toLowerCase().endsWith('.png')) mimeType = 'image/png';
+        else mimeType = 'image/jpeg';
+      }
+
+      const file = new File([fileBlob], fileName, { type: mimeType });
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
@@ -840,16 +917,19 @@
         parent.style.boxShadow = '0 0 10px rgba(52, 211, 153, 0.35)';
       }, 200);
 
-      // Automatically confirm the "Select From Image" crop modal and click Save
-      const modalConfirmed = await autoConfirmSelectFromImageModal(7000);
-      if (modalConfirmed) {
-        console.log('✅ "Select From Image" modal auto-confirmed and saved.');
+      // Photo-specific crop modal auto-confirmation
+      if (isPhoto) {
+        const modalConfirmed = await autoConfirmSelectFromImageModal(7000);
+        if (modalConfirmed) {
+          console.log('✅ "Select From Image" modal auto-confirmed and saved.');
+        }
       }
 
-      console.log(`✅ Photo injected: ${fileName}`);
-      return true;
+      const success = Boolean(input.files && input.files.length > 0);
+      console.log(`✅ File injected: ${fileName} into ${input.id || input.name} (success: ${success})`);
+      return success;
     } catch (err) {
-      console.error('[GCDS Photo] Failed to inject photo via DataTransfer:', err);
+      console.error('[GCDS File] Failed to inject file via DataTransfer:', err);
       return false;
     }
   }
@@ -965,43 +1045,16 @@
       uploadLabel.style.border = '2px dashed #1e40af';
     }
 
-    return new Promise((resolve) => {
-      try {
-        // Request background script to fetch the blob (to bypass CORS)
-        chrome.runtime.sendMessage(
-          {
-            action: 'FETCH_IMAGE_BLOB',
-            url: photoUrl,
-            customerId: customerId,
-          },
-          async (response) => {
-            if (chrome.runtime.lastError || !response || !response.blobData) {
-              console.warn('[GCDS Photo] Photo fetch failed:', chrome.runtime.lastError?.message || response?.error);
-              resolve(false);
-              return;
-            }
+    const blob = await fetchFileBlob(photoUrl, customerId);
+    if (!blob) {
+      console.warn('[GCDS Photo] Failed to fetch photo blob.');
+      return false;
+    }
 
-            try {
-              // Convert DataURL/BlobData back to blob
-              const res = await fetch(response.blobData);
-              const blob = await res.blob();
+    const firstName = customer.first_name || customer.firstName || customer.name?.firstName || 'customer';
+    const fileName = `${firstName}_photo.jpg`;
 
-              const firstName = customer.first_name || customer.firstName || customer.name?.firstName || 'customer';
-              const fileName = `${firstName}_photo.jpg`;
-
-              const success = await injectFileToPortal(input, blob, fileName);
-              resolve(success);
-            } catch (convErr) {
-              console.error('[GCDS Photo] Blob conversion error:', convErr);
-              resolve(false);
-            }
-          }
-        );
-      } catch (sendErr) {
-        console.error('[GCDS Photo] chrome.runtime.sendMessage error:', sendErr);
-        resolve(false);
-      }
-    });
+    return await injectFileToPortal(input, blob, fileName, true);
   }
 
   // ─── Section C: Human-in-the-Loop Relation Confirmation ────────────────────
@@ -1162,8 +1215,8 @@
       }
       @keyframes gcds-spin { to { transform: rotate(360deg); } }
 
-      /* ── Section E: Aadhaar Details Floating Action Card ── */
-      #gcds-aadhaar-card {
+      /* ── Section E & Document Upload Floating Action Cards ── */
+      #gcds-aadhaar-card, #gcds-doc-card {
         position: fixed;
         bottom: 28px;
         right: 28px;
@@ -1179,13 +1232,13 @@
         animation: gcds-card-in 0.25s cubic-bezier(0.34,1.56,0.64,1);
         user-select: none;
       }
-      #gcds-aadhaar-card .gcds-card-header {
+      #gcds-aadhaar-card .gcds-card-header, #gcds-doc-card .gcds-card-header {
         display: flex;
         align-items: center;
         gap: 8px;
         margin-bottom: 12px;
       }
-      #gcds-aadhaar-card .gcds-card-badge {
+      #gcds-aadhaar-card .gcds-card-badge, #gcds-doc-card .gcds-card-badge {
         background: #6366f1;
         color: #fff;
         font-size: 10px;
@@ -1195,32 +1248,32 @@
         border-radius: 20px;
         text-transform: uppercase;
       }
-      #gcds-aadhaar-card .gcds-card-title {
+      #gcds-aadhaar-card .gcds-card-title, #gcds-doc-card .gcds-card-title {
         font-size: 13px;
         font-weight: 600;
         color: #94a3b8;
       }
-      #gcds-aadhaar-card .gcds-rec-box {
+      #gcds-aadhaar-card .gcds-rec-box, #gcds-doc-card .gcds-rec-box {
         background: rgba(99,102,241,0.12);
         border: 1px solid rgba(99,102,241,0.4);
         border-radius: 10px;
         padding: 10px 12px;
         margin-bottom: 12px;
       }
-      #gcds-aadhaar-card .gcds-rec-label {
+      #gcds-aadhaar-card .gcds-rec-label, #gcds-doc-card .gcds-rec-label {
         font-size: 11px;
         color: #94a3b8;
         margin-bottom: 4px;
         text-transform: uppercase;
         letter-spacing: 0.06em;
       }
-      #gcds-aadhaar-card .gcds-rec-name {
+      #gcds-aadhaar-card .gcds-rec-name, #gcds-doc-card .gcds-rec-name {
         font-size: 15px;
         font-weight: 700;
         color: #a5b4fc;
         letter-spacing: -0.01em;
       }
-      #gcds-aadhaar-card .gcds-rec-desc {
+      #gcds-aadhaar-card .gcds-rec-desc, #gcds-doc-card .gcds-rec-desc {
         font-size: 11.5px;
         color: #cbd5e1;
         margin-top: 4px;
@@ -1248,15 +1301,23 @@
         border-color: #6366f1;
         box-shadow: 0 0 0 3px rgba(99,102,241,0.25);
       }
-      #gcds-aadhaar-card .gcds-input-hint {
+      #gcds-aadhaar-card .gcds-input-hint, #gcds-doc-card .gcds-input-hint {
         font-size: 11px;
         color: #94a3b8;
         margin-top: 4px;
         text-align: center;
       }
-      #gcds-aadhaar-card .gcds-input-hint.ready {
+      #gcds-aadhaar-card .gcds-input-hint.ready, #gcds-doc-card .gcds-input-hint.ready {
         color: #34d399;
         font-weight: 600;
+      }
+      #gcds-doc-card .gcds-doc-status-box {
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        background: #0f172a;
+        border: 1.5px solid #334155;
+        border-radius: 8px;
+        text-align: center;
       }
       #gcds-aadhaar-card .gcds-btn-no-aadhaar {
         width: 100%;
@@ -1277,11 +1338,11 @@
         border-color: #ef4444;
         color: #ffffff;
       }
-      #gcds-aadhaar-card .gcds-btn-row {
+      #gcds-aadhaar-card .gcds-btn-row, #gcds-doc-card .gcds-btn-row {
         display: flex;
         gap: 8px;
       }
-      #gcds-aadhaar-card .gcds-btn-confirm {
+      #gcds-aadhaar-card .gcds-btn-confirm, #gcds-doc-card .gcds-btn-confirm {
         flex: 1;
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
         color: #fff;
@@ -1295,10 +1356,10 @@
         transition: opacity 0.15s, transform 0.1s;
         box-shadow: 0 2px 8px rgba(99,102,241,0.4);
       }
-      #gcds-aadhaar-card .gcds-btn-confirm:hover  { opacity: 0.9; transform: translateY(-1px); }
-      #gcds-aadhaar-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
-      #gcds-aadhaar-card .gcds-btn-confirm:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-      #gcds-aadhaar-card .gcds-btn-skip {
+      #gcds-aadhaar-card .gcds-btn-confirm:hover, #gcds-doc-card .gcds-btn-confirm:hover { opacity: 0.9; transform: translateY(-1px); }
+      #gcds-aadhaar-card .gcds-btn-confirm:active, #gcds-doc-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
+      #gcds-aadhaar-card .gcds-btn-confirm:disabled, #gcds-doc-card .gcds-btn-confirm:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+      #gcds-aadhaar-card .gcds-btn-skip, #gcds-doc-card .gcds-btn-skip {
         background: transparent;
         color: #64748b;
         font-size: 12px;
@@ -1308,8 +1369,8 @@
         cursor: pointer;
         transition: color 0.15s, border-color 0.15s;
       }
-      #gcds-aadhaar-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
-      #gcds-aadhaar-card .gcds-spinner {
+      #gcds-aadhaar-card .gcds-btn-skip:hover, #gcds-doc-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
+      #gcds-aadhaar-card .gcds-spinner, #gcds-doc-card .gcds-spinner {
         display: inline-block;
         width: 14px; height: 14px;
         border: 2px solid rgba(255,255,255,0.3);
@@ -1424,6 +1485,22 @@
     }
 
     return false;
+  }
+
+  /**
+   * Safe HTML escaping utility for UI card injections.
+   *
+   * @param {string} str
+   * @returns {string}
+   */
+  function escapeHtml(str) {
+    if (!str || typeof str !== 'string') return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   /**
@@ -1754,6 +1831,131 @@
       setTimeout(() => {
         try { input.focus(); } catch {}
       }, 200);
+    });
+  }
+
+  /**
+   * Prompts the operator with a floating modal card when a supporting document
+   * (Section G Age Proof or Section H Address Proof) is missing from GCDS or requires
+   * manual file selection. Watches the portal's file input live and enables confirmation
+   * once the operator has selected a valid file.
+   *
+   * @param {Object} options
+   * @param {'G'|'H'} options.section - Section letter ('G' or 'H')
+   * @param {string} options.title - Document title (e.g. 'Age Proof Document')
+   * @param {string} options.docTypeName - Name of required doc type (e.g. 'Aadhaar Card')
+   * @param {HTMLInputElement} [options.fileInput] - Target file input on portal DOM
+   * @returns {Promise<{ action: 'CONFIRMED'|'SKIP' }>}
+   */
+  function waitForManualDocumentUpload({ section = 'G', title = 'Document Proof', docTypeName = 'Supporting Document', fileInput = null }) {
+    return new Promise((resolve) => {
+      injectRelationCardStyles();
+
+      // Remove any stale doc card
+      const stale = document.getElementById('gcds-doc-card');
+      if (stale) stale.remove();
+
+      const card = document.createElement('div');
+      card.id = 'gcds-doc-card';
+      card.setAttribute('role', 'dialog');
+      card.setAttribute('aria-label', `Section ${section} ${title} Manual Upload`);
+
+      const safeDocType = escapeHtml(docTypeName || 'Supporting Document');
+      const safeTitle = escapeHtml(title || 'Document Proof');
+
+      card.innerHTML = `
+        <div class="gcds-card-header">
+          <span class="gcds-card-badge">Section ${section}</span>
+          <span class="gcds-card-title">${safeTitle}</span>
+        </div>
+        <div class="gcds-rec-box">
+          <div class="gcds-rec-label">Manual Upload Required</div>
+          <div class="gcds-rec-name">${safeDocType}</div>
+          <div class="gcds-rec-desc">Document not found in GCDS or portal upload needs manual attachment. Please select file in the portal below:</div>
+        </div>
+        <div class="gcds-doc-status-box" id="gcds-doc-status-box">
+          <span style="font-size: 13px; color: #94a3b8;" id="gcds-doc-status-text">⏳ Waiting for file selection in portal…</span>
+        </div>
+        <div class="gcds-btn-row">
+          <button type="button" class="gcds-btn-confirm" id="gcds-btn-confirm-doc" disabled title="Upload a document file in the portal to proceed">
+            ✅ Confirm &amp; Proceed
+          </button>
+          <button type="button" class="gcds-btn-skip" id="gcds-btn-skip-doc" title="Skip this section without advancing">
+            Skip
+          </button>
+        </div>
+      `;
+
+      const statusBox = card.querySelector('#gcds-doc-status-box');
+      const statusText = card.querySelector('#gcds-doc-status-text');
+      const btnConfirm = card.querySelector('#gcds-btn-confirm-doc');
+      const btnSkip = card.querySelector('#gcds-btn-skip-doc');
+
+      let interval = null;
+
+      const updateFileStatus = () => {
+        const input = fileInput || (section === 'G' ? findElement(SELECTOR_MAP.ageProofFile) : findElement(SELECTOR_MAP.addressProofFile));
+        const hasFile = input && input.files && input.files.length > 0;
+        if (hasFile) {
+          const f = input.files[0];
+          statusBox.style.borderColor = '#10b981';
+          statusBox.style.background = 'rgba(16, 185, 129, 0.1)';
+          statusText.style.color = '#34d399';
+          statusText.style.fontWeight = '600';
+          statusText.innerHTML = `✅ Attached: <strong>${escapeHtml(f.name)}</strong> (${(f.size / 1024).toFixed(1)} KB)`;
+          btnConfirm.disabled = false;
+        } else {
+          statusBox.style.borderColor = '#334155';
+          statusBox.style.background = '#0f172a';
+          statusText.style.color = '#94a3b8';
+          statusText.style.fontWeight = 'normal';
+          statusText.innerHTML = '⏳ Waiting for file selection in portal…';
+          btnConfirm.disabled = true;
+        }
+      };
+
+      if (fileInput) {
+        fileInput.addEventListener('change', updateFileStatus);
+      }
+      interval = setInterval(updateFileStatus, 350);
+      updateFileStatus();
+
+      // Confirm & Proceed
+      btnConfirm.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (interval) clearInterval(interval);
+        if (fileInput) fileInput.removeEventListener('change', updateFileStatus);
+        btnConfirm.innerHTML = '<span class="gcds-spinner"></span> Confirming…';
+        btnConfirm.disabled = true;
+        btnSkip.disabled = true;
+
+        setTimeout(() => {
+          card.remove();
+          resolve({ action: 'CONFIRMED' });
+        }, 150);
+      });
+
+      // Skip
+      btnSkip.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (interval) clearInterval(interval);
+        if (fileInput) fileInput.removeEventListener('change', updateFileStatus);
+        card.remove();
+        resolve({ action: 'SKIP' });
+      });
+
+      document.body.appendChild(card);
+
+      // Auto-scroll the corresponding section box into view
+      const box = findSectionBox(section);
+      if (box) {
+        try { box.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+      }
+      if (fileInput) {
+        try { fileInput.focus(); } catch {}
+      }
     });
   }
 
@@ -2407,16 +2609,6 @@
           if (setInputValue(singleDobEl, isoDob)) {
             highlightField(singleDobEl);
             filledCount++;
-
-            // Auto-check Age Proof radio if present
-            const proofRadio = (boxG || document).querySelector('input[type="radio"][name="ageDocument"][value="ageProof"]');
-            if (proofRadio && !proofRadio.checked) {
-              setRadioOrCheckbox(proofRadio, true);
-            }
-            const ageSelect = (boxG || document).querySelector('select[name="ageproof"]');
-            if (ageSelect && !ageSelect.value) {
-              setSelectValue(ageSelect, hasValidAadhaar ? 'ADHR' : 'PC');
-            }
           }
         } else {
           const dobParts = isoDob.split('-');
@@ -2433,8 +2625,96 @@
       skippedFields.push('dateOfBirth');
     }
 
-    // Auto-advance Section G
-    await clickSectionNextButton('G');
+    // ─── Section G: Age Proof Document Upload ──────────────────────────────────
+    const boxG = findSectionBox('G');
+
+    // 1. Radio: Select "Document for proof of Date of Birth"
+    const proofRadio = (boxG || document).querySelector('input[type="radio"][name="ageDocument"][value="ageProof"]')
+      || findElement(SELECTOR_MAP.ageProofRadio);
+    if (proofRadio && !proofRadio.checked) {
+      setRadioOrCheckbox(proofRadio, true);
+      proofRadio.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // 2. Dropdown: Select document type
+    const ageDocCode = data.ageProofType || data.documents?.ageProof?.portalDocType || (hasValidAadhaar ? 'ADHR' : 'PC');
+    const ageSelect = (boxG || document).querySelector('select[name="ageproof"]') || findElement(SELECTOR_MAP.ageProofType);
+    if (ageSelect) {
+      setSelectValue(ageSelect, ageDocCode);
+      ageSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // 3. Document File Input: Locate and verify
+    const ageFileInput = (boxG || document).querySelector('input[type="file"]#ageProof, input[type="file"][name="ageProof"]')
+      || findElement(SELECTOR_MAP.ageProofFile);
+
+    const DOC_NAMES = {
+      ADHR: 'Aadhaar Card',
+      PC: 'PAN Card',
+      BCMR: 'Birth Certificate',
+      IPSP: 'Indian Passport',
+      DL: 'Driving License',
+      CBSC: 'Certificate of Class X / XII',
+      WEGB: 'Water / Electricity / Gas connection bill',
+      CPNS: 'Bank / Post Office Passbook',
+      RRLD: 'Land Record',
+      RSD: 'Registered Rent / Sale Deed',
+    };
+    const ageDocName = DOC_NAMES[ageDocCode] || data.documents?.ageProof?.type || 'Age Proof Document';
+
+    const ageDocUrl = data.ageProofUrl || data.documents?.ageProof?.url || null;
+    const ageDocFileName = data.documents?.ageProof?.fileName || 'age-proof-document.pdf';
+
+    let ageUploaded = false;
+
+    if (ageDocUrl && ageFileInput) {
+      try {
+        console.log(`[GCDS Section G] Fetching Age Proof document from GCDS: ${ageDocUrl}`);
+        const ageBlob = await fetchFileBlob(ageDocUrl, data.id || data._id);
+        if (ageBlob && ageBlob.size > 0) {
+          const injected = await injectFileToPortal(ageFileInput, ageBlob, ageDocFileName, false);
+          if (injected && ageFileInput.files && ageFileInput.files.length > 0) {
+            ageUploaded = true;
+            highlightField(ageFileInput);
+            filledCount++;
+            console.log('✅ [GCDS Section G] Age Proof file injected successfully. Waiting 2s guard before Next...');
+            await sleep(2000);
+          } else {
+            console.warn('[GCDS Section G] File injection into ageProof input did not register files.');
+          }
+        } else {
+          console.warn('[GCDS Section G] Failed to fetch valid blob for Age Proof document.');
+        }
+      } catch (err) {
+        console.error('[GCDS Section G] Error injecting Age Proof document:', err);
+      }
+    }
+
+    // 4. If upload not confirmed, trigger Manual Upload Fallback Card
+    if (!ageUploaded) {
+      console.log('[GCDS Section G] Age Proof document missing or unconfirmed. Showing Manual Upload prompt...');
+      const manualResult = await waitForManualDocumentUpload({
+        section: 'G',
+        title: 'Date of Birth (Age Proof)',
+        docTypeName: ageDocName,
+        fileInput: ageFileInput,
+      });
+
+      if (manualResult.action === 'CONFIRMED') {
+        ageUploaded = true;
+        filledCount++;
+        await sleep(1000);
+      } else {
+        console.log('[GCDS Section G] Operator skipped manual upload. Will not auto-advance Section G.');
+        skippedCount++;
+        skippedFields.push('ageProof');
+      }
+    }
+
+    // 5. Auto-advance Section G ONLY if upload confirmed!
+    if (ageUploaded) {
+      await clickSectionNextButton('G');
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Section H: Present Address Details
@@ -2466,18 +2746,84 @@
       setSelectValue(secHState, stateVal);
     }
 
-    // Address proof document radio
-    const resRadio = document.querySelector('input[type="radio"][name="AddressProofDocument"][value="Y"]');
+    // ─── Section H: Address Proof Document Upload ──────────────────────────────
+    const boxH = findSectionBox('H');
+
+    // 1. Radio: Select "Document for proof of Residence"
+    const resRadio = (boxH || document).querySelector('input[type="radio"][name="AddressProofDocument"][value="Y"]')
+      || findElement(SELECTOR_MAP.addressProofRadio);
     if (resRadio && !resRadio.checked) {
       setRadioOrCheckbox(resRadio, true);
-    }
-    const resSelect = document.querySelector('select[name="currentAddressProofType"]');
-    if (resSelect && !resSelect.value) {
-      setSelectValue(resSelect, hasValidAadhaar ? 'ADHR' : 'PC');
+      resRadio.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    // Auto-advance Section H
-    await clickSectionNextButton('H');
+    // 2. Dropdown: Select document type
+    const addrDocCode = data.addressProofType || data.documents?.addressProof?.portalDocType || (hasValidAadhaar ? 'ADHR' : 'WEGB');
+    const resSelect = (boxH || document).querySelector('select[name="currentAddressProofType"]')
+      || findElement(SELECTOR_MAP.addressProofType);
+    if (resSelect) {
+      setSelectValue(resSelect, addrDocCode);
+      resSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // 3. Document File Input: Locate and verify
+    const addrFileInput = (boxH || document).querySelector('input[type="file"]#currentAddressProof, input[type="file"][name="currentAddressProof"]')
+      || findElement(SELECTOR_MAP.addressProofFile);
+
+    const addrDocName = DOC_NAMES[addrDocCode] || data.documents?.addressProof?.type || 'Address Proof Document';
+    const addrDocUrl = data.addressProofUrl || data.documents?.addressProof?.url || null;
+    const addrDocFileName = data.documents?.addressProof?.fileName || 'address-proof-document.pdf';
+
+    let addressUploaded = false;
+
+    if (addrDocUrl && addrFileInput) {
+      try {
+        console.log(`[GCDS Section H] Fetching Address Proof document from GCDS: ${addrDocUrl}`);
+        const addrBlob = await fetchFileBlob(addrDocUrl, data.id || data._id);
+        if (addrBlob && addrBlob.size > 0) {
+          const injected = await injectFileToPortal(addrFileInput, addrBlob, addrDocFileName, false);
+          if (injected && addrFileInput.files && addrFileInput.files.length > 0) {
+            addressUploaded = true;
+            highlightField(addrFileInput);
+            filledCount++;
+            console.log('✅ [GCDS Section H] Address Proof file injected successfully. Waiting 2s guard before Next...');
+            await sleep(2000);
+          } else {
+            console.warn('[GCDS Section H] File injection into currentAddressProof input did not register files.');
+          }
+        } else {
+          console.warn('[GCDS Section H] Failed to fetch valid blob for Address Proof document.');
+        }
+      } catch (err) {
+        console.error('[GCDS Section H] Error injecting Address Proof document:', err);
+      }
+    }
+
+    // 4. If upload not confirmed, trigger Manual Upload Fallback Card
+    if (!addressUploaded) {
+      console.log('[GCDS Section H] Address Proof document missing or unconfirmed. Showing Manual Upload prompt...');
+      const manualResult = await waitForManualDocumentUpload({
+        section: 'H',
+        title: 'Present Address (Address Proof)',
+        docTypeName: addrDocName,
+        fileInput: addrFileInput,
+      });
+
+      if (manualResult.action === 'CONFIRMED') {
+        addressUploaded = true;
+        filledCount++;
+        await sleep(1000);
+      } else {
+        console.log('[GCDS Section H] Operator skipped manual upload. Will not auto-advance Section H.');
+        skippedCount++;
+        skippedFields.push('addressProof');
+      }
+    }
+
+    // 5. Auto-advance Section H ONLY if upload confirmed!
+    if (addressUploaded) {
+      await clickSectionNextButton('H');
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Section I: Category of Disability (Optional)
@@ -2688,6 +3034,7 @@
     handlePhotoSection,
     waitForRelationConfirmation,
     waitForAadhaarConfirmation,
+    waitForManualDocumentUpload,
     runFill,
     fillForm,
     generateDiagnosticReport,
@@ -2730,6 +3077,8 @@
     if (staleRel) staleRel.remove();
     const staleAadhaar = document.getElementById('gcds-aadhaar-card');
     if (staleAadhaar) staleAadhaar.remove();
+    const staleDoc = document.getElementById('gcds-doc-card');
+    if (staleDoc) staleDoc.remove();
   };
 })();
 
