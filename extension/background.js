@@ -419,12 +419,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
           const blob = await res.blob();
 
-          // Portal size constraint: maximum 2MB (.jpg, .jpeg)
-          const MAX_PHOTO_SIZE_BYTES = 2 * 1024 * 1024;
-          if (blob.size > MAX_PHOTO_SIZE_BYTES) {
+          // Portal size constraint: maximum 5MB for documents and 2MB for photos
+          const MAX_DOC_SIZE_BYTES = 5 * 1024 * 1024;
+          if (blob.size > MAX_DOC_SIZE_BYTES) {
             sendResponse({
               success: false,
-              error: `Customer photograph (${(blob.size / 1024 / 1024).toFixed(2)} MB) exceeds ECI maximum 2MB limit.`,
+              error: `Document (${(blob.size / 1024 / 1024).toFixed(2)} MB) exceeds maximum 5MB limit.`,
               sizeBytes: blob.size,
             });
             return;
@@ -438,7 +438,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             binary += String.fromCharCode(uint8[i]);
           }
           const base64 = btoa(binary);
-          const mimeType = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
+          const mimeType = blob.type || 'image/jpeg';
           const blobData = `data:${mimeType};base64,${base64}`;
 
           sendResponse({

@@ -832,25 +832,95 @@
    * @param {string} [customerId] - Optional customer ID for GCDS photo resolution
    * @returns {Promise<Blob|null>}
    */
+  /**
+   * Converts a Data URL (base64) directly to a Blob without window.fetch()
+   * (bypasses Angular Zone.js polyfill which rejects fetch() on data: URLs).
+   *
+   * @param {string} dataUrl
+   * @returns {Blob|null}
+   */
+  function dataUrlToBlob(dataUrl) {
+    if (!dataUrl || typeof dataUrl !== 'string') return null;
+    try {
+      const parts = dataUrl.split(',');
+      if (parts.length < 2) return null;
+      const mimeMatch = parts[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+      const bstr = atob(parts[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      return new Blob([u8arr], { type: mime });
+    } catch (e) {
+      console.warn('[GCDS File] dataUrlToBlob error:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Fetches a file Blob from either a Data URL, remote URL, or GCDS Vault.
+   * Uses direct binary decoding or background service worker with strict timeout.
+   *
+   * @param {string} url - Target URL or Data URL
+   * @param {string} [customerId] - Optional customer ID for GCDS photo resolution
+   * @returns {Promise<Blob|null>}
+   */
   async function fetchFileBlob(url, customerId) {
     if (!url && !customerId) return null;
+
+    // 1. Direct Data URL conversion via pure JS (immune to Angular zone.js fetch monkey-patching)
+    if (url && typeof url === 'string' && url.startsWith('data:')) {
+      const blob = dataUrlToBlob(url);
+      if (blob && blob.size > 0) return blob;
+    }
+
+    // 2. Direct fetch for HTTP/HTTPS signed URLs (e.g. Supabase storage CORS-enabled)
+    if (url && typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          const blob = await res.blob();
+          if (blob && blob.size > 0) return blob;
+        }
+      } catch {
+        // Direct fetch blocked by CORS or CSP; fallback to background service worker below
+      }
+    }
+
+    // 3. Fallback to background service worker with strict 5-second timeout
     return new Promise((resolve) => {
+      let resolved = false;
+      const timer = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          console.warn('[GCDS File] Background fetch timed out after 5000ms');
+          resolve(null);
+        }
+      }, 5000);
+
       try {
         if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
+          clearTimeout(timer);
           resolve(null);
           return;
         }
         chrome.runtime.sendMessage(
           { action: 'FETCH_IMAGE_BLOB', url, customerId },
           async (response) => {
-            if (chrome.runtime.lastError || !response || !response.blobData) {
-              console.warn('[GCDS File] Fetch failed:', chrome.runtime.lastError?.message || response?.error);
+            if (resolved) return;
+            resolved = true;
+            clearTimeout(timer);
+
+            if (chrome.runtime?.lastError || !response || !response.blobData) {
+              console.warn('[GCDS File] Fetch failed:', chrome.runtime?.lastError?.message || response?.error);
               resolve(null);
               return;
             }
             try {
-              const res = await fetch(response.blobData);
-              const blob = await res.blob();
+              // Convert Data URL response safely via dataUrlToBlob
+              const blob = dataUrlToBlob(response.blobData);
               resolve(blob);
             } catch (err) {
               console.warn('[GCDS File] Blob conversion error:', err);
@@ -859,8 +929,12 @@
           }
         );
       } catch (err) {
-        console.warn('[GCDS File] sendMessage error:', err);
-        resolve(null);
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          console.warn('[GCDS File] sendMessage error:', err);
+          resolve(null);
+        }
       }
     });
   }
@@ -876,6 +950,11 @@
    * @returns {Promise<boolean>}
    */
   async function injectFileToPortal(target, fileBlob, fileName = 'document.jpg', isPhoto = false) {
+    if (!fileBlob || typeof fileBlob.size !== 'number' || fileBlob.size === 0) {
+      console.warn('[GCDS File] Invalid or empty file blob provided to injectFileToPortal');
+      return false;
+    }
+
     const input = typeof target === 'string' ? document.querySelector(target) : target;
     if (!input) {
       console.warn('[GCDS File] File input field not found on portal:', target);
@@ -3502,6 +3581,7 @@
     getOptionsSafe,
     clickSectionNextButton,
     findSectionBox,
+    fetchFileBlob,
     injectFileToPortal,
     autoConfirmSelectFromImageModal,
     handlePhotoSection,
