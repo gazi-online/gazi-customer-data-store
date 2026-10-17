@@ -4247,6 +4247,101 @@
   }
 
   /**
+   * Helper to transition from Section H to Section I.
+   * Click & Verify loop: Clicks Section H Next button, waits for Angular/React state update,
+   * verifies Section I is active in sidebar or DOM, and falls back to sidebar click if needed.
+   *
+   * @param {number} maxAttempts - Maximum Next button click & verification retries
+   * @returns {Promise<boolean>}
+   */
+  async function transitionSectionHToSectionI(maxAttempts = 4) {
+    console.log('[GCDS Section H->I] Starting Click & Verify transition loop to Section I...');
+
+    const isSectionIActive = () => {
+      // In the portal's sidebar:
+      // Section H complete -> 'sidenavclassstart'
+      // Section I active -> 'sidenavclass' (or 'sidenavclassstart')
+      const sidebarItems = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
+        .filter((x) => x.innerText && /^[A-L]\./.test(x.innerText.trim()));
+      const itemH = sidebarItems.find((it) => it.innerText.trim().startsWith('H.'));
+      const itemI = sidebarItems.find((it) => it.innerText.trim().startsWith('I.'));
+
+      if (itemH && itemH.className.includes('sidenavclassstart')) {
+        return true;
+      }
+      if (itemI && (itemI.className.includes('sidenavclassstart') || itemI.className.includes('sidenavclass'))) {
+        return true;
+      }
+
+      // Check if Section I inputs are active/un-disabled
+      const boxI = findSectionBox('I');
+      if (boxI) {
+        const enabledInputs = boxI.querySelectorAll('input:not([disabled]), button.next-btn:not([disabled])');
+        if (enabledInputs.length > 0) return true;
+      }
+      return false;
+    };
+
+    if (isSectionIActive()) {
+      console.log('[GCDS Section H->I] Section I is already active.');
+      return true;
+    }
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      console.log(`[GCDS Section H->I] Clicking Next on Section H (attempt ${attempt}/${maxAttempts})...`);
+      const clicked = await clickSectionNextButton('H');
+      console.log(`[GCDS Section H->I] Section H clickSectionNextButton result: ${clicked}`);
+
+      // Wait 1.5 seconds for Angular/React validation and transition
+      await sleep(1500);
+
+      if (isSectionIActive()) {
+        console.log(`[GCDS Section H->I] Section I transition confirmed on attempt ${attempt}.`);
+        break;
+      }
+
+      // Direct sidebar click fallback
+      console.log(`[GCDS Section H->I] Triggering Section I sidebar navigation fallback...`);
+      const sidebarItems = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
+        .filter((x) => x.innerText && /^[A-L]\./.test(x.innerText.trim()));
+      const itemI = sidebarItems.find((it) => it.innerText.trim().startsWith('I.'));
+      if (itemI) {
+        try {
+          itemI.click();
+          itemI.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+          const innerLink = itemI.querySelector('.content_sidenav');
+          if (innerLink) {
+            innerLink.click();
+            innerLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+          }
+          await sleep(1500);
+        } catch {}
+      }
+
+      if (isSectionIActive()) {
+        console.log(`[GCDS Section H->I] Section I transition confirmed via sidebar on attempt ${attempt}.`);
+        break;
+      }
+
+      // Check if Section H displays a validation error
+      const currentBoxH = findSectionBox('H');
+      const errEl = currentBoxH?.querySelector('.text-danger, .invalid-feedback, .alert');
+      if (errEl && errEl.innerText && errEl.innerText.trim()) {
+        console.warn('[GCDS Section H->I] Section H validation error blocking Next:', errEl.innerText.trim());
+        await sleep(1000);
+      }
+    }
+
+    // Smooth scroll Section I into view
+    const boxI = findSectionBox('I');
+    if (boxI) {
+      try { boxI.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+    }
+
+    return isSectionIActive();
+  }
+
+  /**
    * Helper to transition from Section I to Section J.
    * Clicks Section I Next button and verifies transition to Section J.
    *
@@ -4254,8 +4349,20 @@
    * @returns {Promise<boolean>}
    */
   async function transitionSectionIToJ(maxWaitMs = 4000) {
+    // 1. Force-unlock Section I next button if present
+    const boxI = findSectionBox('I');
+    const nextBtnI = boxI?.querySelector('button.next-btn');
+    if (nextBtnI) {
+      nextBtnI.removeAttribute('disabled');
+      nextBtnI.disabled = false;
+      nextBtnI.classList.remove('buttonDisable');
+      nextBtnI.classList.add('buttonVisible');
+    }
+
     const clicked = await clickSectionNextButton('I');
     const startTime = Date.now();
+    let sidebarFallbackTriggered = false;
+
     while (Date.now() - startTime < maxWaitMs) {
       // 1. Check if Section J header or title is visible
       const titles = Array.from(document.querySelectorAll('.form-title, h1, h2, h3, h4, h5, h6, strong, span.textheadingnum'));
@@ -4280,6 +4387,24 @@
         console.log('✅ Section J active confirmed.');
         return true;
       }
+
+      // Direct sidebar click fallback after 1200ms
+      if (!sidebarFallbackTriggered && (Date.now() - startTime > 1200)) {
+        sidebarFallbackTriggered = true;
+        if (sidebarJ) {
+          console.log('[GCDS Section I->J] Triggering Section J sidebar click fallback...');
+          try {
+            sidebarJ.click();
+            sidebarJ.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            const innerLink = sidebarJ.querySelector('.content_sidenav');
+            if (innerLink) {
+              innerLink.click();
+              innerLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            }
+          } catch {}
+        }
+      }
+
       await sleep(150);
     }
     return clicked;
@@ -4296,7 +4421,24 @@
    * @param {Object} data - Form Fill DTO
    * @returns {Promise<{ action: 'FILLED'|'SKIPPED', filledCount?: number }>}
    */
-  function waitForSectionIDisabilityChoice(data) {
+  async function waitForSectionIDisabilityChoice(data) {
+    // Safety check: ensure Section I is active before displaying the action card
+    const isSectionIActive = () => {
+      const sidebarItems = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
+        .filter((x) => x.innerText && /^[A-L]\./.test(x.innerText.trim()));
+      const itemH = sidebarItems.find((it) => it.innerText.trim().startsWith('H.'));
+      const itemI = sidebarItems.find((it) => it.innerText.trim().startsWith('I.'));
+      return Boolean(
+        (itemH && itemH.className.includes('sidenavclassstart')) ||
+        (itemI && (itemI.className.includes('sidenavclassstart') || itemI.className.includes('sidenavclass')))
+      );
+    };
+
+    if (!isSectionIActive()) {
+      console.log('[GCDS Section I] Section I not active yet. Waiting for transition to Section I...');
+      await transitionSectionHToSectionI(3);
+    }
+
     return new Promise((resolve) => {
       injectRelationCardStyles();
 
@@ -4310,6 +4452,15 @@
           boxI.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       } catch {}
+
+      // Force unlock Section I Next button in the DOM
+      const nextBtnI = boxI?.querySelector?.('button.next-btn');
+      if (nextBtnI) {
+        nextBtnI.removeAttribute('disabled');
+        nextBtnI.disabled = false;
+        nextBtnI.classList.remove('buttonDisable');
+        nextBtnI.classList.add('buttonVisible');
+      }
 
       const card = document.createElement('div');
       card.id = 'gcds-disability-card';
@@ -5804,9 +5955,9 @@
       filledCount++;
     }
 
-    // 5. Auto-advance Section H ONLY if upload confirmed!
+    // 5. Auto-advance Section H to Section I
     if (addressUploaded) {
-      await clickSectionNextButton('H');
+      await transitionSectionHToSectionI();
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -6028,6 +6179,7 @@
     waitForAddressProofSmartPicker,
     waitForHouseNumberInput,
     waitForManualDocumentUpload,
+    transitionSectionHToSectionI,
     waitForSectionIDisabilityChoice,
     transitionSectionIToJ,
     parseAddressComponents,
