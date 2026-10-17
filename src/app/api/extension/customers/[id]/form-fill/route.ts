@@ -233,6 +233,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
       fileName: string;
       mimeType: string;
       documentType: string;
+      otherDescription?: string;
     }> = [];
 
     try {
@@ -330,8 +331,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
         };
       }
 
-      // Matcher for the 7 standard ECI Address Proof categories
-      const matchAddressCategory = (d: any): { code: string; category: string; label: string } | null => {
+      // Matcher for the 7 standard ECI Address Proof categories + Option 2 (Other Document)
+      const matchAddressCategory = (d: any): { code: string; category: string; label: string; otherDescription?: string } | null => {
         const t = `${d.document_type || ''} ${d.document_name || ''} ${d.source_filename || ''} ${d.file_name || ''}`.toLowerCase();
         // 1. Water / Electricity / Gas Connection Bill
         if (t.includes('water') || t.includes('electric') || t.includes('electricity') || t.includes('gas') || t.includes('utility') || (t.includes('bill') && !t.includes('rent'))) {
@@ -361,6 +362,17 @@ export async function GET(req: NextRequest, context: RouteContext) {
         if (t.includes('aadhaar') || t.includes('aadhar') || t.includes('uidai') || t.includes('adhaar')) {
           return { code: 'ADHR', category: 'AADHAAR_CARD', label: 'Aadhaar Card' };
         }
+        // Option 2: Any other Document (Pl. Specify)
+        if (
+          t.includes('other') ||
+          d.document_type === 'OTHER' ||
+          d.document_type === 'OTHER_DOCUMENT' ||
+          d.document_type === 'ADDRESS_PROOF_OTHER' ||
+          d.document_type === 'CUSTOM'
+        ) {
+          const desc = d.document_name || d.document_type || 'Other Document';
+          return { code: 'OTHR', category: 'OTHER', label: desc, otherDescription: desc };
+        }
         return null;
       };
 
@@ -389,6 +401,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
               fileName: doc.file_name || doc.source_filename || `${matched.code.toLowerCase()}_proof.jpg`,
               mimeType: doc.mime_type || 'image/jpeg',
               documentType: doc.document_type || matched.label,
+              otherDescription: matched.otherDescription || (matched.code === 'OTHR' ? (doc.document_name || doc.document_type || 'Other Document') : undefined),
             });
           }
         }
@@ -474,6 +487,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
       ageProofOtherDescription: (customer as any).age_proof_other_description || null,
       addressProofUrl: addressProofDoc?.url || null,
       addressProofType: addressProofDoc?.type || null,
+      address_proof_other_description: (customer as any).address_proof_other_description || null,
+      addressProofOtherDescription: (customer as any).address_proof_other_description || null,
 
       village: resolvedVillage,
       post_office: resolvedPostOffice,
