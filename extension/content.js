@@ -6138,7 +6138,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.2.9-stable',
+      version: '1.3.0-stable',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
