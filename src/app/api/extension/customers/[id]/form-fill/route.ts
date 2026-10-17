@@ -417,6 +417,44 @@ export async function GET(req: NextRequest, context: RouteContext) {
           mimeType: primaryAddressCandidate.mimeType,
         };
       }
+
+      // Resolve Disability Certificate candidate from customer_documents
+      let disabilityCertificateDoc: { url: string; fileName: string; mimeType: string } | null = null;
+      let disabilityCertificateUrl: string | null = null;
+
+      const matchDisabilityCategory = (d: any): boolean => {
+        const t = `${d.document_type || ''} ${d.document_name || ''} ${d.source_filename || ''} ${d.file_name || ''}`.toLowerCase();
+        return (
+          t.includes('disab') ||
+          t.includes('handicap') ||
+          t.includes('pwd') ||
+          t.includes('locomotor') ||
+          t.includes('visual') ||
+          t.includes('hearing') ||
+          t.includes('udid')
+        );
+      };
+
+      for (const doc of activeDocs) {
+        if (!doc.file_url) continue;
+        if (matchDisabilityCategory(doc) && !disabilityCertificateDoc) {
+          try {
+            const { data: sData } = await db.storage
+              .from('customer_documents')
+              .createSignedUrl(doc.file_url, 3600);
+            if (sData?.signedUrl) {
+              disabilityCertificateUrl = sData.signedUrl;
+              disabilityCertificateDoc = {
+                url: sData.signedUrl,
+                fileName: doc.file_name || doc.source_filename || 'disability_certificate.pdf',
+                mimeType: doc.mime_type || 'application/pdf',
+              };
+            }
+          } catch (certErr) {
+            console.warn('[form-fill] Disability certificate signing skipped:', certErr);
+          }
+        }
+      }
     } catch (docsErr) {
       console.warn('[form-fill] Document lookup skipped:', docsErr);
     }
@@ -475,6 +513,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
         ageProofCandidates,
         addressProofCandidates,
         address_proof_candidates: addressProofCandidates,
+        disabilityCertificate: disabilityCertificateDoc,
       },
       ageProofCandidates,
       addressProofCandidates,
@@ -489,6 +528,17 @@ export async function GET(req: NextRequest, context: RouteContext) {
       addressProofType: addressProofDoc?.type || null,
       address_proof_other_description: (customer as any).address_proof_other_description || null,
       addressProofOtherDescription: (customer as any).address_proof_other_description || null,
+
+      // Section I (Category of Disability) DTO mappings
+      disability_type: (customer as any).disability_type || null,
+      disability_description: (customer as any).disability_description || null,
+      disability_percentage: (customer as any).disability_percentage != null ? String((customer as any).disability_percentage) : null,
+      disability_certificate_url: disabilityCertificateUrl || (customer as any).disability_certificate_url || null,
+      disabilityType: (customer as any).disability_type || null,
+      disabilityDescription: (customer as any).disability_description || null,
+      disabilityPercentage: (customer as any).disability_percentage != null ? String((customer as any).disability_percentage) : null,
+      disabilityCertificateUrl: disabilityCertificateUrl || (customer as any).disability_certificate_url || null,
+      disabilityCertificate: disabilityCertificateDoc,
 
       village: resolvedVillage,
       post_office: resolvedPostOffice,

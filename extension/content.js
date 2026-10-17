@@ -374,6 +374,57 @@
       'input[type="file"][name="currentAddressProof"]',
       '#currentAddressProof',
     ],
+
+    // ─── Category of Disability (Section I - Optional) ──────────────────────
+    disabilityLocomotor: [
+      'input[type="checkbox"][value="disabilityTypeLocomotor"]',
+      'input[name="disability"][value="disabilityTypeLocomotor"]',
+      'input[aria-label*="locomotor" i]',
+    ],
+    disabilityVisual: [
+      'input[type="checkbox"][value="disabilityTypeVi"]',
+      'input[name="disability"][value="disabilityTypeVi"]',
+      'input[aria-label*=" vi" i]',
+      'input[aria-label*="visual" i]',
+    ],
+    disabilityDeafDumb: [
+      'input[type="checkbox"][value="disabilityTypeSh"]',
+      'input[name="disability"][value="disabilityTypeSh"]',
+      'input[aria-label*=" sh" i]',
+      'input[aria-label*="hearing" i]',
+      'input[aria-label*="deaf" i]',
+    ],
+    disabilityOtherCheckbox: [
+      'input[type="checkbox"][value="disabilityTypeOthers"]',
+      'input[name="disability"][value="disabilityTypeOthers"]',
+      'input[aria-label*=" other" i]',
+    ],
+    disabilityOtherDescription: [
+      'input#other[name="other"]',
+      'input#other',
+      'input[name="other"]',
+      'input[placeholder*="Other Disability" i]',
+      'input.checkinput',
+    ],
+    disabilityPercentage: [
+      'input#disability[name="disability"]',
+      'input#disability',
+      'input[aria-label*="Percentage of disability" i]',
+      'input.percentmedia',
+    ],
+    disabilityCertYes: [
+      'input[type="radio"][name="disabilitychoose"][value="Y"]',
+      'input#disabilitychoose[value="Y"]',
+    ],
+    disabilityCertNo: [
+      'input[type="radio"][name="disabilitychoose"][value="N"]',
+      'input#disabilitychoose[value="N"]',
+    ],
+    disabilityCertFile: [
+      'input[type="file"]#disabilityProof',
+      'input[type="file"][name="disabilityProof"]',
+      '#disabilityProof',
+    ],
   };
 
   // ─── Inject Highlight Styles ──────────────────────────────────────────────
@@ -1389,8 +1440,8 @@
       }
       @keyframes gcds-spin { to { transform: rotate(360deg); } }
 
-      /* ── Section E, G & H Floating Action Cards ── */
-      #gcds-aadhaar-card, #gcds-doc-card, #gcds-house-card {
+      /* ── Section E, G, H & I Floating Action Cards ── */
+      #gcds-aadhaar-card, #gcds-doc-card, #gcds-house-card, #gcds-disability-card {
         position: fixed;
         bottom: 28px;
         right: 28px;
@@ -1406,13 +1457,13 @@
         animation: gcds-card-in 0.25s cubic-bezier(0.34,1.56,0.64,1);
         user-select: none;
       }
-      #gcds-aadhaar-card .gcds-card-header, #gcds-doc-card .gcds-card-header, #gcds-house-card .gcds-card-header {
+      #gcds-aadhaar-card .gcds-card-header, #gcds-doc-card .gcds-card-header, #gcds-house-card .gcds-card-header, #gcds-disability-card .gcds-card-header {
         display: flex;
         align-items: center;
         gap: 8px;
         margin-bottom: 12px;
       }
-      #gcds-aadhaar-card .gcds-card-badge, #gcds-doc-card .gcds-card-badge, #gcds-house-card .gcds-card-badge {
+      #gcds-aadhaar-card .gcds-card-badge, #gcds-doc-card .gcds-card-badge, #gcds-house-card .gcds-card-badge, #gcds-disability-card .gcds-card-badge {
         background: #6366f1;
         color: #fff;
         font-size: 10px;
@@ -1422,32 +1473,32 @@
         border-radius: 20px;
         text-transform: uppercase;
       }
-      #gcds-aadhaar-card .gcds-card-title, #gcds-doc-card .gcds-card-title, #gcds-house-card .gcds-card-title {
+      #gcds-aadhaar-card .gcds-card-title, #gcds-doc-card .gcds-card-title, #gcds-house-card .gcds-card-title, #gcds-disability-card .gcds-card-title {
         font-size: 13px;
         font-weight: 600;
         color: #94a3b8;
       }
-      #gcds-aadhaar-card .gcds-rec-box, #gcds-doc-card .gcds-rec-box, #gcds-house-card .gcds-rec-box {
+      #gcds-aadhaar-card .gcds-rec-box, #gcds-doc-card .gcds-rec-box, #gcds-house-card .gcds-rec-box, #gcds-disability-card .gcds-rec-box {
         background: rgba(99,102,241,0.12);
         border: 1px solid rgba(99,102,241,0.4);
         border-radius: 10px;
         padding: 10px 12px;
         margin-bottom: 12px;
       }
-      #gcds-aadhaar-card .gcds-rec-label, #gcds-doc-card .gcds-rec-label, #gcds-house-card .gcds-rec-label {
+      #gcds-aadhaar-card .gcds-rec-label, #gcds-doc-card .gcds-rec-label, #gcds-house-card .gcds-rec-label, #gcds-disability-card .gcds-rec-label {
         font-size: 11px;
         color: #94a3b8;
         margin-bottom: 4px;
         text-transform: uppercase;
         letter-spacing: 0.06em;
       }
-      #gcds-aadhaar-card .gcds-rec-name, #gcds-doc-card .gcds-rec-name, #gcds-house-card .gcds-rec-name {
+      #gcds-aadhaar-card .gcds-rec-name, #gcds-doc-card .gcds-rec-name, #gcds-house-card .gcds-rec-name, #gcds-disability-card .gcds-rec-name {
         font-size: 15px;
         font-weight: 700;
         color: #a5b4fc;
         letter-spacing: -0.01em;
       }
-      #gcds-aadhaar-card .gcds-rec-desc, #gcds-doc-card .gcds-rec-desc, #gcds-house-card .gcds-rec-desc {
+      #gcds-aadhaar-card .gcds-rec-desc, #gcds-doc-card .gcds-rec-desc, #gcds-house-card .gcds-rec-desc, #gcds-disability-card .gcds-rec-desc {
         font-size: 11.5px;
         color: #cbd5e1;
         margin-top: 4px;
@@ -1485,7 +1536,7 @@
         color: #34d399;
         font-weight: 600;
       }
-      #gcds-doc-card .gcds-doc-status-box {
+      #gcds-doc-card .gcds-doc-status-box, #gcds-disability-card .gcds-doc-status-box {
         margin-bottom: 12px;
         padding: 10px 12px;
         background: #0f172a;
@@ -1512,11 +1563,11 @@
         border-color: #ef4444;
         color: #ffffff;
       }
-      #gcds-aadhaar-card .gcds-btn-row, #gcds-doc-card .gcds-btn-row, #gcds-house-card .gcds-btn-row {
+      #gcds-aadhaar-card .gcds-btn-row, #gcds-doc-card .gcds-btn-row, #gcds-house-card .gcds-btn-row, #gcds-disability-card .gcds-btn-row {
         display: flex;
         gap: 8px;
       }
-      #gcds-aadhaar-card .gcds-btn-confirm, #gcds-doc-card .gcds-btn-confirm, #gcds-house-card .gcds-btn-confirm {
+      #gcds-aadhaar-card .gcds-btn-confirm, #gcds-doc-card .gcds-btn-confirm, #gcds-house-card .gcds-btn-confirm, #gcds-disability-card .gcds-btn-confirm {
         flex: 1;
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
         color: #fff;
@@ -1530,10 +1581,10 @@
         transition: opacity 0.15s, transform 0.1s;
         box-shadow: 0 2px 8px rgba(99,102,241,0.4);
       }
-      #gcds-aadhaar-card .gcds-btn-confirm:hover, #gcds-doc-card .gcds-btn-confirm:hover, #gcds-house-card .gcds-btn-confirm:hover { opacity: 0.9; transform: translateY(-1px); }
-      #gcds-aadhaar-card .gcds-btn-confirm:active, #gcds-doc-card .gcds-btn-confirm:active, #gcds-house-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
-      #gcds-aadhaar-card .gcds-btn-confirm:disabled, #gcds-doc-card .gcds-btn-confirm:disabled, #gcds-house-card .gcds-btn-confirm:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-      #gcds-aadhaar-card .gcds-btn-skip, #gcds-doc-card .gcds-btn-skip, #gcds-house-card .gcds-btn-skip {
+      #gcds-aadhaar-card .gcds-btn-confirm:hover, #gcds-doc-card .gcds-btn-confirm:hover, #gcds-house-card .gcds-btn-confirm:hover, #gcds-disability-card .gcds-btn-confirm:hover { opacity: 0.9; transform: translateY(-1px); }
+      #gcds-aadhaar-card .gcds-btn-confirm:active, #gcds-doc-card .gcds-btn-confirm:active, #gcds-house-card .gcds-btn-confirm:active, #gcds-disability-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
+      #gcds-aadhaar-card .gcds-btn-confirm:disabled, #gcds-doc-card .gcds-btn-confirm:disabled, #gcds-house-card .gcds-btn-confirm:disabled, #gcds-disability-card .gcds-btn-confirm:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+      #gcds-aadhaar-card .gcds-btn-skip, #gcds-doc-card .gcds-btn-skip, #gcds-house-card .gcds-btn-skip, #gcds-disability-card .gcds-btn-skip {
         background: transparent;
         color: #64748b;
         font-size: 12px;
@@ -1543,8 +1594,8 @@
         cursor: pointer;
         transition: color 0.15s, border-color 0.15s;
       }
-      #gcds-aadhaar-card .gcds-btn-skip:hover, #gcds-doc-card .gcds-btn-skip:hover, #gcds-house-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
-      #gcds-aadhaar-card .gcds-spinner, #gcds-doc-card .gcds-spinner, #gcds-house-card .gcds-spinner {
+      #gcds-aadhaar-card .gcds-btn-skip:hover, #gcds-doc-card .gcds-btn-skip:hover, #gcds-house-card .gcds-btn-skip:hover, #gcds-disability-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
+      #gcds-aadhaar-card .gcds-spinner, #gcds-doc-card .gcds-spinner, #gcds-house-card .gcds-spinner, #gcds-disability-card .gcds-spinner {
         display: inline-block;
         width: 14px; height: 14px;
         border: 2px solid rgba(255,255,255,0.3);
@@ -1553,6 +1604,66 @@
         animation: gcds-spin 0.6s linear infinite;
         vertical-align: middle;
         margin-right: 6px;
+      }
+
+      /* ── Section I (Disability) Dedicated Action Card Buttons & Layout ── */
+      #gcds-disability-card .gcds-btn-skip-primary {
+        width: 100%;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 700;
+        border: none;
+        border-radius: 9px;
+        padding: 12px 0;
+        cursor: pointer;
+        letter-spacing: 0.02em;
+        transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+      #gcds-disability-card .gcds-btn-skip-primary:hover {
+        opacity: 0.95;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.5);
+      }
+      #gcds-disability-card .gcds-btn-skip-primary:active {
+        opacity: 0.85;
+        transform: translateY(0);
+      }
+      #gcds-disability-card .gcds-btn-fill-secondary {
+        width: 100%;
+        background: rgba(99, 102, 241, 0.15);
+        border: 1.5px solid #6366f1;
+        color: #c7d2fe;
+        font-size: 13px;
+        font-weight: 700;
+        border-radius: 9px;
+        padding: 10px 0;
+        cursor: pointer;
+        margin-top: 10px;
+        transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+      #gcds-disability-card .gcds-btn-fill-secondary:hover {
+        background: rgba(99, 102, 241, 0.28);
+        border-color: #818cf8;
+        color: #ffffff;
+        transform: translateY(-1px);
+      }
+      #gcds-disability-card .gcds-action-desc {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-top: 4px;
+        margin-bottom: 8px;
+        text-align: center;
+        line-height: 1.35;
       }
       #gcds-doc-card .gcds-doc-picker-list {
         display: flex;
@@ -4135,6 +4246,348 @@
     });
   }
 
+  /**
+   * Helper to transition from Section I to Section J.
+   * Clicks Section I Next button and verifies transition to Section J.
+   *
+   * @param {number} maxWaitMs - Maximum time to wait for transition
+   * @returns {Promise<boolean>}
+   */
+  async function transitionSectionIToJ(maxWaitMs = 4000) {
+    const clicked = await clickSectionNextButton('I');
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWaitMs) {
+      // 1. Check if Section J header or title is visible
+      const titles = Array.from(document.querySelectorAll('.form-title, h1, h2, h3, h4, h5, h6, strong, span.textheadingnum'));
+      const hasJTitle = titles.some((el) => {
+        const txt = (el.textContent || '').trim().toLowerCase();
+        return (txt.includes('j.') || txt.includes('10.')) && (txt.includes('family') || txt.includes('member') || txt.includes('পরিবার'));
+      });
+
+      // 2. Check if Section J container is active (un-disabled)
+      const boxJ = findSectionBox('J');
+      const isJActive = boxJ && (
+        !boxJ.querySelector('fieldset[disabled]') &&
+        Boolean(boxJ.querySelector('select#currentRelRelationship, input#epicNo, input[name="epicNo"], input:not([disabled])'))
+      );
+
+      // 3. Check sidebar status
+      const sidebarJ = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
+        .find((el) => (el.innerText || '').trim().startsWith('J.'));
+      const isJSidebarActive = sidebarJ && sidebarJ.className.includes('sidenavclass') && !sidebarJ.className.includes('sidenavclassstart');
+
+      if (hasJTitle || isJActive || isJSidebarActive) {
+        console.log('✅ Section J active confirmed.');
+        return true;
+      }
+      await sleep(150);
+    }
+    return clicked;
+  }
+
+  /**
+   * Section I (Category of Disability) Smart Skip-or-Fill Action Card.
+   *
+   * Displays a floating Action Card when Section I is detected:
+   * - Option 1: [ Skip Section ] (Primary Action) - Bypasses Section I immediately to Section J without data injection.
+   * - Option 2: [ Yes, Fill Details ] - Automates disability category checkboxes, percentage,
+   *   and certificate upload with DataTransfer & 2-second Upload Guard.
+   *
+   * @param {Object} data - Form Fill DTO
+   * @returns {Promise<{ action: 'FILLED'|'SKIPPED', filledCount?: number }>}
+   */
+  function waitForSectionIDisabilityChoice(data) {
+    return new Promise((resolve) => {
+      injectRelationCardStyles();
+
+      // Remove any existing disability card
+      const stale = document.getElementById('gcds-disability-card');
+      if (stale) stale.remove();
+
+      const boxI = findSectionBox('I') || document;
+      try {
+        if (boxI && typeof boxI.scrollIntoView === 'function') {
+          boxI.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      } catch {}
+
+      const card = document.createElement('div');
+      card.id = 'gcds-disability-card';
+      card.setAttribute('role', 'dialog');
+      card.setAttribute('aria-label', 'Section I Category of Disability Smart Skip-or-Fill');
+
+      // Check if GCDS customer has disability information registered
+      const disType = (data.disability_type || data.disabilityType || '').trim();
+      const disDesc = (data.disability_description || data.disabilityDescription || '').trim();
+      const disPct = (data.disability_percentage || data.disabilityPercentage || '').trim();
+      const certUrl = data.disability_certificate_url || data.disabilityCertificateUrl || data.documents?.disabilityCertificate?.url || null;
+      const hasGcdsData = Boolean(disType || disPct || certUrl);
+
+      card.innerHTML = `
+        <div class="gcds-card-header">
+          <span class="gcds-card-badge">Section I</span>
+          <span class="gcds-card-title">Category of Disability</span>
+        </div>
+        <div class="gcds-rec-box">
+          <div class="gcds-rec-label">Optional Section</div>
+          <div class="gcds-rec-name">Smart Skip-or-Fill</div>
+          <div class="gcds-rec-desc">${
+            hasGcdsData
+              ? `Customer record has disability details${disType ? ` (${escapeHtml(disType)})` : ''}. Choose to fill or skip:`
+              : 'No disability details to provide for most applicants. Choose an action:'
+          }</div>
+        </div>
+
+        <button type="button" class="gcds-btn-skip-primary" id="gcds-btn-skip-section-i" data-testid="btn-skip-disability">
+          ⏭️ Skip Section
+        </button>
+        <div class="gcds-action-desc">No disability details to provide. Move to Section J.</div>
+
+        <button type="button" class="gcds-btn-fill-secondary" id="gcds-btn-fill-disability" data-testid="btn-fill-disability">
+          ♿ Yes, Fill Details
+        </button>
+        <div class="gcds-action-desc">Fill disability category, percentage, and upload certificate.</div>
+      `;
+
+      const btnSkip = card.querySelector('#gcds-btn-skip-section-i');
+      const btnFill = card.querySelector('#gcds-btn-fill-disability');
+
+      // Handler for Skip Section:
+      // Bypasses Section I immediately by clicking portal Next button and waiting for Section J
+      const handleSkip = async (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        btnSkip.disabled = true;
+        btnFill.disabled = true;
+        btnSkip.innerHTML = '<span class="gcds-spinner"></span> Skipping to Section J…';
+
+        try {
+          card.remove();
+        } catch {}
+
+        await transitionSectionIToJ();
+        resolve({ action: 'SKIPPED' });
+      };
+
+      btnSkip.addEventListener('click', handleSkip);
+
+      // Handler for Yes, Fill Details:
+      // Automates category checkbox, percentage, Yes radio, file upload via DataTransfer & 2-sec Upload Guard
+      btnFill.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        btnSkip.disabled = true;
+        btnFill.disabled = true;
+
+        // Transition card to Fill Details mode
+        card.innerHTML = `
+          <div class="gcds-card-header">
+            <span class="gcds-card-badge">Section I</span>
+            <span class="gcds-card-title">Disability Details</span>
+          </div>
+          <div class="gcds-rec-box">
+            <div class="gcds-rec-label">Automating Section I</div>
+            <div class="gcds-rec-name" id="gcds-disability-step-name">Injecting Disability Info…</div>
+            <div class="gcds-rec-desc" id="gcds-disability-step-desc">Selecting category, filling percentage, and attaching certificate.</div>
+          </div>
+          <div class="gcds-doc-status-box" id="gcds-disability-status-box">
+            <span style="font-size: 13px; color: #94a3b8;" id="gcds-disability-status-text">⏳ Processing disability fields…</span>
+          </div>
+          <div class="gcds-btn-row">
+            <button type="button" class="gcds-btn-confirm" id="gcds-btn-confirm-disability" disabled>
+              ✅ Confirm &amp; Proceed
+            </button>
+            <button type="button" class="gcds-btn-skip" id="gcds-btn-cancel-disability">
+              Skip Section
+            </button>
+          </div>
+        `;
+
+        const statusBox = card.querySelector('#gcds-disability-status-box');
+        const statusText = card.querySelector('#gcds-disability-status-text');
+        const stepName = card.querySelector('#gcds-disability-step-name');
+        const stepDesc = card.querySelector('#gcds-disability-step-desc');
+        const btnConfirm = card.querySelector('#gcds-btn-confirm-disability');
+        const btnCancel = card.querySelector('#gcds-btn-cancel-disability');
+
+        btnCancel.addEventListener('click', handleSkip);
+
+        let fieldsFilledCount = 0;
+
+        try {
+          // ─── Step A: Category Checkbox Mapping ──────────────────────────────
+          const rawType = (disType || disDesc || '').toLowerCase();
+          let targetCheckboxVal = 'disabilityTypeOthers';
+          let isOther = true;
+          let categoryLabel = 'Other';
+
+          if (rawType.includes('locomot') || rawType.includes('physical') || rawType.includes('ortho') || rawType.includes('walk') || rawType.includes('limb') || rawType.includes('handicap')) {
+            targetCheckboxVal = 'disabilityTypeLocomotor';
+            isOther = false;
+            categoryLabel = 'Locomotive';
+          } else if (rawType.includes('visu') || rawType.includes('blind') || rawType.includes('eye') || rawType.includes('sight') || rawType === 'vi') {
+            targetCheckboxVal = 'disabilityTypeVi';
+            isOther = false;
+            categoryLabel = 'Visual';
+          } else if (rawType.includes('deaf') || rawType.includes('dumb') || rawType.includes('speech') || rawType.includes('hear') || rawType.includes('mute') || rawType === 'sh') {
+            targetCheckboxVal = 'disabilityTypeSh';
+            isOther = false;
+            categoryLabel = 'Deaf & Dumb';
+          }
+
+          if (stepName) stepName.textContent = `Category: ${categoryLabel}`;
+
+          const curBoxI = findSectionBox('I') || document;
+          const chk = curBoxI.querySelector(`input[type="checkbox"][value="${targetCheckboxVal}"]`) ||
+            findElement(
+              targetCheckboxVal === 'disabilityTypeLocomotor' ? SELECTOR_MAP.disabilityLocomotor :
+              targetCheckboxVal === 'disabilityTypeVi' ? SELECTOR_MAP.disabilityVisual :
+              targetCheckboxVal === 'disabilityTypeSh' ? SELECTOR_MAP.disabilityDeafDumb :
+              SELECTOR_MAP.disabilityOtherCheckbox
+            );
+
+          if (chk) {
+            setRadioOrCheckbox(chk, true);
+            const propKey = Object.keys(chk).find((k) => k.startsWith('__reactProps'));
+            if (propKey && chk[propKey]?.onChange) {
+              try { chk[propKey].onChange({ target: { checked: true, value: targetCheckboxVal } }); } catch {}
+            }
+            highlightField(chk);
+            fieldsFilledCount++;
+          }
+
+          // If "Other", fill description box
+          if (isOther) {
+            const otherText = disDesc || disType || 'Other Disability';
+            const otherInp = curBoxI.querySelector('input#other[name="other"], input[name="other"]') || findElement(SELECTOR_MAP.disabilityOtherDescription);
+            if (otherInp) {
+              setInputValue(otherInp, otherText);
+              highlightField(otherInp);
+              fieldsFilledCount++;
+            }
+          }
+
+          await sleep(200);
+
+          // ─── Step B: Percentage ─────────────────────────────────────────────
+          const pctVal = String(disPct || '40').replace(/\D/g, '') || '40';
+          const pctInp = curBoxI.querySelector('input#disability[name="disability"], input[name="disability"]') || findElement(SELECTOR_MAP.disabilityPercentage);
+          if (pctInp) {
+            setInputValue(pctInp, pctVal);
+            highlightField(pctInp);
+            fieldsFilledCount++;
+          }
+
+          await sleep(200);
+
+          // ─── Step C: Certificate Radio & Document Upload ────────────────────
+          if (stepName) stepName.textContent = 'Certificate Upload';
+          if (stepDesc) stepDesc.textContent = 'Setting Certificate Attached to Yes and uploading certificate…';
+
+          const radioYes = curBoxI.querySelector('input[type="radio"][name="disabilitychoose"][value="Y"]') || findElement(SELECTOR_MAP.disabilityCertYes);
+          if (radioYes) {
+            setRadioOrCheckbox(radioYes, true);
+            const propKey = Object.keys(radioYes).find((k) => k.startsWith('__reactProps'));
+            if (propKey && radioYes[propKey]?.onChange) {
+              try { radioYes[propKey].onChange({ target: { checked: true, value: 'Y' } }); } catch {}
+            }
+            highlightField(radioYes);
+          }
+
+          // Wait for file input to become enabled/visible
+          let fileInp = null;
+          const pollStart = Date.now();
+          while (Date.now() - pollStart < 3000) {
+            fileInp = curBoxI.querySelector('input[type="file"]#disabilityProof, input[type="file"][name="disabilityProof"]') || findElement(SELECTOR_MAP.disabilityCertFile);
+            if (fileInp && !fileInp.disabled) break;
+            await sleep(150);
+          }
+
+          // Fetch & Inject Disability Certificate
+          let certBlob = null;
+          if (certUrl) {
+            if (statusText) statusText.textContent = '⏳ Fetching disability certificate from GCDS…';
+            certBlob = await fetchFileBlob(certUrl, data.customerId);
+          }
+
+          let uploadSuccess = false;
+          if (fileInp && certBlob) {
+            if (statusText) statusText.textContent = '⏳ Injecting certificate via DataTransfer…';
+            uploadSuccess = await injectFileToPortal(fileInp, certBlob, 'disability_certificate.pdf', false);
+
+            if (uploadSuccess) {
+              fieldsFilledCount++;
+              highlightField(fileInp);
+
+              // Apply 2-Second Upload Guard
+              if (statusBox && statusText) {
+                statusBox.style.borderColor = '#10b981';
+                statusBox.style.background = 'rgba(16, 185, 129, 0.15)';
+                statusText.style.color = '#34d399';
+                statusText.innerHTML = '✅ Certificate uploaded. <strong>2-second Upload Guard…</strong>';
+              }
+              await sleep(2000);
+
+              if (statusText) {
+                statusText.innerHTML = '✅ Certificate verified and registered.';
+              }
+            }
+          }
+
+          if (!uploadSuccess) {
+            if (statusBox && statusText) {
+              statusBox.style.borderColor = '#f59e0b';
+              statusBox.style.background = 'rgba(245, 158, 11, 0.15)';
+              statusText.style.color = '#fbbf24';
+              statusText.innerHTML = certUrl
+                ? '⚠️ Auto-upload incomplete. Please attach certificate in portal if available.'
+                : 'ℹ️ No certificate found in GCDS. Attach in portal if available, or proceed.';
+            }
+          }
+
+          // ─── Step D: Show Confirm & Proceed Button ─────────────────────────
+          if (stepName) stepName.textContent = 'Ready to Proceed';
+          if (stepDesc) stepDesc.textContent = 'Disability details populated. Review and confirm to advance to Section J.';
+          btnConfirm.disabled = false;
+
+          btnConfirm.addEventListener('click', async (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            btnConfirm.disabled = true;
+            btnCancel.disabled = true;
+            btnConfirm.innerHTML = '<span class="gcds-spinner"></span> Advancing to Section J…';
+
+            try {
+              card.remove();
+            } catch {}
+
+            await transitionSectionIToJ();
+            resolve({ action: 'FILLED', filledCount: fieldsFilledCount });
+          });
+        } catch (fillErr) {
+          console.warn('[GCDS Section I] Error filling disability details:', fillErr);
+          if (statusBox && statusText) {
+            statusBox.style.borderColor = '#ef4444';
+            statusBox.style.background = 'rgba(239, 68, 68, 0.15)';
+            statusText.style.color = '#f87171';
+            statusText.textContent = `Error: ${fillErr.message || 'Auto-fill error'}. You may complete manually or skip.`;
+          }
+          btnConfirm.disabled = false;
+          btnConfirm.addEventListener('click', async () => {
+            try { card.remove(); } catch {}
+            await transitionSectionIToJ();
+            resolve({ action: 'FILLED', filledCount: fieldsFilledCount });
+          });
+        }
+      });
+
+      document.body.appendChild(card);
+    });
+  }
+
   // ─── Main Fill Engine ─────────────────────────────────────────────────────
 
   /**
@@ -5357,11 +5810,16 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Section I: Category of Disability (Optional)
+    // Section I: Category of Disability (Optional) — Smart Skip-or-Fill Logic
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // Auto-advance Section I
-    await clickSectionNextButton('I');
+    const secIResult = await waitForSectionIDisabilityChoice(data);
+    if (secIResult?.action === 'FILLED') {
+      filledCount += secIResult.filledCount || 1;
+    } else {
+      skippedCount++;
+      skippedFields.push('Section I (Disability)');
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Section J: Family Member Details (Optional)
@@ -5529,7 +5987,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.2.8-stable',
+      version: '1.2.9-stable',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
@@ -5570,6 +6028,8 @@
     waitForAddressProofSmartPicker,
     waitForHouseNumberInput,
     waitForManualDocumentUpload,
+    waitForSectionIDisabilityChoice,
+    transitionSectionIToJ,
     parseAddressComponents,
     runFill,
     fillForm,
@@ -5617,6 +6077,8 @@
     if (staleDoc) staleDoc.remove();
     const staleHouse = document.getElementById('gcds-house-card');
     if (staleHouse) staleHouse.remove();
+    const staleDisability = document.getElementById('gcds-disability-card');
+    if (staleDisability) staleDisability.remove();
   };
 })();
 
