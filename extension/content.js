@@ -5414,8 +5414,10 @@
    * Displays the final completion card:
    * "Form entry complete. Please solve Captcha and Submit manually to generate Receipt."
    * Halts all automation so human operator solves Captcha and performs manual submission.
+   *
+   * @param {Object} [customerData] - Customer Form Fill DTO
    */
-  function showSectionLCompletionCard() {
+  function showSectionLCompletionCard(customerData = null) {
     injectRelationCardStyles();
 
     const stale = document.getElementById('gcds-completion-card');
@@ -5448,6 +5450,181 @@
     `;
 
     document.body.appendChild(card);
+
+    // Task 1: As soon as Section L card is displayed, initiate watchForFinalSubmission
+    watchForFinalSubmission(customerData);
+  }
+
+  /**
+   * Section L: Success Watcher & Auto-Dismiss Observer (v1.5.0).
+   *
+   * Continuously monitors the portal after Section L completion card is displayed.
+   * Criteria for Completion:
+   * 1. Detects ECI success modal/container (.modal-content, app-form-acknowledgement, .alert-success, etc.)
+   * 2. Identifies the success string: "Application Submitted Successfully" (English, Bengali, Hindi).
+   * 3. Uses Regex to scrape the Reference Number (e.g., WB..., S05..., or [A-Z0-9]{8,24}).
+   * 4. Detects presence of "Download Acknowledgment" or "Print" button.
+   *
+   * Post-Completion Actions:
+   * 1. Updates #gcds-completion-card to "Success Green" theme with:
+   *    "🎉 Submission Recorded! Ref: [Number]. Closing & Syncing with GCDS..."
+   * 2. Sends message to background.js with action 'FORM_SUBMISSION_COMPLETED'.
+   * 3. Waits exactly 3.5 seconds, then executes window.__GCDS_CONTENT_SCRIPT_CLEANUP().
+   *
+   * @param {Object} [customerData] - Customer Form Fill DTO
+   * @param {Function} [onComplete] - Optional completion callback
+   */
+  function watchForFinalSubmission(customerData = null, onComplete = null) {
+    if (window.__GCDS_SUBMISSION_OBSERVER) {
+      try { window.__GCDS_SUBMISSION_OBSERVER.disconnect(); } catch {}
+      window.__GCDS_SUBMISSION_OBSERVER = null;
+    }
+
+    const SUCCESS_TEXT_REGEX = /(?:application\s+submitted\s+successfully|your\s+application\s+has\s+been\s+submitted|submitted\s+successfully|submission\s+complete|আবেদন\s+সফলভাবে\s+জমা|আবেদন\s+সফলভাবে\s+দাখিল|आवेदन\s+सफलतापूर्वक\s+जमा)/i;
+
+    const REF_REGEX_PATTERNS = [
+      /(?:Reference|Acknowledgement|Acknowledgment)\s*(?:No\.?|Number)?\s*[:\-–]\s*([A-Z0-9\/\-]{6,30})/i,
+      /\b(WB\/?\d{4}\/?\d{6,14}|S\d{2}[A-Z0-9]{6,16}|[A-Z]{2,4}\d{6,16})\b/i,
+    ];
+
+    let hasHandledCompletion = false;
+
+    function checkDomForSubmission() {
+      if (hasHandledCompletion) return;
+
+      // Check all modal containers, alert boxes, and acknowledgment components
+      const candidateElements = Array.from(
+        document.querySelectorAll('.modal-content, .modal, app-form-acknowledgement, [class*="acknowledg"], .alert-success, div[role="dialog"]')
+      );
+
+      // If no specific container found, also inspect body text if body contains success keywords
+      if (candidateElements.length === 0 && SUCCESS_TEXT_REGEX.test(document.body.innerText || '')) {
+        candidateElements.push(document.body);
+      }
+
+      for (const container of candidateElements) {
+        const text = (container.innerText || container.textContent || '').trim();
+        if (!text) continue;
+
+        const isSuccess = SUCCESS_TEXT_REGEX.test(text);
+        if (!isSuccess) continue;
+
+        // Ensure this is not an error alert or preview dialog
+        const isError = /(?:invalid|error|failed|try again|ভুল|ব্যর্থ)/i.test(text) && !/(?:successfully|সফলভাবে)/i.test(text);
+        if (isError) continue;
+
+        // Try extracting reference number
+        let refNumber = null;
+        for (const regex of REF_REGEX_PATTERNS) {
+          const match = text.match(regex);
+          if (match && match[1]) {
+            refNumber = match[1].replace(/[.,;:)]$/, '').trim();
+            break;
+          }
+        }
+
+        // Secondary check: presence of "Download Acknowledgment" or print action
+        const actionButtons = Array.from(container.querySelectorAll('button, a, input[type="button"], .btn'));
+        const hasDownloadBtn = actionButtons.some((b) =>
+          /(?:download|acknowledg|print|receipt|রসিদ|ডাউনলোড)/i.test(b.textContent || b.value || '')
+        );
+
+        // Verification condition: Success string + (Reference number OR Download button)
+        if (refNumber || hasDownloadBtn) {
+          hasHandledCompletion = true;
+          if (window.__GCDS_SUBMISSION_OBSERVER) {
+            try { window.__GCDS_SUBMISSION_OBSERVER.disconnect(); } catch {}
+            window.__GCDS_SUBMISSION_OBSERVER = null;
+          }
+
+          const finalRef = refNumber || 'ECI-REGISTERED';
+          console.log(`[GCDS Extension] 🎉 Final Submission Acknowledgment Detected! Ref: ${finalRef}`);
+
+          // Task 2: "Sync & Farewell" UI Update
+          const card = document.getElementById('gcds-completion-card');
+          if (card) {
+            card.style.background = 'linear-gradient(145deg, #064e3b 0%, #065f46 50%, #047857 100%) !important';
+            card.style.borderColor = '#34d399 !important';
+            card.style.boxShadow = '0 10px 48px rgba(52, 211, 153, 0.6), 0 2px 16px rgba(0,0,0,0.6) !important';
+
+            card.innerHTML = `
+              <div class="gcds-card-header">
+                <span class="gcds-card-badge" style="background:#34d399 !important; color:#064e3b !important; font-weight:800;">SUBMISSION COMPLETE</span>
+                <span class="gcds-card-title" style="color:#a7f3d0 !important;">Portal Verified</span>
+              </div>
+              <div class="gcds-complete-title" style="color:#ffffff !important; font-size:15px; font-weight:800;">
+                🎉 Submission Recorded! Ref: <span style="color:#fde047; font-family:monospace; font-size:15px;">${finalRef}</span>
+              </div>
+              <div class="gcds-complete-bengali" style="color:#d1fae5 !important; font-weight:600;">
+                Closing &amp; Syncing with GCDS... (আবেদন সফলভাবে নথিভুক্ত হয়েছে)
+              </div>
+              <div class="gcds-complete-box" style="background:rgba(0,0,0,0.4); border-color:#34d399;">
+                <div style="color:#34d399; font-weight:700;">✔ Reference Number: ${finalRef}</div>
+                <div style="color:#e2e8f0;">✔ ECI Form 6 submission registered successfully</div>
+                <div style="color:#94a3b8; font-size:11px; margin-top:4px;">⏱ Auto-dismissing in 3.5 seconds…</div>
+              </div>
+            `;
+          }
+
+          // Send message to background script to update GCDS status and reset session
+          if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
+            try {
+              chrome.runtime.sendMessage({
+                action: 'FORM_SUBMISSION_COMPLETED',
+                payload: {
+                  referenceNumber: finalRef,
+                  customerId: customerData?.id || null,
+                  customerCode: customerData?.customerCode || null,
+                  customerName: customerData?.name?.fullName || null,
+                  submittedAt: new Date().toISOString(),
+                  status: 'SUBMITTED',
+                },
+              }, () => {});
+            } catch (err) {
+              console.warn('[GCDS] Notice sending submission completed message:', err);
+            }
+          }
+
+          // Task 3: Automated Teardown & Session Reset after exactly 3.5 seconds
+          setTimeout(() => {
+            try {
+              if (typeof window.__GCDS_CONTENT_SCRIPT_CLEANUP === 'function') {
+                window.__GCDS_CONTENT_SCRIPT_CLEANUP();
+              }
+            } catch (err) {
+              console.warn('[GCDS] Teardown error:', err);
+            }
+
+            // Also clear active customer session storage directly in content script if available
+            try {
+              if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+                chrome.storage.session.remove(['activeCustomer', 'current_form_data', 'selected_customer']);
+              }
+            } catch {}
+
+            if (typeof onComplete === 'function') {
+              onComplete({ success: true, referenceNumber: finalRef });
+            }
+          }, 3500);
+
+          return;
+        }
+      }
+    }
+
+    // Check immediately in case acknowledgment is already visible
+    checkDomForSubmission();
+
+    // Start persistent observer
+    try {
+      const observer = new MutationObserver(() => {
+        checkDomForSubmission();
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      window.__GCDS_SUBMISSION_OBSERVER = observer;
+    } catch (err) {
+      console.warn('[GCDS] Could not start submission MutationObserver:', err);
+    }
   }
 
   // ─── Main Fill Engine ─────────────────────────────────────────────────────
@@ -6709,7 +6886,7 @@
     // CRITICAL SAFETY RULE 1: NEVER AUTOMATE FINAL SUBMISSION
     // ═══════════════════════════════════════════════════════════════════════════
 
-    showSectionLCompletionCard();
+    showSectionLCompletionCard(data);
 
     const fillResult = {
       success: true,
@@ -6816,7 +6993,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.4.0-stable',
+      version: '1.5.0-stable',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
@@ -6865,6 +7042,7 @@
     transitionSectionKToL,
     handleSectionKDeclaration,
     showSectionLCompletionCard,
+    watchForFinalSubmission,
     parseAddressComponents,
     runFill,
     fillForm,
@@ -6904,6 +7082,10 @@
 
   // Register re-injection cleanup hook
   window.__GCDS_CONTENT_SCRIPT_CLEANUP = () => {
+    if (window.__GCDS_SUBMISSION_OBSERVER) {
+      try { window.__GCDS_SUBMISSION_OBSERVER.disconnect(); } catch {}
+      window.__GCDS_SUBMISSION_OBSERVER = null;
+    }
     const staleRel = document.getElementById('gcds-rel-card');
     if (staleRel) staleRel.remove();
     const staleAadhaar = document.getElementById('gcds-aadhaar-card');

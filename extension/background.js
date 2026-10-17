@@ -16,7 +16,7 @@
 const DEFAULT_API_URL = 'https://gdsa-opal.vercel.app';
 const SEARCH_ENDPOINT = '/api/extension/customers/search';
 const FORM_FILL_ENDPOINT = '/api/extension/customers'; // /{id}/form-fill
-const EXTENSION_VERSION = '1.2.2';
+const EXTENSION_VERSION = '1.5.0';
 
 // Inactivity security timeout for multi-operator kiosk protection
 const INACTIVITY_TIMEOUT_MINUTES = 30;
@@ -603,6 +603,84 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             success: false,
             error: `Injection error: ${err.message}`,
           });
+        }
+      })();
+    case 'FORM_SUBMISSION_COMPLETED':
+      (async () => {
+        try {
+          const refNumber = payload?.referenceNumber || 'UNKNOWN';
+          const custId = payload?.customerId;
+          console.log(`[GCDS] ✅ ECI Final Submission Registered. Reference: ${refNumber}, Customer: ${custId || 'N/A'}`);
+
+          // 1. Store last submission metadata in local storage for history/receipts
+          await new Promise((resolve) => {
+            chrome.storage.local.set(
+              {
+                gcds_last_submission: {
+                  referenceNumber: refNumber,
+                  submittedAt: payload?.submittedAt || new Date().toISOString(),
+                  customerId: custId || null,
+                  status: 'SUBMITTED',
+                },
+              },
+              resolve
+            );
+          });
+
+          // 2. Clear activeCustomer and session data (Session Reset for next customer)
+          try {
+            if (chrome.storage?.session) {
+              await chrome.storage.session.remove(['activeCustomer', 'current_form_data', 'selected_customer']);
+            }
+          } catch {}
+
+          await new Promise((resolve) => {
+            chrome.storage.local.remove(['activeCustomer', 'gcds_active_customer', 'current_form_data'], resolve);
+          });
+
+          // 3. Desktop Notification via chrome.notifications (Task 3)
+          if (typeof chrome !== 'undefined' && chrome.notifications?.create) {
+            try {
+              chrome.notifications.create(`gcds_sub_${Date.now()}`, {
+                type: 'basic',
+                iconUrl: 'icons/icon128.png',
+                title: 'GCDS: Application Synced Successfully',
+                message: `ECI Form 6 Submission Registered.\nReference No: ${refNumber}`,
+                priority: 2,
+              });
+            } catch (notifErr) {
+              console.warn('[GCDS] Desktop notification notice:', notifErr);
+            }
+          }
+
+          // 4. Attempt non-blocking GCDS backend status sync
+          if (custId) {
+            try {
+              const { apiUrl, authToken } = await getSettings();
+              if (authToken) {
+                await fetch(`${apiUrl}/api/extension/customers/${custId}/submit`, {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${authToken}`,
+                    'Content-Type': 'application/json',
+                    'X-GCDS-Client': `gazi-smart-form-filler/${EXTENSION_VERSION}`,
+                  },
+                  body: JSON.stringify({
+                    referenceNumber: refNumber,
+                    status: 'submitted',
+                    submittedAt: payload?.submittedAt || new Date().toISOString(),
+                  }),
+                }).catch(() => {});
+              }
+            } catch (err) {
+              console.warn('[GCDS] Non-blocking backend sync notice:', err);
+            }
+          }
+
+          sendResponse({ success: true, referenceNumber: refNumber, status: 'SUBMITTED' });
+        } catch (err) {
+          console.error('[GCDS] Error processing submission completion:', err);
+          sendResponse({ success: false, error: err.message });
         }
       })();
       return true;

@@ -47,6 +47,7 @@ graph LR
 | **CORS** | Origin-whitelisted (`chrome-extension://...`), no wildcard `*` |
 | **PII Protection** | Mobile masked in search, Aadhaar/PAN/GST never returned |
 | **No Silent Submit** | Submit button is NEVER automated — human review mandatory |
+| **Submission Watcher** | Listens for ECI acknowledgment dialog, scrapes Reference No., auto-dismisses UI in 3.5s |
 | **Fail-Safe** | Detects missing DOM selectors, notifies user instead of misfilling |
 | **Token Storage** | `chrome.storage.local` (encrypted at rest by Chrome) |
 | **Tenant Isolation** | All queries scoped to `business_id`, cross-tenant = 404 |
