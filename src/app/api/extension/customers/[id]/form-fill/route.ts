@@ -219,6 +219,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
       fileName: string;
       mimeType: string;
       documentType: string;
+      otherDescription?: string;
     }> = [];
 
     let ageProofDoc: { url: string; type: string; fileName: string; mimeType: string } | null = null;
@@ -243,8 +244,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
       const activeDocs = (customerDocs || []).filter((d: any) => d.status === 'active' || !d.status);
 
-      // Matcher for the 6 standard ECI Age Proof categories
-      const matchAgeCategory = (d: any): { code: string; category: string; label: string } | null => {
+      // Matcher for the 6 standard ECI Age Proof categories + Option 2 (Other Document)
+      const matchAgeCategory = (d: any): { code: string; category: string; label: string; otherDescription?: string } | null => {
         const t = `${d.document_type || ''} ${d.document_name || ''} ${d.source_filename || ''} ${d.file_name || ''}`.toLowerCase();
         if (t.includes('birth')) {
           return { code: 'BCMR', category: 'BIRTH_CERTIFICATE', label: 'Birth Certificate' };
@@ -274,6 +275,16 @@ export async function GET(req: NextRequest, context: RouteContext) {
         ) {
           return { code: 'CCIS', category: 'MARK_SHEET / SCHOOL_CERTIFICATE', label: 'Certificates of Class X or XII' };
         }
+        if (
+          t.includes('other') ||
+          d.document_type === 'OTHER' ||
+          d.document_type === 'OTHER_DOCUMENT' ||
+          d.document_type === 'AGE_PROOF_OTHER' ||
+          d.document_type === 'CUSTOM'
+        ) {
+          const desc = d.document_name || d.document_type || 'Other Document';
+          return { code: 'OTHR', category: 'OTHER', label: desc, otherDescription: desc };
+        }
         return null;
       };
 
@@ -302,6 +313,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
               fileName: doc.file_name || doc.source_filename || `${matched.code.toLowerCase()}_proof.jpg`,
               mimeType: doc.mime_type || 'image/jpeg',
               documentType: doc.document_type || matched.label,
+              otherDescription: matched.otherDescription || (matched.code === 'OTHR' ? (doc.document_name || doc.document_type || 'Other Document') : undefined),
             });
           }
         }
@@ -458,6 +470,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
       addressProof: addressProofDoc,
       ageProofUrl: ageProofDoc?.url || null,
       ageProofType: ageProofDoc?.type || null,
+      age_proof_other_description: (customer as any).age_proof_other_description || null,
+      ageProofOtherDescription: (customer as any).age_proof_other_description || null,
       addressProofUrl: addressProofDoc?.url || null,
       addressProofType: addressProofDoc?.type || null,
 

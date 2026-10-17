@@ -326,9 +326,21 @@
       'input[type="radio"][name="ageDocument"][value="ageProof"]',
       'input#ageDocument[value="ageProof"]',
     ],
+    ageProofOtherRadio: [
+      'input[type="radio"][name="ageDocument"][value="otherAgeProof"]',
+      'input#ageDocument[value="otherAgeProof"]',
+      'input[type="radio"][name="ageDocument"][value*="other" i]',
+    ],
     ageProofType: [
       'select[name="ageproof"]',
       'select#ageproof',
+    ],
+    ageProofOtherInput: [
+      'input[name="ageProofOthers"]',
+      'input#ageProofOthers',
+      'input.partGselectfield',
+      'input[formcontrolname="ageProofOthers"]',
+      'input[formcontrolname="ageProofOther"]',
     ],
     ageProofFile: [
       'input[type="file"]#ageProof',
@@ -2102,12 +2114,39 @@
    * @param {HTMLElement} [options.boxG] - Section G box container
    * @returns {Promise<{ action: 'UPLOADED'|'CONFIRMED'|'SKIP', code?: string, label?: string }>}
    */
+  /**
+   * Shows a floating Smart Age-Proof Document Picker for Section G with Dual-Option Support:
+   *
+   * Option 1: Standard Document List:
+   * Displays all 6 standard ECI Age Proof document options (PAN, Passport,
+   * DL, Class X/XII Certificate, Birth Certificate, Aadhaar Card).
+   * Clicks Option 1 radio ('ageProof'), waits 500ms, selects dropdown, and auto-uploads.
+   *
+   * Option 2: Any Other Document (Specify):
+   * Clicks Option 2 radio ('otherAgeProof'), waits 500ms, fills document description input
+   * ('ageProofOthers'), and uploads the file with 2-second upload guard.
+   *
+   * @param {Object} options
+   * @param {Array} options.candidates - List of age proof candidates from GCDS DTO
+   * @param {string} [options.customerId] - Customer ID for binary fetch
+   * @param {HTMLInputElement} [options.fileInput] - Target file input on portal DOM (#ageProof)
+   * @param {HTMLSelectElement} [options.selectElement] - Target select element on portal DOM (select[name="ageproof"])
+   * @param {HTMLInputElement} [options.radioElement] - Target radio element for ageDocument (Option 1: ageProof)
+   * @param {HTMLInputElement} [options.otherRadioElement] - Target radio element for ageDocument (Option 2: otherAgeProof)
+   * @param {HTMLInputElement} [options.otherInputElement] - Target input element for document description (ageProofOthers)
+   * @param {string} [options.initialOtherDescription] - Initial description text for Other Document
+   * @param {HTMLElement} [options.boxG] - Section G box container
+   * @returns {Promise<{ action: 'UPLOADED'|'CONFIRMED'|'SKIP', code?: string, label?: string, isOther?: boolean, description?: string }>}
+   */
   function waitForAgeProofSmartPicker({
     candidates = [],
     customerId = null,
     fileInput = null,
     selectElement = null,
     radioElement = null,
+    otherRadioElement = null,
+    otherInputElement = null,
+    initialOtherDescription = '',
     boxG = null,
   }) {
     return new Promise((resolve) => {
@@ -2120,7 +2159,7 @@
       const card = document.createElement('div');
       card.id = 'gcds-doc-card';
       card.setAttribute('role', 'dialog');
-      card.setAttribute('aria-label', 'Section G Smart Age-Proof Document Picker');
+      card.setAttribute('aria-label', 'Section G Dual-Option Age-Proof Document Picker');
 
       const ECI_AGE_OPTIONS = [
         { code: 'PC', label: 'PAN Card', category: 'PAN_CARD', portalText: 'Pan Card', icon: '💳' },
@@ -2138,7 +2177,7 @@
           if (c.code === opt.code) return true;
           if (opt.altCode && c.code === opt.altCode) return true;
           if (c.category && c.category === opt.category) return true;
-          const t = `${c.documentType || ''} ${c.fileName || ''} ${c.type || ''}`.toLowerCase();
+          const t = `${c.documentType || ''} ${c.fileName || ''} ${c.type || ''} ${c.label || ''}`.toLowerCase();
           if (opt.code === 'PC' && t.includes('pan')) return true;
           if (opt.code === 'ADHR' && t.includes('aadhaar')) return true;
           if (opt.code === 'BCMR' && t.includes('birth')) return true;
@@ -2156,14 +2195,47 @@
         return {
           ...opt,
           isAvailable: Boolean(found && (found.url || found.signedUrl)),
-          candidate: found ? {
-            ...found,
-            url: found.url || found.signedUrl,
-          } : null,
+          candidate: found
+            ? {
+                ...found,
+                url: found.url || found.signedUrl,
+              }
+            : null,
         };
       });
 
-      const availableCount = enrichedOptions.filter((o) => o.isAvailable).length;
+      // Detect any "OTHER" document candidate in GCDS
+      const otherCandidateRaw =
+        candidates.find((c) => {
+          if (!c) return false;
+          if (c.code === 'OTHR' || c.code === 'OTHER') return true;
+          if (c.category === 'OTHER' || c.category === 'OTHER_DOCUMENT') return true;
+          const t = `${c.documentType || ''} ${c.fileName || ''} ${c.type || ''} ${c.label || ''}`.toLowerCase();
+          if (t.includes('other')) return true;
+          // Check if it doesn't match any standard option
+          const isStandard = ECI_AGE_OPTIONS.some(
+            (opt) =>
+              c.code === opt.code ||
+              (opt.altCode && c.code === opt.altCode) ||
+              c.category === opt.category ||
+              (opt.code === 'PC' && t.includes('pan')) ||
+              (opt.code === 'ADHR' && t.includes('aadhaar')) ||
+              (opt.code === 'BCMR' && t.includes('birth')) ||
+              (opt.code === 'DL' && (t.includes('driving') || t.includes('license') || t.includes('dl'))) ||
+              (opt.code === 'IPSP' && t.includes('passport')) ||
+              (opt.code === 'CCIS' && (t.includes('class') || t.includes('school') || t.includes('mark') || t.includes('matric') || t.includes('secondary') || t.includes('certificate')))
+          );
+          return !isStandard && Boolean(c.url || c.signedUrl);
+        }) || null;
+
+      const otherCandidate = otherCandidateRaw
+        ? {
+            ...otherCandidateRaw,
+            url: otherCandidateRaw.url || otherCandidateRaw.signedUrl,
+          }
+        : null;
+
+      const availableCount = enrichedOptions.filter((o) => o.isAvailable).length + (otherCandidate ? 1 : 0);
 
       let fileWatchInterval = null;
       const cleanupListeners = () => {
@@ -2173,8 +2245,8 @@
         }
       };
 
-      // Helper to select option in portal DOM
-      const applyOptionToPortal = (opt) => {
+      // ─── Option 1 Helper: Click Radio 1, wait 500ms, select dropdown ────────
+      const applyOption1ToPortal = async (opt) => {
         const rad =
           radioElement ||
           (boxG || document).querySelector('input[type="radio"][name="ageDocument"][value="ageProof"]') ||
@@ -2183,6 +2255,9 @@
           setRadioOrCheckbox(rad, true);
           rad.dispatchEvent(new Event('change', { bubbles: true }));
         }
+
+        // Wait 500ms for dropdown to appear / activate
+        await sleep(500);
 
         const sel =
           selectElement ||
@@ -2199,24 +2274,58 @@
         return false;
       };
 
-      // ─── Mode 1: Render Picker ─────────────────────────────────────────────
+      // ─── Option 2 Helper: Click Radio 2, wait 500ms, fill description ───────
+      const applyOption2ToPortal = async (customDesc = '') => {
+        const radOther =
+          otherRadioElement ||
+          (boxG || document).querySelector('input[type="radio"][name="ageDocument"][value="otherAgeProof"]') ||
+          findElement(SELECTOR_MAP.ageProofOtherRadio);
+        if (radOther && !radOther.checked) {
+          setRadioOrCheckbox(radOther, true);
+          radOther.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        // Wait 500ms for text input to appear / activate
+        await sleep(500);
+
+        const descToFill = (customDesc || '').trim();
+        if (descToFill) {
+          const otherInp =
+            otherInputElement ||
+            (boxG || document).querySelector('input[name="ageProofOthers"], input#ageProofOthers, input.partGselectfield') ||
+            findElement(SELECTOR_MAP.ageProofOtherInput);
+          if (otherInp) {
+            setInputValue(otherInp, descToFill);
+            otherInp.dispatchEvent(new Event('input', { bubbles: true }));
+            otherInp.dispatchEvent(new Event('change', { bubbles: true }));
+            otherInp.dispatchEvent(new Event('blur', { bubbles: true }));
+            highlightField(otherInp);
+          }
+        }
+      };
+
+      // ─── Mode 1: Render Picker View ─────────────────────────────────────────
       const renderPickerView = () => {
         cleanupListeners();
 
         const descText =
           availableCount > 0
             ? `Found <strong style="color: #34d399;">${availableCount} document(s)</strong> in GCDS. Click an option to auto-upload or upload manually:`
-            : 'No Age Proof documents found in GCDS. Select a document type to upload manually in portal:';
+            : 'Select a standard document type or specify any other document:';
 
         card.innerHTML = `
           <div class="gcds-card-header">
             <span class="gcds-card-badge">Section G</span>
-            <span class="gcds-card-title">Smart Age-Proof Picker</span>
+            <span class="gcds-card-title">Dual-Option Age-Proof Picker</span>
           </div>
           <div class="gcds-rec-box">
-            <div class="gcds-rec-label">Age Proof Document</div>
+            <div class="gcds-rec-label">Age Proof Document (7b)</div>
             <div class="gcds-rec-name">Select Document Type</div>
             <div class="gcds-rec-desc">${descText}</div>
+          </div>
+
+          <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin: 6px 0 4px 2px;">
+            Option 1: Standard Document List
           </div>
           <div class="gcds-doc-picker-list" id="gcds-age-picker-list">
             ${enrichedOptions
@@ -2245,6 +2354,31 @@
               )
               .join('')}
           </div>
+
+          <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin: 10px 0 4px 2px;">
+            Option 2: Any Other Document
+          </div>
+          <button
+            type="button"
+            class="gcds-doc-option ${otherCandidate ? 'available' : ''}"
+            id="gcds-btn-choose-other"
+            style="border: 1.5px dashed ${otherCandidate ? '#10b981' : '#6366f1'}; background: ${otherCandidate ? 'rgba(16, 185, 129, 0.08)' : 'rgba(99, 102, 241, 0.08)'}; margin-bottom: 8px;"
+            title="Use Any other Document for proof of Date of Birth (Pl. Specify)"
+          >
+            <div class="gcds-doc-opt-left">
+              <div class="gcds-doc-opt-title">
+                <span>📝</span>
+                <span>Use Other Document (Specify)</span>
+              </div>
+              <div class="gcds-doc-opt-sub">
+                ${otherCandidate ? `📄 Attached in GCDS: ${escapeHtml(otherCandidate.fileName || otherCandidate.label)}` : 'Specify custom document name & upload'}
+              </div>
+            </div>
+            <div class="gcds-doc-badge ${otherCandidate ? 'ready' : 'manual'}">
+              ${otherCandidate ? '⚡ Auto-Upload' : '✍️ Specify'}
+            </div>
+          </button>
+
           <div class="gcds-btn-row">
             <button type="button" class="gcds-btn-skip" id="gcds-btn-skip-doc" style="width: 100%;" title="Skip Section G without auto-advancing">
               Skip Section G
@@ -2252,8 +2386,8 @@
           </div>
         `;
 
-        // Bind Option clicks
-        card.querySelectorAll('.gcds-doc-option').forEach((btn) => {
+        // Bind Option 1 clicks
+        card.querySelectorAll('.gcds-doc-option[data-code]').forEach((btn) => {
           btn.addEventListener('click', async (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -2269,6 +2403,13 @@
           });
         });
 
+        // Bind Option 2 click
+        card.querySelector('#gcds-btn-choose-other').addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          renderOtherDocView();
+        });
+
         // Bind Skip
         card.querySelector('#gcds-btn-skip-doc').addEventListener('click', (e) => {
           e.preventDefault();
@@ -2279,7 +2420,7 @@
         });
       };
 
-      // ─── Auto-Upload Handler ───────────────────────────────────────────────
+      // ─── Option 1: Auto-Upload Handler ──────────────────────────────────────
       const handleAutoUpload = async (opt) => {
         cleanupListeners();
 
@@ -2289,7 +2430,7 @@
             <span class="gcds-card-title">Auto-Uploading Document</span>
           </div>
           <div class="gcds-rec-box">
-            <div class="gcds-rec-label">Auto-Upload In Progress</div>
+            <div class="gcds-rec-label">Option 1: Standard Proof</div>
             <div class="gcds-rec-name">${opt.icon} ${opt.label}</div>
             <div class="gcds-rec-desc" id="gcds-upload-status-text">
               <span class="gcds-spinner"></span> Selecting ${opt.label} in ECI portal dropdown…
@@ -2315,9 +2456,9 @@
         const statusDesc = card.querySelector('#gcds-auto-status-desc');
 
         try {
-          // 1. Select option in portal dropdown
-          applyOptionToPortal(opt);
-          await sleep(150);
+          // 1. Select Radio 1 and portal dropdown with 500ms wait
+          if (statusDesc) statusDesc.textContent = `⚡ Activating Standard Age-Proof dropdown…`;
+          await applyOption1ToPortal(opt);
 
           // 2. Fetch blob from GCDS
           if (statusDesc) statusDesc.textContent = `⚡ Downloading ${opt.candidate.fileName || 'file'} from GCDS…`;
@@ -2334,9 +2475,14 @@
             (boxG || document).querySelector('input[type="file"]#ageProof, input[type="file"][name="ageProof"]') ||
             findElement(SELECTOR_MAP.ageProofFile);
 
-          const injected = await injectFileToPortal(inp, blob, opt.candidate.fileName || 'age_proof.jpg', false);
+          await injectFileToPortal(inp, blob, opt.candidate.fileName || 'age_proof.jpg', false);
 
-          // 1. Upload Presence Check: Wait up to 5 seconds for portal to register the file
+          // Visual highlight (Blue dashed border during upload)
+          if (inp) {
+            inp.style.border = '2px dashed #6366f1';
+          }
+
+          // 4. Upload Presence Check: Wait up to 5 seconds for portal to register the file
           if (statusDesc) statusDesc.textContent = '⚡ Waiting for portal to sync…';
           if (statusText) statusText.innerHTML = '<span class="gcds-spinner"></span> Waiting for portal to sync…';
 
@@ -2347,7 +2493,6 @@
               hasFile = true;
               break;
             }
-            // Re-detect file input in case Angular re-attached it
             const refreshedInp =
               (boxG || document).querySelector('input[type="file"]#ageProof, input[type="file"][name="ageProof"]') ||
               findElement(SELECTOR_MAP.ageProofFile);
@@ -2362,7 +2507,7 @@
             throw new Error('File input did not register injected file within 5 seconds.');
           }
 
-          // 2. Portal Error Detection: Check for "File size exceeds" or validation errors
+          // 5. Portal Error Detection: Check for validation errors
           const currentBoxG = boxG || findSectionBox('G');
           const errorEls = Array.from((currentBoxG || document).querySelectorAll('.alert, .text-danger, .invalid-feedback, .error-message'));
           let detectedError = null;
@@ -2385,15 +2530,11 @@
             return;
           }
 
-          // 3. Heartbeat / Activity ping
-          try {
-            if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
-              chrome.runtime.sendMessage({ action: 'RESET_INACTIVITY_TIMER' });
-            }
-          } catch {}
-
-          // 4. Visual confirmation with "Waiting for portal to sync..."
+          // 6. Visual confirmation (Green on success)
           highlightField(inp);
+          if (inp) {
+            inp.style.border = '2px solid #10b981';
+          }
           statusBox.style.borderColor = '#10b981';
           statusBox.style.background = 'rgba(16, 185, 129, 0.15)';
           statusDesc.style.color = '#34d399';
@@ -2401,8 +2542,9 @@
           const attachedName = inp.files?.[0]?.name || opt.candidate.fileName || 'file';
           const attachedSize = inp.files?.[0]?.size ? ` (${(inp.files[0].size / 1024).toFixed(1)} KB)` : '';
           statusDesc.innerHTML = `✅ Attached: <strong>${escapeHtml(attachedName)}</strong>${attachedSize}`;
-          if (statusText) statusText.innerHTML = `✅ ${opt.label} registered. <strong>Waiting for portal to sync…</strong>`;
+          if (statusText) statusText.innerHTML = `✅ ${opt.label} registered. <strong>2-second Upload Guard…</strong>`;
 
+          // 2-Second Upload Guard
           await sleep(2000);
           cleanupListeners();
           card.remove();
@@ -2414,12 +2556,12 @@
         }
       };
 
-      // ─── Mode 2: Manual Upload Mode ────────────────────────────────────────
-      const handleManualMode = (opt, customNotice = null) => {
+      // ─── Option 1: Manual Upload Mode ──────────────────────────────────────
+      const handleManualMode = async (opt, customNotice = null) => {
         cleanupListeners();
 
-        // 1. Instantly set the portal dropdown to this document type
-        applyOptionToPortal(opt);
+        // 1. Instantly set Radio 1 and dropdown in portal DOM
+        await applyOption1ToPortal(opt);
 
         const safeDocName = escapeHtml(opt.label);
         const noticeDesc = customNotice
@@ -2435,7 +2577,7 @@
             ⬅ Back to Document Picker
           </button>
           <div class="gcds-rec-box">
-            <div class="gcds-rec-label">Manual Upload Required</div>
+            <div class="gcds-rec-label">Option 1: Manual Upload</div>
             <div class="gcds-rec-name">${opt.icon} ${safeDocName}</div>
             <div class="gcds-rec-desc">${noticeDesc}</div>
           </div>
@@ -2521,6 +2663,311 @@
           card.remove();
           resolve({ action: 'SKIP' });
         });
+      };
+
+      // ─── Mode 2: Option 2 (Other Document) View ─────────────────────────────
+      const renderOtherDocView = async () => {
+        cleanupListeners();
+
+        // 1. Instantly select Radio 2 in portal DOM
+        await applyOption2ToPortal();
+
+        const defaultDesc =
+          otherCandidate?.otherDescription ||
+          otherCandidate?.documentType ||
+          otherCandidate?.label ||
+          initialOtherDescription ||
+          '';
+
+        card.innerHTML = `
+          <div class="gcds-card-header">
+            <span class="gcds-card-badge">Section G</span>
+            <span class="gcds-card-title">Option 2: Other Document (Specify)</span>
+          </div>
+          <button type="button" class="gcds-btn-back" id="gcds-btn-back-picker">
+            ⬅ Back to Standard Document List
+          </button>
+          <div class="gcds-rec-box">
+            <div class="gcds-rec-label">Any other Document (7b)</div>
+            <div class="gcds-rec-name">Specify Document Name</div>
+            <div class="gcds-rec-desc">Specify the document name to fill into the portal's description field:</div>
+          </div>
+
+          <div style="margin: 8px 0 12px 0;">
+            <label style="display: block; font-size: 11px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Document Name / Description *</label>
+            <input
+              type="text"
+              id="gcds-other-doc-name-input"
+              class="gcds-input"
+              style="width: 100%; box-sizing: border-box; padding: 9px 12px; background: #0f172a; border: 1.5px solid #334155; border-radius: 8px; color: #f8fafc; font-size: 13px; outline: none;"
+              placeholder="e.g. School Leaving Certificate, Domicile"
+              value="${escapeHtml(defaultDesc)}"
+            />
+          </div>
+
+          ${
+            otherCandidate
+              ? `
+          <div class="gcds-doc-status-box" style="border-color: #10b981; background: rgba(16, 185, 129, 0.1); margin-bottom: 12px;">
+            <span style="font-size: 12.5px; color: #34d399; font-weight: 600;">
+              📄 GCDS File: <strong>${escapeHtml(otherCandidate.fileName || otherCandidate.label)}</strong>
+            </span>
+          </div>
+          `
+              : `
+          <div class="gcds-doc-status-box" id="gcds-other-status-box" style="margin-bottom: 12px;">
+            <span style="font-size: 12.5px; color: #94a3b8;" id="gcds-other-status-text">⏳ Waiting for file selection in portal…</span>
+          </div>
+          `
+          }
+
+          <div class="gcds-btn-row">
+            ${
+              otherCandidate
+                ? `
+            <button type="button" class="gcds-btn-confirm" id="gcds-btn-auto-upload-other" style="flex: 1;" title="Fill description & Auto-upload from GCDS">
+              ⚡ Auto-Upload
+            </button>
+            `
+                : ''
+            }
+            <button type="button" class="gcds-btn-confirm" id="gcds-btn-confirm-other" ${otherCandidate ? 'style="flex: 1; background: #334155;"' : 'style="flex: 1;" disabled'} title="Confirm upload and proceed">
+              ✅ Confirm &amp; Proceed
+            </button>
+            <button type="button" class="gcds-btn-skip" id="gcds-btn-skip-doc" title="Skip">
+              Skip
+            </button>
+          </div>
+        `;
+
+        const descInput = card.querySelector('#gcds-other-doc-name-input');
+        const btnAutoUpload = card.querySelector('#gcds-btn-auto-upload-other');
+        const btnConfirm = card.querySelector('#gcds-btn-confirm-other');
+        const btnSkip = card.querySelector('#gcds-btn-skip-doc');
+        const btnBack = card.querySelector('#gcds-btn-back-picker');
+        const statusBox = card.querySelector('#gcds-other-status-box');
+        const statusText = card.querySelector('#gcds-other-status-text');
+
+        btnBack.addEventListener('click', (e) => {
+          e.preventDefault();
+          renderPickerView();
+        });
+
+        // Real-time sync of description to portal input
+        descInput.addEventListener('input', () => {
+          const val = descInput.value.trim();
+          applyOption2ToPortal(val);
+        });
+
+        const updateOtherFileStatus = () => {
+          const inp =
+            fileInput ||
+            (boxG || document).querySelector('input[type="file"]#ageProof, input[type="file"][name="ageProof"]') ||
+            findElement(SELECTOR_MAP.ageProofFile);
+          const hasFile = inp && inp.files && inp.files.length > 0;
+          if (hasFile) {
+            const f = inp.files[0];
+            if (statusBox && statusText) {
+              statusBox.style.borderColor = '#10b981';
+              statusBox.style.background = 'rgba(16, 185, 129, 0.1)';
+              statusText.style.color = '#34d399';
+              statusText.style.fontWeight = '600';
+              statusText.innerHTML = `✅ Attached: <strong>${escapeHtml(f.name)}</strong> (${(f.size / 1024).toFixed(1)} KB)`;
+            }
+            btnConfirm.disabled = false;
+          } else if (!otherCandidate) {
+            if (statusBox && statusText) {
+              statusBox.style.borderColor = '#334155';
+              statusBox.style.background = '#0f172a';
+              statusText.style.color = '#94a3b8';
+              statusText.style.fontWeight = 'normal';
+              statusText.innerHTML = '⏳ Waiting for file selection in portal…';
+            }
+            btnConfirm.disabled = true;
+          }
+        };
+
+        const inp =
+          fileInput ||
+          (boxG || document).querySelector('input[type="file"]#ageProof, input[type="file"][name="ageProof"]') ||
+          findElement(SELECTOR_MAP.ageProofFile);
+        if (inp) {
+          inp.addEventListener('change', updateOtherFileStatus);
+        }
+        fileWatchInterval = setInterval(updateOtherFileStatus, 350);
+        updateOtherFileStatus();
+
+        if (btnAutoUpload && otherCandidate) {
+          btnAutoUpload.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const desc = descInput.value.trim() || defaultDesc || 'Other Age Proof Document';
+            await handleOtherAutoUpload(otherCandidate, desc);
+          });
+        }
+
+        btnConfirm.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cleanupListeners();
+          if (inp) inp.removeEventListener('change', updateOtherFileStatus);
+
+          const desc = descInput.value.trim() || defaultDesc || 'Other Age Proof Document';
+          await applyOption2ToPortal(desc);
+
+          btnConfirm.innerHTML = '<span class="gcds-spinner"></span> 2s Guard…';
+          btnConfirm.disabled = true;
+          btnSkip.disabled = true;
+          btnBack.disabled = true;
+
+          await sleep(2000);
+          card.remove();
+          resolve({ action: 'CONFIRMED', code: 'OTHR', label: desc, isOther: true, description: desc });
+        });
+
+        btnSkip.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cleanupListeners();
+          if (inp) inp.removeEventListener('change', updateOtherFileStatus);
+          card.remove();
+          resolve({ action: 'SKIP' });
+        });
+      };
+
+      // ─── Option 2: Auto-Upload Handler ──────────────────────────────────────
+      const handleOtherAutoUpload = async (cand, customDesc) => {
+        cleanupListeners();
+
+        card.innerHTML = `
+          <div class="gcds-card-header">
+            <span class="gcds-card-badge">Section G</span>
+            <span class="gcds-card-title">Auto-Uploading Other Document</span>
+          </div>
+          <div class="gcds-rec-box">
+            <div class="gcds-rec-label">Option 2: Other Document</div>
+            <div class="gcds-rec-name">📝 ${escapeHtml(customDesc)}</div>
+            <div class="gcds-rec-desc" id="gcds-other-upload-status-text">
+              <span class="gcds-spinner"></span> Setting Option 2 &amp; description in ECI portal…
+            </div>
+          </div>
+          <div class="gcds-doc-status-box" id="gcds-other-auto-status-box" style="border-color: #6366f1; background: rgba(99,102,241,0.1);">
+            <span style="font-size: 13px; color: #a5b4fc;" id="gcds-other-auto-status-desc">⚡ Fetching file from GCDS Vault…</span>
+          </div>
+          <div class="gcds-btn-row">
+            <button type="button" class="gcds-btn-skip" id="gcds-btn-cancel-other-upload" style="width: 100%;">
+              Cancel &amp; Upload Manually
+            </button>
+          </div>
+        `;
+
+        card.querySelector('#gcds-btn-cancel-other-upload').addEventListener('click', (e) => {
+          e.preventDefault();
+          renderOtherDocView();
+        });
+
+        const statusText = card.querySelector('#gcds-other-upload-status-text');
+        const statusBox = card.querySelector('#gcds-other-auto-status-box');
+        const statusDesc = card.querySelector('#gcds-other-auto-status-desc');
+
+        try {
+          // 1. Select Radio 2 and fill description text with 500ms wait
+          if (statusDesc) statusDesc.textContent = `⚡ Activating Option 2 & setting description…`;
+          await applyOption2ToPortal(customDesc);
+
+          // 2. Fetch blob from GCDS
+          if (statusDesc) statusDesc.textContent = `⚡ Downloading ${cand.fileName || 'file'} from GCDS…`;
+          const blob = await fetchFileBlob(cand.url, customerId);
+
+          if (!blob || blob.size === 0) {
+            throw new Error('Downloaded document blob is empty or inaccessible');
+          }
+
+          // 3. Inject into portal file input
+          if (statusDesc) statusDesc.textContent = `⚡ Injecting document into portal file input…`;
+          const inp =
+            fileInput ||
+            (boxG || document).querySelector('input[type="file"]#ageProof, input[type="file"][name="ageProof"]') ||
+            findElement(SELECTOR_MAP.ageProofFile);
+
+          await injectFileToPortal(inp, blob, cand.fileName || 'other_age_proof.jpg', false);
+
+          // Visual highlight (Blue dashed border during upload)
+          if (inp) {
+            inp.style.border = '2px dashed #6366f1';
+          }
+
+          // 4. Upload Presence Check: Wait up to 5 seconds for portal to register the file
+          if (statusDesc) statusDesc.textContent = '⚡ Waiting for portal to sync…';
+          if (statusText) statusText.innerHTML = '<span class="gcds-spinner"></span> Waiting for portal to sync…';
+
+          let hasFile = false;
+          const uploadPresenceStart = Date.now();
+          while (Date.now() - uploadPresenceStart < 5000) {
+            if (inp && inp.files && inp.files.length > 0) {
+              hasFile = true;
+              break;
+            }
+            const refreshedInp =
+              (boxG || document).querySelector('input[type="file"]#ageProof, input[type="file"][name="ageProof"]') ||
+              findElement(SELECTOR_MAP.ageProofFile);
+            if (refreshedInp && refreshedInp.files && refreshedInp.files.length > 0) {
+              hasFile = true;
+              break;
+            }
+            await sleep(250);
+          }
+
+          if (!hasFile) {
+            throw new Error('File input did not register injected file within 5 seconds.');
+          }
+
+          // 5. Portal Error Detection: Check for validation errors
+          const currentBoxG = boxG || findSectionBox('G');
+          const errorEls = Array.from((currentBoxG || document).querySelectorAll('.alert, .text-danger, .invalid-feedback, .error-message'));
+          let detectedError = null;
+          for (const el of errorEls) {
+            const errText = (el.innerText || el.textContent || '').trim();
+            if (/size exceeds|less than 2\s*mb|invalid file|upload failed|error/i.test(errText)) {
+              detectedError = errText;
+              break;
+            }
+          }
+
+          if (detectedError) {
+            statusBox.style.borderColor = '#ef4444';
+            statusBox.style.background = 'rgba(239, 68, 68, 0.15)';
+            statusDesc.style.color = '#f87171';
+            statusDesc.style.fontWeight = '700';
+            statusDesc.innerHTML = `⚠️ Portal Error: <strong>${escapeHtml(detectedError)}</strong>`;
+            if (statusText) statusText.innerHTML = `⚠️ Upload rejected by portal. Choose another file or upload manually:`;
+            return;
+          }
+
+          // 6. Visual confirmation (Green on success)
+          highlightField(inp);
+          if (inp) {
+            inp.style.border = '2px solid #10b981';
+          }
+          statusBox.style.borderColor = '#10b981';
+          statusBox.style.background = 'rgba(16, 185, 129, 0.15)';
+          statusDesc.style.color = '#34d399';
+          statusDesc.style.fontWeight = '700';
+          const attachedName = inp.files?.[0]?.name || cand.fileName || 'file';
+          const attachedSize = inp.files?.[0]?.size ? ` (${(inp.files[0].size / 1024).toFixed(1)} KB)` : '';
+          statusDesc.innerHTML = `✅ Attached: <strong>${escapeHtml(attachedName)}</strong>${attachedSize}`;
+          if (statusText) statusText.innerHTML = `✅ ${escapeHtml(customDesc)} registered. <strong>2-second Upload Guard…</strong>`;
+
+          // 2-Second Upload Guard
+          await sleep(2000);
+          cleanupListeners();
+          card.remove();
+          resolve({ action: 'UPLOADED', code: 'OTHR', label: customDesc, isOther: true, description: customDesc });
+          return;
+        } catch (err) {
+          console.warn('[GCDS Section G] Auto-upload error for Other Document:', err);
+          renderOtherDocView();
+        }
       };
 
       // Initial View
@@ -3927,19 +4374,22 @@
       skippedFields.push('dateOfBirth');
     }
 
-    // ─── Section G: Age Proof Document Upload (Smart Document Picker) ─────────
+    // ─── Section G: Age Proof Document Upload (Dual-Option Smart Document Picker) ───
     const boxG = findSectionBox('G');
 
-    // 1. Radio: Select "Document for proof of Date of Birth"
+    // 1. Locate Radios, Inputs, and Dropdown
     const proofRadio =
       (boxG || document).querySelector('input[type="radio"][name="ageDocument"][value="ageProof"]') ||
       findElement(SELECTOR_MAP.ageProofRadio);
-    if (proofRadio && !proofRadio.checked) {
-      setRadioOrCheckbox(proofRadio, true);
-      proofRadio.dispatchEvent(new Event('change', { bubbles: true }));
-    }
 
-    // 2. Locate Dropdown and File Input
+    const otherRadio =
+      (boxG || document).querySelector('input[type="radio"][name="ageDocument"][value="otherAgeProof"]') ||
+      findElement(SELECTOR_MAP.ageProofOtherRadio);
+
+    const otherInput =
+      (boxG || document).querySelector('input[name="ageProofOthers"], input#ageProofOthers, input.partGselectfield') ||
+      findElement(SELECTOR_MAP.ageProofOtherInput);
+
     const ageSelect =
       (boxG || document).querySelector('select[name="ageproof"]') ||
       findElement(SELECTOR_MAP.ageProofType);
@@ -3948,7 +4398,7 @@
       (boxG || document).querySelector('input[type="file"]#ageProof, input[type="file"][name="ageProof"]') ||
       findElement(SELECTOR_MAP.ageProofFile);
 
-    // 3. Assemble all Age Proof candidates from GCDS DTO
+    // 2. Assemble all Age Proof candidates from GCDS DTO
     let ageCandidates = [];
     if (Array.isArray(data.ageProofCandidates) && data.ageProofCandidates.length > 0) {
       ageCandidates = data.ageProofCandidates;
@@ -3969,13 +4419,16 @@
       ];
     }
 
-    // 4. Launch Smart Age-Proof Picker Action Card
+    // 3. Launch Dual-Option Smart Age-Proof Picker Action Card
     const pickerResult = await waitForAgeProofSmartPicker({
       candidates: ageCandidates,
       customerId: data.id || data._id || data.customerId,
       fileInput: ageFileInput,
       selectElement: ageSelect,
       radioElement: proofRadio,
+      otherRadioElement: otherRadio,
+      otherInputElement: otherInput,
+      initialOtherDescription: data.age_proof_other_description || data.ageProofOtherDescription || '',
       boxG,
     });
 
@@ -4628,7 +5081,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.2.6-stable',
+      version: '1.2.7-stable',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
