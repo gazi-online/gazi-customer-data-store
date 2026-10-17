@@ -224,6 +224,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     let ageProofDoc: { url: string; type: string; fileName: string; mimeType: string } | null = null;
     let addressProofDoc: { url: string; type: string; fileName: string; mimeType: string } | null = null;
+    let disabilityCertificateDoc: { url: string; fileName: string; mimeType: string } | null = null;
+    let disabilityCertificateUrl: string | null = null;
 
     const addressProofCandidates: Array<{
       code: string;
@@ -601,6 +603,16 @@ export async function GET(req: NextRequest, context: RouteContext) {
         state: customer.state || null,
         country: customer.country || 'India',
       },
+
+      // Section J (Family Member Details) & Section K (Declaration) mappings
+      relative_name: (customer as any).relative_name || null,
+      relative_surname: (customer as any).relative_surname || null,
+      relative_type: (customer as any).relative_type || null,
+      relative_epic_number: (customer as any).relative_epic_number || (customer as any).relative_epic || (customer as any).family_epic || null,
+      family_epic: (customer as any).relative_epic_number || (customer as any).relative_epic || (customer as any).family_epic || null,
+
+      address_since: (customer as any).address_since || (customer as any).resident_since || null,
+      resident_since: (customer as any).address_since || (customer as any).resident_since || null,
 
       epic: customer.voter_id_number || null,
 

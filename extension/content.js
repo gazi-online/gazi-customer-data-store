@@ -278,20 +278,77 @@
       'select[id*="ac" i]',
     ],
 
+    // ─── Section J: Family Member Details ───────────────────────────────────
+    familyMemberName: [
+      'input[aria-label="Name of Family Member" i]',
+      'input[name="currentRelFullName"]',
+      'input#applicantRelativeName',
+      'input[name="applicantRelativeName"]',
+      'input#relativeName',
+      'input[placeholder*="Family Member" i]',
+    ],
+    familyMemberSurname: [
+      'input#applicantRelativeSurname',
+      'input[name="applicantRelativeSurname"]',
+      'input#relativeSurname',
+    ],
+    familyMemberRelation: [
+      'select#currentRelRelationship',
+      'select[name="currentRelRelationship"]',
+      'select[aria-label*="Relationship with applicant" i]',
+    ],
+    familyMemberEpic: [
+      'input[aria-label="His/Her EPIC Number" i]',
+      'input[name="currentRelEpic"]',
+      'input#epicNumber',
+      'input#epicNo',
+      'input[name="epicNo"]',
+      'input[placeholder*="EPIC" i]',
+    ],
+    familyMemberRegionalName: [
+      'input#regRelatName',
+      'input[name="regRelatName"]',
+      'input#relativeRegionalName',
+    ],
+    familyMemberRegionalSurname: [
+      'input#regRelatSurName',
+      'input[name="regRelatSurName"]',
+      'input#relativeRegionalSurname',
+    ],
+
     // ─── Declaration (Section K) ────────────────────────────────────────────
     declarationPlace: [
       'input#Place',
       'input[name="Place"]',
       '#Place',
+      'input[aria-label="Place" i]',
     ],
     declarationVillage: [
       'input#village[name="village"]',
       'input#village',
+      'input[name="village"]',
+      'input[aria-label="Village/Town" i]',
     ],
     declarationDate: [
+      'input[type="date"][name="date"]',
       'input#dateDeclaration',
       'input#declrDate',
       'input[name="declarationDate"]',
+      'input.library-date',
+    ],
+    residenceDateSince: [
+      'input[name="dob"][placeholder="mm-yyyy"]',
+      'div[aria-label*="ordinarily a resident" i] input',
+      '.react-datepicker__input-container input',
+      'input[placeholder="mm-yyyy"]',
+    ],
+    declarationState: [
+      'select#stateCodeA',
+      'select[name="stateCodeA"]',
+    ],
+    declarationDistrict: [
+      'select#districtCdA',
+      'select[name="districtCdA"]',
     ],
 
     // ─── EPIC (Voter ID) ────────────────────────────────────────────────────
@@ -851,6 +908,7 @@
       I: ['Disability', 'প্রতিবন্ধী'],
       J: ['Family Member', 'EPIC', 'পরিবার'],
       K: ['Declaration', 'ঘোষণাপত্র'],
+      L: ['Captcha', 'ক্যাপচা'],
     }[lUpper] || [];
 
     const allBoxes = document.querySelectorAll('.box, .card, .accordion-item');
@@ -1440,8 +1498,8 @@
       }
       @keyframes gcds-spin { to { transform: rotate(360deg); } }
 
-      /* ── Section E, G, H & I Floating Action Cards ── */
-      #gcds-aadhaar-card, #gcds-doc-card, #gcds-house-card, #gcds-disability-card {
+      /* ── Section E, G, H, I, J, K & L Floating Action Cards ── */
+      #gcds-aadhaar-card, #gcds-doc-card, #gcds-house-card, #gcds-disability-card, #gcds-family-epic-card, #gcds-declaration-card, #gcds-completion-card {
         position: fixed;
         bottom: 28px;
         right: 28px;
@@ -1457,13 +1515,13 @@
         animation: gcds-card-in 0.25s cubic-bezier(0.34,1.56,0.64,1);
         user-select: none;
       }
-      #gcds-aadhaar-card .gcds-card-header, #gcds-doc-card .gcds-card-header, #gcds-house-card .gcds-card-header, #gcds-disability-card .gcds-card-header {
+      #gcds-aadhaar-card .gcds-card-header, #gcds-doc-card .gcds-card-header, #gcds-house-card .gcds-card-header, #gcds-disability-card .gcds-card-header, #gcds-family-epic-card .gcds-card-header, #gcds-declaration-card .gcds-card-header, #gcds-completion-card .gcds-card-header {
         display: flex;
         align-items: center;
         gap: 8px;
         margin-bottom: 12px;
       }
-      #gcds-aadhaar-card .gcds-card-badge, #gcds-doc-card .gcds-card-badge, #gcds-house-card .gcds-card-badge, #gcds-disability-card .gcds-card-badge {
+      #gcds-aadhaar-card .gcds-card-badge, #gcds-doc-card .gcds-card-badge, #gcds-house-card .gcds-card-badge, #gcds-disability-card .gcds-card-badge, #gcds-family-epic-card .gcds-card-badge, #gcds-declaration-card .gcds-card-badge, #gcds-completion-card .gcds-card-badge {
         background: #6366f1;
         color: #fff;
         font-size: 10px;
@@ -1473,32 +1531,32 @@
         border-radius: 20px;
         text-transform: uppercase;
       }
-      #gcds-aadhaar-card .gcds-card-title, #gcds-doc-card .gcds-card-title, #gcds-house-card .gcds-card-title, #gcds-disability-card .gcds-card-title {
+      #gcds-aadhaar-card .gcds-card-title, #gcds-doc-card .gcds-card-title, #gcds-house-card .gcds-card-title, #gcds-disability-card .gcds-card-title, #gcds-family-epic-card .gcds-card-title, #gcds-declaration-card .gcds-card-title, #gcds-completion-card .gcds-card-title {
         font-size: 13px;
         font-weight: 600;
         color: #94a3b8;
       }
-      #gcds-aadhaar-card .gcds-rec-box, #gcds-doc-card .gcds-rec-box, #gcds-house-card .gcds-rec-box, #gcds-disability-card .gcds-rec-box {
+      #gcds-aadhaar-card .gcds-rec-box, #gcds-doc-card .gcds-rec-box, #gcds-house-card .gcds-rec-box, #gcds-disability-card .gcds-rec-box, #gcds-family-epic-card .gcds-rec-box, #gcds-declaration-card .gcds-rec-box, #gcds-completion-card .gcds-rec-box {
         background: rgba(99,102,241,0.12);
         border: 1px solid rgba(99,102,241,0.4);
         border-radius: 10px;
         padding: 10px 12px;
         margin-bottom: 12px;
       }
-      #gcds-aadhaar-card .gcds-rec-label, #gcds-doc-card .gcds-rec-label, #gcds-house-card .gcds-rec-label, #gcds-disability-card .gcds-rec-label {
+      #gcds-aadhaar-card .gcds-rec-label, #gcds-doc-card .gcds-rec-label, #gcds-house-card .gcds-rec-label, #gcds-disability-card .gcds-rec-label, #gcds-family-epic-card .gcds-rec-label, #gcds-declaration-card .gcds-rec-label, #gcds-completion-card .gcds-rec-label {
         font-size: 11px;
         color: #94a3b8;
         margin-bottom: 4px;
         text-transform: uppercase;
         letter-spacing: 0.06em;
       }
-      #gcds-aadhaar-card .gcds-rec-name, #gcds-doc-card .gcds-rec-name, #gcds-house-card .gcds-rec-name, #gcds-disability-card .gcds-rec-name {
+      #gcds-aadhaar-card .gcds-rec-name, #gcds-doc-card .gcds-rec-name, #gcds-house-card .gcds-rec-name, #gcds-disability-card .gcds-rec-name, #gcds-family-epic-card .gcds-rec-name, #gcds-declaration-card .gcds-rec-name, #gcds-completion-card .gcds-rec-name {
         font-size: 15px;
         font-weight: 700;
         color: #a5b4fc;
         letter-spacing: -0.01em;
       }
-      #gcds-aadhaar-card .gcds-rec-desc, #gcds-doc-card .gcds-rec-desc, #gcds-house-card .gcds-rec-desc, #gcds-disability-card .gcds-rec-desc {
+      #gcds-aadhaar-card .gcds-rec-desc, #gcds-doc-card .gcds-rec-desc, #gcds-house-card .gcds-rec-desc, #gcds-disability-card .gcds-rec-desc, #gcds-family-epic-card .gcds-rec-desc, #gcds-declaration-card .gcds-rec-desc, #gcds-completion-card .gcds-rec-desc {
         font-size: 11.5px;
         color: #cbd5e1;
         margin-top: 4px;
@@ -1563,11 +1621,11 @@
         border-color: #ef4444;
         color: #ffffff;
       }
-      #gcds-aadhaar-card .gcds-btn-row, #gcds-doc-card .gcds-btn-row, #gcds-house-card .gcds-btn-row, #gcds-disability-card .gcds-btn-row {
+      #gcds-aadhaar-card .gcds-btn-row, #gcds-doc-card .gcds-btn-row, #gcds-house-card .gcds-btn-row, #gcds-disability-card .gcds-btn-row, #gcds-family-epic-card .gcds-btn-row, #gcds-declaration-card .gcds-btn-row, #gcds-completion-card .gcds-btn-row {
         display: flex;
         gap: 8px;
       }
-      #gcds-aadhaar-card .gcds-btn-confirm, #gcds-doc-card .gcds-btn-confirm, #gcds-house-card .gcds-btn-confirm, #gcds-disability-card .gcds-btn-confirm {
+      #gcds-aadhaar-card .gcds-btn-confirm, #gcds-doc-card .gcds-btn-confirm, #gcds-house-card .gcds-btn-confirm, #gcds-disability-card .gcds-btn-confirm, #gcds-family-epic-card .gcds-btn-confirm, #gcds-declaration-card .gcds-btn-confirm, #gcds-completion-card .gcds-btn-confirm {
         flex: 1;
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
         color: #fff;
@@ -1581,10 +1639,10 @@
         transition: opacity 0.15s, transform 0.1s;
         box-shadow: 0 2px 8px rgba(99,102,241,0.4);
       }
-      #gcds-aadhaar-card .gcds-btn-confirm:hover, #gcds-doc-card .gcds-btn-confirm:hover, #gcds-house-card .gcds-btn-confirm:hover, #gcds-disability-card .gcds-btn-confirm:hover { opacity: 0.9; transform: translateY(-1px); }
-      #gcds-aadhaar-card .gcds-btn-confirm:active, #gcds-doc-card .gcds-btn-confirm:active, #gcds-house-card .gcds-btn-confirm:active, #gcds-disability-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
-      #gcds-aadhaar-card .gcds-btn-confirm:disabled, #gcds-doc-card .gcds-btn-confirm:disabled, #gcds-house-card .gcds-btn-confirm:disabled, #gcds-disability-card .gcds-btn-confirm:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-      #gcds-aadhaar-card .gcds-btn-skip, #gcds-doc-card .gcds-btn-skip, #gcds-house-card .gcds-btn-skip, #gcds-disability-card .gcds-btn-skip {
+      #gcds-aadhaar-card .gcds-btn-confirm:hover, #gcds-doc-card .gcds-btn-confirm:hover, #gcds-house-card .gcds-btn-confirm:hover, #gcds-disability-card .gcds-btn-confirm:hover, #gcds-family-epic-card .gcds-btn-confirm:hover, #gcds-declaration-card .gcds-btn-confirm:hover, #gcds-completion-card .gcds-btn-confirm:hover { opacity: 0.9; transform: translateY(-1px); }
+      #gcds-aadhaar-card .gcds-btn-confirm:active, #gcds-doc-card .gcds-btn-confirm:active, #gcds-house-card .gcds-btn-confirm:active, #gcds-disability-card .gcds-btn-confirm:active, #gcds-family-epic-card .gcds-btn-confirm:active, #gcds-declaration-card .gcds-btn-confirm:active, #gcds-completion-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
+      #gcds-aadhaar-card .gcds-btn-confirm:disabled, #gcds-doc-card .gcds-btn-confirm:disabled, #gcds-house-card .gcds-btn-confirm:disabled, #gcds-disability-card .gcds-btn-confirm:disabled, #gcds-family-epic-card .gcds-btn-confirm:disabled, #gcds-declaration-card .gcds-btn-confirm:disabled, #gcds-completion-card .gcds-btn-confirm:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+      #gcds-aadhaar-card .gcds-btn-skip, #gcds-doc-card .gcds-btn-skip, #gcds-house-card .gcds-btn-skip, #gcds-disability-card .gcds-btn-skip, #gcds-family-epic-card .gcds-btn-skip, #gcds-declaration-card .gcds-btn-skip, #gcds-completion-card .gcds-btn-skip {
         background: transparent;
         color: #64748b;
         font-size: 12px;
@@ -1594,8 +1652,8 @@
         cursor: pointer;
         transition: color 0.15s, border-color 0.15s;
       }
-      #gcds-aadhaar-card .gcds-btn-skip:hover, #gcds-doc-card .gcds-btn-skip:hover, #gcds-house-card .gcds-btn-skip:hover, #gcds-disability-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
-      #gcds-aadhaar-card .gcds-spinner, #gcds-doc-card .gcds-spinner, #gcds-house-card .gcds-spinner, #gcds-disability-card .gcds-spinner {
+      #gcds-aadhaar-card .gcds-btn-skip:hover, #gcds-doc-card .gcds-btn-skip:hover, #gcds-house-card .gcds-btn-skip:hover, #gcds-disability-card .gcds-btn-skip:hover, #gcds-family-epic-card .gcds-btn-skip:hover, #gcds-declaration-card .gcds-btn-skip:hover, #gcds-completion-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
+      #gcds-aadhaar-card .gcds-spinner, #gcds-doc-card .gcds-spinner, #gcds-house-card .gcds-spinner, #gcds-disability-card .gcds-spinner, #gcds-family-epic-card .gcds-spinner, #gcds-declaration-card .gcds-spinner, #gcds-completion-card .gcds-spinner {
         display: inline-block;
         width: 14px; height: 14px;
         border: 2px solid rgba(255,255,255,0.3);
@@ -1763,6 +1821,100 @@
       #gcds-doc-card .gcds-btn-back:hover {
         color: #cbd5e1;
         border-color: #94a3b8;
+      }
+
+      /* ── Section J (Family EPIC Guard) Card ── */
+      #gcds-family-epic-card .gcds-epic-input {
+        width: 100%;
+        box-sizing: border-box;
+        background: #0f172a;
+        border: 1.5px solid #334155;
+        border-radius: 8px;
+        color: #f8fafc;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        padding: 9px 12px;
+        text-align: center;
+        outline: none;
+        margin-top: 6px;
+        margin-bottom: 12px;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+      #gcds-family-epic-card .gcds-epic-input:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99,102,241,0.25);
+      }
+
+      /* ── Section K (Declaration) Card ── */
+      #gcds-declaration-card {
+        border-color: #10b981 !important;
+        box-shadow: 0 8px 40px rgba(16,185,129,0.3), 0 2px 12px rgba(0,0,0,0.5) !important;
+      }
+      #gcds-declaration-card .gcds-card-badge {
+        background: #059669 !important;
+      }
+      #gcds-declaration-card .gcds-decl-summary {
+        background: rgba(16,185,129,0.12);
+        border: 1px solid rgba(16,185,129,0.35);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 14px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #e2e8f0;
+      }
+      #gcds-declaration-card .gcds-decl-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+      }
+      #gcds-declaration-card .gcds-decl-label {
+        color: #94a3b8;
+        font-weight: 500;
+      }
+      #gcds-declaration-card .gcds-decl-val {
+        color: #34d399;
+        font-weight: 700;
+      }
+      #gcds-declaration-card .gcds-btn-confirm {
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
+        box-shadow: 0 2px 10px rgba(16,185,129,0.4) !important;
+      }
+
+      /* ── Section L (Final Completion) Card ── */
+      #gcds-completion-card {
+        border-color: #10b981 !important;
+        background: linear-gradient(145deg, #064e3b 0%, #0f172a 100%) !important;
+        box-shadow: 0 10px 48px rgba(16,185,129,0.45), 0 2px 16px rgba(0,0,0,0.6) !important;
+      }
+      #gcds-completion-card .gcds-card-badge {
+        background: #10b981 !important;
+        color: #064e3b !important;
+        font-weight: 800 !important;
+      }
+      #gcds-completion-card .gcds-complete-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #f1f5f9;
+        margin-bottom: 6px;
+        line-height: 1.4;
+      }
+      #gcds-completion-card .gcds-complete-bengali {
+        font-size: 12px;
+        color: #a7f3d0;
+        margin-bottom: 12px;
+        line-height: 1.45;
+      }
+      #gcds-completion-card .gcds-complete-box {
+        background: rgba(0,0,0,0.3);
+        border: 1px solid rgba(16,185,129,0.3);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 11.5px;
+        color: #cbd5e1;
+        line-height: 1.5;
+        margin-bottom: 10px;
       }
     `;
     document.head.appendChild(s);
@@ -4739,6 +4891,565 @@
     });
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Section J & K Helpers: Transition & Human-in-the-Loop Flows
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Helper to transition from Section J to Section K.
+   * Clicks Section J Next button and verifies transition to Section K.
+   *
+   * @param {number} maxWaitMs - Maximum time to wait for transition
+   * @returns {Promise<boolean>}
+   */
+  async function transitionSectionJToK(maxWaitMs = 4000) {
+    // Force-unlock Section J next button if present
+    const boxJ = findSectionBox('J');
+    const nextBtnJ = boxJ?.querySelector('button.next-btn');
+    if (nextBtnJ) {
+      nextBtnJ.removeAttribute('disabled');
+      nextBtnJ.disabled = false;
+      nextBtnJ.classList.remove('buttonDisable');
+      nextBtnJ.classList.add('buttonVisible');
+    }
+
+    const clicked = await clickSectionNextButton('J');
+    const startTime = Date.now();
+    let sidebarFallbackTriggered = false;
+
+    while (Date.now() - startTime < maxWaitMs) {
+      const titles = Array.from(document.querySelectorAll('.form-title, h1, h2, h3, h4, h5, h6, strong, span.textheadingnum'));
+      const hasKTitle = titles.some((el) => {
+        const txt = (el.textContent || '').trim().toLowerCase();
+        return (txt.includes('k.') || txt.includes('11.')) && (txt.includes('declaration') || txt.includes('ঘোষণাপত্র'));
+      });
+
+      const sidebarK = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
+        .find((el) => (el.innerText || '').trim().startsWith('K.'));
+      const isKSidebarActive = sidebarK && sidebarK.className.includes('sidenavclass') && !sidebarK.className.includes('sidenavclassstart');
+
+      if (hasKTitle || isKSidebarActive) {
+        console.log('✅ Section K active confirmed.');
+        return true;
+      }
+
+      if (!sidebarFallbackTriggered && (Date.now() - startTime > 1200)) {
+        sidebarFallbackTriggered = true;
+        if (sidebarK) {
+          console.log('[GCDS Section J->K] Triggering Section K sidebar click fallback...');
+          try {
+            sidebarK.click();
+            sidebarK.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            const innerLink = sidebarK.querySelector('.content_sidenav');
+            if (innerLink) {
+              innerLink.click();
+              innerLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            }
+          } catch {}
+        }
+      }
+
+      await sleep(150);
+    }
+    return clicked;
+  }
+
+  /**
+   * Section J: Family Member Details — Smart Map & Missing EPIC Guard.
+   *
+   * Requirement:
+   * 1. Relation Type: Map relative_type to portal select dropdown (#currentRelRelationship) or radio buttons.
+   * 2. Name Fields: Fill First Name (#applicantRelativeName) & Surname (#applicantRelativeSurname),
+   *    or combined Full Name into input[aria-label="Name of Family Member"].
+   * 3. Regional Name: Transliterate regional name into #regRelatName / #regRelatSurName if present.
+   * 4. EPIC Number: Fill 10-digit EPIC number into #epicNumber / input[name="currentRelEpic"].
+   * 5. Guard: If EPIC is missing, show an alert card:
+   *    "No Family EPIC found. Please enter manually or Skip."
+   *    - [ ⏭️ Skip Section J ] (bypasses Section J immediately)
+   *    - [ ✅ Fill & Proceed ] (fills with operator-entered EPIC)
+   *
+   * @param {Object} data - GCDS Form Fill DTO
+   * @returns {Promise<{ action: 'FILLED'|'SKIPPED', filledCount: number }>}
+   */
+  async function handleSectionJFamilyMember(data) {
+    // 1. Resolve Family Member Details
+    let relName = (data.relative_name || data.relative?.fatherFirstMiddleName || data.relative?.fatherName || data.father_first_name || data.father_name || '').trim();
+    let relSurname = (data.relative_surname || data.relative?.fatherSurname || data.father_last_name || '').trim();
+    let relType = (data.relative_type || data.relativeType || '').trim();
+    let relEpic = (
+      data.relative_epic_number ||
+      data.relative_epic ||
+      data.family_epic ||
+      data.family_member_epic ||
+      data.relative?.epic ||
+      data.relative?.relative_epic_number ||
+      ''
+    ).trim();
+
+    // Auto-pick fallback: If relative name or type is empty, intelligently derive from customer data
+    if (!relName) {
+      if (data.father_name || data.relative?.fatherName) {
+        relName = (data.relative?.fatherFirstMiddleName || data.father_first_name || data.father_name || '').trim();
+        relSurname = (data.relative?.fatherSurname || data.father_last_name || '').trim();
+        relType = relType || 'Father';
+      } else if (data.spouse_name || data.relative?.spouseName) {
+        relName = (data.relative?.spouseFirstMiddleName || data.spouse_first_name || data.spouse_name || '').trim();
+        relSurname = (data.relative?.spouseSurname || data.spouse_last_name || '').trim();
+        relType = relType || (data.gender === 'F' ? 'Husband' : 'Wife');
+      } else if (data.mother_name || data.relative?.motherName) {
+        relName = (data.relative?.motherFirstMiddleName || data.mother_first_name || data.mother_name || '').trim();
+        relSurname = (data.relative?.motherSurname || data.mother_last_name || '').trim();
+        relType = relType || 'Mother';
+      }
+    }
+
+    if (!relType) {
+      relType = 'Father';
+    }
+
+    // Split surname if name has multiple words and surname is empty
+    if (!relSurname && relName.includes(' ')) {
+      const parts = relName.split(/\s+/);
+      if (parts.length > 1) {
+        relSurname = parts.pop();
+        relName = parts.join(' ');
+      }
+    }
+
+    const boxJ = findSectionBox('J') || document;
+    try {
+      if (boxJ && typeof boxJ.scrollIntoView === 'function') {
+        boxJ.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } catch {}
+
+    // Inner helper to perform the actual DOM filling into Section J
+    const applySectionJFill = async (epicValue) => {
+      let filled = 0;
+      const combinedFullName = [relName, relSurname].filter(Boolean).join(' ');
+
+      // A. Fill Full Name / First Name
+      const singleNameInp = boxJ.querySelector('input[aria-label*="Name of Family Member" i], input[name="currentRelFullName"]') ||
+        findElement(SELECTOR_MAP.familyMemberName);
+      const sepFirstInp = boxJ.querySelector('input#applicantRelativeName, input[name="applicantRelativeName"]');
+      const sepSurInp = boxJ.querySelector('input#applicantRelativeSurname, input[name="applicantRelativeSurname"]') ||
+        findElement(SELECTOR_MAP.familyMemberSurname);
+
+      if (singleNameInp) {
+        setInputValue(singleNameInp, combinedFullName);
+        highlightField(singleNameInp);
+        filled++;
+      } else if (sepFirstInp) {
+        setInputValue(sepFirstInp, relName);
+        highlightField(sepFirstInp);
+        filled++;
+        if (sepSurInp && relSurname) {
+          setInputValue(sepSurInp, relSurname);
+          highlightField(sepSurInp);
+          filled++;
+        }
+      }
+
+      // B. Relation Dropdown / Radios
+      const relSelect = boxJ.querySelector('select#currentRelRelationship, select[name="currentRelRelationship"]') ||
+        findElement(SELECTOR_MAP.familyMemberRelation);
+      if (relSelect) {
+        setSelectValue(relSelect, relType);
+        const propKey = Object.keys(relSelect).find((k) => k.startsWith('__reactProps'));
+        if (propKey && relSelect[propKey]?.onChange) {
+          try { relSelect[propKey].onChange({ target: relSelect }); } catch {}
+        }
+        highlightField(relSelect);
+        filled++;
+      }
+
+      // C. Regional Name transliteration (if inputs exist)
+      const regNameInp = boxJ.querySelector('input#regRelatName, input[name="regRelatName"]') ||
+        findElement(SELECTOR_MAP.familyMemberRegionalName);
+      const regSurInp = boxJ.querySelector('input#regRelatSurName, input[name="regRelatSurName"]') ||
+        findElement(SELECTOR_MAP.familyMemberRegionalSurname);
+
+      if (regNameInp && relName) {
+        const regionalFirst = await requestTransliteration(relName);
+        if (regionalFirst) {
+          setInputValue(regNameInp, regionalFirst);
+          highlightField(regNameInp);
+          filled++;
+        }
+      }
+      if (regSurInp && relSurname) {
+        const regionalSur = await requestTransliteration(relSurname);
+        if (regionalSur) {
+          setInputValue(regSurInp, regionalSur);
+          highlightField(regSurInp);
+          filled++;
+        }
+      }
+
+      // D. EPIC Number
+      if (epicValue) {
+        const cleanEpic = String(epicValue).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const epicInp = boxJ.querySelector('input[aria-label*="EPIC Number" i], input[name="currentRelEpic"], input#epicNumber, input#epicNo') ||
+          findElement(SELECTOR_MAP.familyMemberEpic);
+        if (epicInp) {
+          setInputValue(epicInp, cleanEpic);
+          highlightField(epicInp);
+          filled++;
+        }
+      }
+
+      return filled;
+    };
+
+    // 2. Guard: If EPIC Number is missing, show Action Card with Manual Input & Skip Option
+    if (!relEpic) {
+      return new Promise((resolve) => {
+        injectRelationCardStyles();
+
+        const stale = document.getElementById('gcds-family-epic-card');
+        if (stale) stale.remove();
+
+        const card = document.createElement('div');
+        card.id = 'gcds-family-epic-card';
+        card.setAttribute('role', 'dialog');
+        card.setAttribute('aria-label', 'Section J Family Member EPIC Guard');
+
+        const combinedName = [relName, relSurname].filter(Boolean).join(' ');
+
+        card.innerHTML = `
+          <div class="gcds-card-header">
+            <span class="gcds-card-badge">Section J</span>
+            <span class="gcds-card-title">Family Member Details</span>
+          </div>
+          <div class="gcds-rec-box">
+            <div class="gcds-rec-label">Optional Section &bull; Guard</div>
+            <div class="gcds-rec-name" style="font-size: 13.5px; color: #fbbf24;">⚠️ No Family EPIC found</div>
+            <div class="gcds-rec-desc">Please enter the 10-digit EPIC number of <strong>${escapeHtml(combinedName || 'Family Member')}</strong> (${escapeHtml(relType)}) manually, or Skip this section:</div>
+          </div>
+          <input type="text" class="gcds-epic-input" id="gcds-manual-family-epic" placeholder="Enter EPIC (e.g. WBG1234567)" maxlength="20" autocomplete="off" />
+          <div class="gcds-btn-row">
+            <button type="button" class="gcds-btn-confirm" id="gcds-btn-fill-family-epic">
+              ✅ Fill &amp; Proceed
+            </button>
+            <button type="button" class="gcds-btn-skip" id="gcds-btn-skip-family-epic">
+              ⏭️ Skip Section J
+            </button>
+          </div>
+          <div class="gcds-action-desc" style="margin-top: 8px;">Family EPIC is optional. You can safely skip to Section K.</div>
+        `;
+
+        const btnSkip = card.querySelector('#gcds-btn-skip-family-epic');
+        const btnFill = card.querySelector('#gcds-btn-fill-family-epic');
+        const inpEpic = card.querySelector('#gcds-manual-family-epic');
+
+        // Focus the EPIC input for convenient operator entry
+        setTimeout(() => {
+          try { inpEpic?.focus(); } catch {}
+        }, 300);
+
+        // Skip handler
+        btnSkip.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          btnSkip.disabled = true;
+          btnFill.disabled = true;
+          btnSkip.innerHTML = '<span class="gcds-spinner"></span> Skipping to Section K…';
+          try { card.remove(); } catch {}
+          await transitionSectionJToK();
+          resolve({ action: 'SKIPPED', filledCount: 0 });
+        });
+
+        // Fill handler
+        btnFill.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const manualVal = (inpEpic?.value || '').trim();
+          btnSkip.disabled = true;
+          btnFill.disabled = true;
+          btnFill.innerHTML = '<span class="gcds-spinner"></span> Saving &amp; Proceeding…';
+
+          const filled = await applySectionJFill(manualVal);
+          try { card.remove(); } catch {}
+          await transitionSectionJToK();
+          resolve({ action: 'FILLED', filledCount: filled });
+        });
+
+        document.body.appendChild(card);
+      });
+    }
+
+    // 3. Auto-Fill Section J directly when EPIC exists in GCDS
+    const filledCount = await applySectionJFill(relEpic);
+    await sleep(250);
+    await transitionSectionJToK();
+    return { action: 'FILLED', filledCount };
+  }
+
+  /**
+   * Helper to transition from Section K to Section L (Captcha).
+   * Clicks Section K Next button and verifies transition to Section L.
+   *
+   * @param {number} maxWaitMs - Maximum time to wait for transition
+   * @returns {Promise<boolean>}
+   */
+  async function transitionSectionKToL(maxWaitMs = 4000) {
+    // Force-unlock Section K next button if present
+    const boxK = findSectionBox('K');
+    const nextBtnK = boxK?.querySelector('button.next-btn');
+    if (nextBtnK) {
+      nextBtnK.removeAttribute('disabled');
+      nextBtnK.disabled = false;
+      nextBtnK.classList.remove('buttonDisable');
+      nextBtnK.classList.add('buttonVisible');
+    }
+
+    const clicked = await clickSectionNextButton('K');
+    const startTime = Date.now();
+    let sidebarFallbackTriggered = false;
+
+    while (Date.now() - startTime < maxWaitMs) {
+      const titles = Array.from(document.querySelectorAll('.form-title, h1, h2, h3, h4, h5, h6, strong, span.textheadingnum'));
+      const hasLTitle = titles.some((el) => {
+        const txt = (el.textContent || '').trim().toLowerCase();
+        return (txt.includes('l.') || txt.includes('12.')) && (txt.includes('captcha') || txt.includes('ক্যাপচা'));
+      });
+
+      const sidebarL = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
+        .find((el) => (el.innerText || '').trim().startsWith('L.'));
+      const isLSidebarActive = sidebarL && sidebarL.className.includes('sidenavclass');
+
+      if (hasLTitle || isLSidebarActive) {
+        console.log('✅ Section L (Captcha) reached confirmed.');
+        return true;
+      }
+
+      if (!sidebarFallbackTriggered && (Date.now() - startTime > 1200)) {
+        sidebarFallbackTriggered = true;
+        if (sidebarL) {
+          console.log('[GCDS Section K->L] Triggering Section L sidebar click fallback...');
+          try {
+            sidebarL.click();
+            sidebarL.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            const innerLink = sidebarL.querySelector('.content_sidenav');
+            if (innerLink) {
+              innerLink.click();
+              innerLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            }
+          } catch {}
+        }
+      }
+
+      await sleep(150);
+    }
+    return clicked;
+  }
+
+  /**
+   * Section K (Declaration) — Legal Confirmation Human-in-the-Loop Flow.
+   *
+   * Requirement:
+   * 1. Date of Residence: Use address_since (Month & Year, format: mm-yyyy).
+   * 2. Place: Auto-fill City/Village name from GCDS into #Place.
+   * 3. State, District, Village/Town & Date: Set strictly within Section K box.
+   * 4. Safety Step (Mandatory): Display Confirmation Card:
+   *    "Legal Declaration: Resident since [Month/Year] at [Place]. Confirm to proceed?"
+   *    Action: Only click 'Next' (to reach Section L) after the operator confirms this card.
+   *
+   * @param {Object} data - GCDS Form Fill DTO
+   * @returns {Promise<{ action: 'CONFIRMED', filledCount: number }>}
+   */
+  async function handleSectionKDeclaration(data) {
+    const boxK = findSectionBox('K') || document;
+    try {
+      if (boxK && typeof boxK.scrollIntoView === 'function') {
+        boxK.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } catch {}
+
+    let filledCount = 0;
+
+    // 1. Resolve Village / Town
+    const rawVillage = data.address?.village || data.village || data.address?.cityTownVillage || data.city || '';
+    const decVillageVal = rawVillage.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (decVillageVal) {
+      const villInp = boxK.querySelector('input#village[name="village"], input#village') || findElement(SELECTOR_MAP.declarationVillage);
+      if (villInp) {
+        setInputValue(villInp, decVillageVal);
+        highlightField(villInp);
+        filledCount++;
+      }
+    }
+
+    // 2. Set State Code and District Code strictly within Section K
+    const stateVal = data.address?.state || data.state || '';
+    if (stateVal) {
+      const secKState = boxK.querySelector('select#stateCodeA, select[name="stateCodeA"]') || findElement(SELECTOR_MAP.declarationState);
+      if (secKState) {
+        setSelectValue(secKState, stateVal);
+        filledCount++;
+      }
+    }
+
+    const districtVal = data.address?.district || data.district || '';
+    if (districtVal) {
+      const secKDistrict = boxK.querySelector('select#districtCdA, select[name="districtCdA"]') || findElement(SELECTOR_MAP.declarationDistrict);
+      if (secKDistrict) {
+        setSelectValue(secKDistrict, districtVal);
+        filledCount++;
+      }
+    }
+
+    // 3. Resolve Date of Residence (since mm-yyyy)
+    let rawSince = data.address_since || data.resident_since || data.addressSince || data.residentSince || '';
+    let mmYyyy = '';
+    if (rawSince) {
+      const m1 = String(rawSince).match(/^(\d{4})[-/.](\d{1,2})/);
+      const m2 = String(rawSince).match(/^(\d{1,2})[-/.](\d{4})/);
+      const m3 = String(rawSince).match(/\b(\d{4})\b/);
+      if (m1) mmYyyy = `${String(m1[2]).padStart(2, '0')}-${m1[1]}`;
+      else if (m2) mmYyyy = `${String(m2[1]).padStart(2, '0')}-${m2[2]}`;
+      else if (m3) mmYyyy = `01-${m3[1]}`;
+    }
+    // Lifelong resident fallback: birth month & year
+    if (!mmYyyy && data.dateOfBirth) {
+      const dobM = String(data.dateOfBirth).match(/^(\d{4})[-/.](\d{1,2})/);
+      if (dobM) mmYyyy = `${String(dobM[2]).padStart(2, '0')}-${dobM[1]}`;
+    }
+    if (!mmYyyy) mmYyyy = '01-2015';
+
+    const residenceDateInp = boxK.querySelector('input[name="dob"][placeholder="mm-yyyy"], div[aria-label*="ordinarily a resident" i] input, .react-datepicker__input-container input') ||
+      findElement(SELECTOR_MAP.residenceDateSince);
+    if (residenceDateInp) {
+      setInputValue(residenceDateInp, mmYyyy);
+      const propKey = Object.keys(residenceDateInp).find((k) => k.startsWith('__reactProps'));
+      if (propKey && residenceDateInp[propKey]?.onChange) {
+        try { residenceDateInp[propKey].onChange({ target: { value: mmYyyy } }); } catch {}
+      }
+      highlightField(residenceDateInp);
+      filledCount++;
+    }
+
+    // 4. Resolve Place of Declaration
+    const rawPlace = data.address?.cityTownVillage || data.city || data.address?.district || data.district || decVillageVal || 'Kolkata';
+    const placeVal = rawPlace.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (placeVal) {
+      const placeInp = boxK.querySelector('input#Place, input[name="Place"]') || findElement(SELECTOR_MAP.declarationPlace);
+      if (placeInp) {
+        setInputValue(placeInp, placeVal);
+        highlightField(placeInp);
+        filledCount++;
+      }
+    }
+
+    // 5. Declaration Date (Today)
+    const today = new Date().toISOString().split('T')[0];
+    const secKDate = boxK.querySelector('input[type="date"][name="date"], input.library-date') || findElement(SELECTOR_MAP.declarationDate);
+    if (secKDate) {
+      setInputValue(secKDate, today);
+      highlightField(secKDate);
+      filledCount++;
+    }
+
+    // 6. Mandatory Safety Step: Show Confirmation Card to Operator
+    return new Promise((resolve) => {
+      injectRelationCardStyles();
+
+      const stale = document.getElementById('gcds-declaration-card');
+      if (stale) stale.remove();
+
+      const card = document.createElement('div');
+      card.id = 'gcds-declaration-card';
+      card.setAttribute('role', 'dialog');
+      card.setAttribute('aria-label', 'Section K Legal Declaration Confirmation');
+
+      card.innerHTML = `
+        <div class="gcds-card-header">
+          <span class="gcds-card-badge">Section K</span>
+          <span class="gcds-card-title">Legal Declaration</span>
+        </div>
+        <div class="gcds-rec-box">
+          <div class="gcds-rec-label">Mandatory Confirmation</div>
+          <div class="gcds-rec-name" style="font-size: 13.5px; color: #34d399;">Legal Declaration: Resident since ${escapeHtml(mmYyyy)} at ${escapeHtml(placeVal)}</div>
+          <div class="gcds-rec-desc">Confirm the residency date and declaration place before advancing to Captcha:</div>
+        </div>
+        <div class="gcds-decl-summary">
+          <div class="gcds-decl-row">
+            <span class="gcds-decl-label">📅 Resident Since:</span>
+            <span class="gcds-decl-val">${escapeHtml(mmYyyy)}</span>
+          </div>
+          <div class="gcds-decl-row">
+            <span class="gcds-decl-label">📍 Declaration Place:</span>
+            <span class="gcds-decl-val">${escapeHtml(placeVal)}</span>
+          </div>
+          <div class="gcds-decl-row">
+            <span class="gcds-decl-label">🏛️ Village / Town:</span>
+            <span class="gcds-decl-val">${escapeHtml(decVillageVal || placeVal)}</span>
+          </div>
+        </div>
+        <button type="button" class="gcds-btn-confirm" id="gcds-btn-confirm-declaration" style="width: 100%; padding: 11px 0; font-size: 13.5px;">
+          ✅ Confirm &amp; Proceed to Captcha
+        </button>
+        <div class="gcds-action-desc" style="margin-top: 8px;">Only verified declarations may be submitted. Operator approval mandatory.</div>
+      `;
+
+      const btnConfirm = card.querySelector('#gcds-btn-confirm-declaration');
+      btnConfirm.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        btnConfirm.disabled = true;
+        btnConfirm.innerHTML = '<span class="gcds-spinner"></span> Advancing to Section L (Captcha)…';
+
+        try { card.remove(); } catch {}
+        await transitionSectionKToL();
+        resolve({ action: 'CONFIRMED', filledCount });
+      });
+
+      document.body.appendChild(card);
+    });
+  }
+
+  /**
+   * Section L: Captcha & Review Final Stop.
+   *
+   * Displays the final completion card:
+   * "Form entry complete. Please solve Captcha and Submit manually to generate Receipt."
+   * Halts all automation so human operator solves Captcha and performs manual submission.
+   */
+  function showSectionLCompletionCard() {
+    injectRelationCardStyles();
+
+    const stale = document.getElementById('gcds-completion-card');
+    if (stale) stale.remove();
+
+    const boxL = findSectionBox('L');
+    if (boxL) {
+      try { boxL.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+    }
+
+    const card = document.createElement('div');
+    card.id = 'gcds-completion-card';
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-label', 'Section L Form Entry Complete Final Stop');
+
+    card.innerHTML = `
+      <div class="gcds-card-header">
+        <span class="gcds-card-badge">Section L</span>
+        <span class="gcds-card-title">Final Step</span>
+      </div>
+      <div class="gcds-complete-title">🎉 Form entry complete. Please solve Captcha and Submit manually to generate Receipt.</div>
+      <div class="gcds-complete-bengali">ফর্ম ফিলিং সম্পন্ন হয়েছে। অনুগ্রহ করে ক্যাপচা (Captcha) পূরণ করুন এবং প্রিভিউ দেখে ম্যানুয়ালি সাবমিট করুন।</div>
+      <div class="gcds-complete-box">
+        <div>✔ Sections A – K verified and auto-filled</div>
+        <div>✔ Photo, Age &amp; Address Proof attached</div>
+        <div>✔ Family details &amp; Declaration logged</div>
+        <div style="color: #34d399; font-weight: 700; margin-top: 4px;">🔒 Final Submission Guarded: Solve Captcha &amp; Click Preview/Submit</div>
+      </div>
+      <div class="gcds-action-desc" style="color: #94a3b8; font-size: 11px; margin-top: 6px;">Next Step: Acknowledgment Number Scraper &amp; Thermal Receipt Generator will capture the submission receipt.</div>
+    `;
+
+    document.body.appendChild(card);
+  }
+
   // ─── Main Fill Engine ─────────────────────────────────────────────────────
 
   /**
@@ -5973,65 +6684,32 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Section J: Family Member Details (Optional)
+    // Section J: Family Member Details (Optional) — Smart Map & Guard
     // ═══════════════════════════════════════════════════════════════════════════
 
-    const epicVal = data.epic || data.voter_id_number;
-    if (epicVal) {
-      await fillTextField('epicNumber', epicVal);
+    const secJResult = await handleSectionJFamilyMember(data);
+    if (secJResult?.action === 'FILLED') {
+      filledCount += secJResult.filledCount || 1;
+    } else {
+      skippedCount++;
+      skippedFields.push('Section J (Family Member)');
     }
-
-    // Auto-advance Section J
-    await clickSectionNextButton('J');
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Section K: Declaration
+    // Section K: Declaration — Legal Confirmation
     // ═══════════════════════════════════════════════════════════════════════════
 
-    const rawPlace = addr.cityTownVillage || addr.district || data.city || '';
-    const placeVal = rawPlace.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (placeVal) {
-      await fillTextField('declarationPlace', placeVal);
+    const secKResult = await handleSectionKDeclaration(data);
+    if (secKResult?.action === 'CONFIRMED' || secKResult?.success) {
+      filledCount += secKResult.filledCount || 1;
     }
-    const rawVillage = villageVal || addr.cityTownVillage || data.city || '';
-    const decVillageVal = rawVillage.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (decVillageVal) {
-      await fillTextField('declarationVillage', decVillageVal);
-    }
-
-    // Set Section K State, District, and Declaration Date strictly within Section K box
-    const boxK = findSectionBox('K');
-    if (boxK) {
-      const secKState = boxK.querySelector('select#stateCodeA, select[name="stateCodeA"]');
-      if (secKState && stateVal) {
-        setSelectValue(secKState, stateVal);
-      }
-      const secKDistrict = boxK.querySelector('select#districtCdA, select[name="districtCdA"]');
-      if (secKDistrict && districtVal) {
-        setSelectValue(secKDistrict, districtVal);
-      }
-      const today = new Date().toISOString().split('T')[0];
-      const secKDate = boxK.querySelector('input[type="date"][name="date"], input.library-date');
-      if (secKDate) {
-        setInputValue(secKDate, today);
-        highlightField(secKDate);
-      }
-    }
-
-    // Auto-advance Section K
-    await clickSectionNextButton('K');
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Section L: Captcha & Review
+    // Section L: Captcha & Review Final Stop
     // CRITICAL SAFETY RULE 1: NEVER AUTOMATE FINAL SUBMISSION
     // ═══════════════════════════════════════════════════════════════════════════
 
-    const boxL = findSectionBox('L');
-    if (boxL) {
-      try {
-        boxL.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } catch {}
-    }
+    showSectionLCompletionCard();
 
     const fillResult = {
       success: true,
@@ -6138,7 +6816,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.3.0-stable',
+      version: '1.4.0-stable',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
@@ -6182,6 +6860,11 @@
     transitionSectionHToSectionI,
     waitForSectionIDisabilityChoice,
     transitionSectionIToJ,
+    transitionSectionJToK,
+    handleSectionJFamilyMember,
+    transitionSectionKToL,
+    handleSectionKDeclaration,
+    showSectionLCompletionCard,
     parseAddressComponents,
     runFill,
     fillForm,
@@ -6231,6 +6914,12 @@
     if (staleHouse) staleHouse.remove();
     const staleDisability = document.getElementById('gcds-disability-card');
     if (staleDisability) staleDisability.remove();
+    const staleFamily = document.getElementById('gcds-family-epic-card');
+    if (staleFamily) staleFamily.remove();
+    const staleDecl = document.getElementById('gcds-declaration-card');
+    if (staleDecl) staleDecl.remove();
+    const staleComplete = document.getElementById('gcds-completion-card');
+    if (staleComplete) staleComplete.remove();
   };
 })();
 
