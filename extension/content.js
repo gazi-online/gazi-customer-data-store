@@ -5089,12 +5089,13 @@
 
     if (!relSelect) return false;
 
-    const rec = familyRecords[relCode] || familyRecords.FTHR;
+    const rec = (familyRecords && familyRecords[relCode]) || (familyRecords && familyRecords.FTHR) || {};
+    const portalValues = Array.isArray(rec.portalValues) ? rec.portalValues : [rec.labelEn, relCode].filter(Boolean);
     const options = Array.from(relSelect.options || []);
     let matchedOption = null;
 
     if (options.length > 0) {
-      for (const pv of rec.portalValues) {
+      for (const pv of portalValues) {
         const cleanPv = pv.toUpperCase().replace(/[^A-Z0-9]/g, '');
         matchedOption = options.find((opt) => {
           const optVal = (opt.value || '').trim().toUpperCase();
@@ -5114,7 +5115,7 @@
     if (matchedOption) {
       relSelect.value = matchedOption.value;
     } else {
-      setSelectValue(relSelect, rec.labelEn);
+      setSelectValue(relSelect, rec.labelEn || relCode);
     }
 
     dispatchStandardEvents(relSelect);
@@ -5128,7 +5129,7 @@
 
   async function applySectionJFill(relCode, familyRecords, manualEpic = '') {
     const boxJ = findSectionBox('J') || document;
-    const rec = familyRecords[relCode] || familyRecords.FTHR;
+    const rec = (familyRecords && familyRecords[relCode]) || (familyRecords && familyRecords.FTHR) || {};
     let filled = 0;
 
     // A. Sync Dropdown
@@ -5160,15 +5161,13 @@
       }
     }
 
-    // C. Transliterate and Fill Regional Name
-    const regNameInp = boxJ.querySelector('input#regRelatName, input[name="regRelatName"]') ||
-      findElement(SELECTOR_MAP.familyMemberRegionalName);
-    const regSurInp = boxJ.querySelector('input#regRelatSurName, input[name="regRelatSurName"]') ||
-      findElement(SELECTOR_MAP.familyMemberRegionalSurname);
+    // C. Transliterate and Fill Regional Name (only if local to boxJ — do NOT cross over to Section C)
+    const regNameInp = boxJ.querySelector('input#regRelatName, input[name="regRelatName"]');
+    const regSurInp = boxJ.querySelector('input#regRelatSurName, input[name="regRelatSurName"]');
 
     if (regNameInp && rec.name) {
       if (!rec.regionalFirst) {
-        rec.regionalFirst = await requestTransliteration(rec.name);
+        try { rec.regionalFirst = await requestTransliteration(rec.name); } catch {}
       }
       if (rec.regionalFirst) {
         setInputValue(regNameInp, rec.regionalFirst);
@@ -5178,7 +5177,7 @@
     }
     if (regSurInp && rec.surname) {
       if (!rec.regionalSurname) {
-        rec.regionalSurname = await requestTransliteration(rec.surname);
+        try { rec.regionalSurname = await requestTransliteration(rec.surname); } catch {}
       }
       if (rec.regionalSurname) {
         setInputValue(regSurInp, rec.regionalSurname);
@@ -5197,6 +5196,9 @@
         setInputValue(epicInp, cleanEpic);
         highlightField(epicInp);
         filled++;
+      }
+      if (rec) {
+        rec.epic = cleanEpic;
       }
     }
 
@@ -5338,23 +5340,27 @@
           chip.addEventListener('click', async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            selectedCode = chip.dataset.code;
-            const targetRec = familyRecords[selectedCode];
+            try {
+              selectedCode = chip.dataset.code;
+              const targetRec = familyRecords[selectedCode];
 
-            // A. Instantly sync portal dropdown to selected relation
-            selectSectionJDropdown(selectedCode, familyRecords);
+              // A. Instantly sync portal dropdown to selected relation
+              selectSectionJDropdown(selectedCode, familyRecords);
 
-            // B. If EPIC exists, auto-fill portal details immediately (checklist item #2)
-            if (targetRec && targetRec.epic) {
-              lastFilledCount = await applySectionJFill(selectedCode, familyRecords, targetRec.epic);
-              renderCard(true);
-            } else if (targetRec && targetRec.name) {
-              // Fill name and present manual input for EPIC
-              lastFilledCount = await applySectionJFill(selectedCode, familyRecords, '');
-              renderCard(false);
-            } else {
-              // No record in GCDS — prompt operator to enter manually on portal (checklist item #3)
-              renderCard(false);
+              // B. If EPIC exists, auto-fill portal details immediately (checklist item #2)
+              if (targetRec && targetRec.epic) {
+                lastFilledCount = await applySectionJFill(selectedCode, familyRecords, targetRec.epic);
+                renderCard(true);
+              } else if (targetRec && targetRec.name) {
+                // Fill name and present manual input for EPIC
+                lastFilledCount = await applySectionJFill(selectedCode, familyRecords, '');
+                renderCard(false);
+              } else {
+                // No record in GCDS — prompt operator to enter manually on portal (checklist item #3)
+                renderCard(false);
+              }
+            } catch (err) {
+              console.error('[GCDS] Error selecting Section J chip:', err);
             }
           });
         });
@@ -5368,10 +5374,20 @@
             btnFill.disabled = true;
             btnFill.innerHTML = '<span class="gcds-spinner"></span> Filling…';
 
-            const manualVal = (card.querySelector('#gcds-manual-family-epic')?.value || '').trim();
-            const filled = await applySectionJFill(selectedCode, familyRecords, manualVal);
-            lastFilledCount = filled;
-            renderCard(true);
+            try {
+              const manualVal = (card.querySelector('#gcds-manual-family-epic')?.value || '').trim();
+              if (manualVal && familyRecords && familyRecords[selectedCode]) {
+                const cleanEpic = manualVal.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                familyRecords[selectedCode].epic = cleanEpic;
+              }
+              const filled = await applySectionJFill(selectedCode, familyRecords, manualVal);
+              lastFilledCount = filled;
+              renderCard(true);
+            } catch (err) {
+              console.error('[GCDS] Error in Section J fill:', err);
+              btnFill.disabled = false;
+              btnFill.innerHTML = '✅ Fill &amp; Proceed';
+            }
           });
         }
 
@@ -5383,9 +5399,15 @@
             e.stopPropagation();
             btnProceed.disabled = true;
             btnProceed.innerHTML = '<span class="gcds-spinner"></span> Advancing to Section K…';
-            try { card.remove(); } catch {}
-            await transitionSectionJToK();
-            resolve({ action: 'FILLED', filledCount: lastFilledCount || 1 });
+            try {
+              try { card.remove(); } catch {}
+              await transitionSectionJToK();
+              resolve({ action: 'FILLED', filledCount: lastFilledCount || 1 });
+            } catch (err) {
+              console.error('[GCDS] Error advancing to Section K:', err);
+              btnProceed.disabled = false;
+              btnProceed.innerHTML = '➡️ Proceed to Section K';
+            }
           });
         }
 
@@ -5397,9 +5419,15 @@
             e.stopPropagation();
             btnSkip.disabled = true;
             btnSkip.innerHTML = '<span class="gcds-spinner"></span> Skipping to Section K…';
-            try { card.remove(); } catch {}
-            await transitionSectionJToK();
-            resolve({ action: 'SKIPPED', filledCount: 0 });
+            try {
+              try { card.remove(); } catch {}
+              await transitionSectionJToK();
+              resolve({ action: 'SKIPPED', filledCount: 0 });
+            } catch (err) {
+              console.error('[GCDS] Error skipping Section J:', err);
+              btnSkip.disabled = false;
+              btnSkip.innerHTML = '⏭️ Skip Section J';
+            }
           });
         }
       };
