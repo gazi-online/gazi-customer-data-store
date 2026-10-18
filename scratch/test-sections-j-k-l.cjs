@@ -52,12 +52,12 @@ const routeTs = fs.readFileSync('src/app/api/extension/customers/[id]/form-fill/
 
 console.log('--- 1. Version & Release Tagging ---');
 
-test('manifest.json version is 1.6.1', () => {
-  assert.strictEqual(manifest.version, '1.6.1');
+test('manifest.json version is 1.6.2', () => {
+  assert.strictEqual(manifest.version, '1.6.2');
 });
 
-test('content.js diagnostic version is 1.6.1-GOLD', () => {
-  assert.ok(contentJs.includes("version: '1.6.1-GOLD'"));
+test('content.js diagnostic version is 1.6.2-GOLD', () => {
+  assert.ok(contentJs.includes("version: '1.6.2-GOLD'"));
 });
 
 console.log('\n--- 2. SELECTOR_MAP Section J & K Selectors ---');

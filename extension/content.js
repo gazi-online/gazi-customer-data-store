@@ -23,6 +23,72 @@
   }
   window.__GCDS_CONTENT_SCRIPT_LOADED = true;
 
+  // ─── State-Aware Session Tracking ──────────────────────────────────────────
+  // Tracks confirmed relations from Section C (2a) and Section J (10) to power
+  // conditional logic in downstream sections (e.g. Section K Birth Village/Town).
+  const sessionState = {
+    lastSelectedRelationC: null, // 'FTHR' | 'MTHR' | 'HSBN' | 'WIFE' | 'OTHR'
+    lastSelectedRelationJ: null, // 'FTHR' | 'MTHR' | 'HSBN' | 'GRDN'
+    birthPlaceManualConfirmed: false,
+    birthPlaceValue: '',
+  };
+  window.__GCDS_SESSION_STATE = sessionState;
+
+  // Hydrate sessionState from chrome.storage.local for back-and-forth resilience
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    try {
+      chrome.storage.local.get(['gcds_last_relation_c', 'gcds_last_relation_j', 'gcds_birth_place_val'], (res) => {
+        if (res) {
+          if (res.gcds_last_relation_c) sessionState.lastSelectedRelationC = res.gcds_last_relation_c;
+          if (res.gcds_last_relation_j) sessionState.lastSelectedRelationJ = res.gcds_last_relation_j;
+          if (res.gcds_birth_place_val) {
+            sessionState.birthPlaceValue = res.gcds_birth_place_val;
+            sessionState.birthPlaceManualConfirmed = true;
+          }
+        }
+      });
+    } catch {}
+  }
+
+  /**
+   * Evaluates if a relation code represents direct parental lineage (Father or Mother).
+   * Used for conditional birth-place determination in Section K.
+   *
+   * @param {string} relCode - Relation code (FTHR, MTHR, Father, Mother, etc.)
+   * @returns {boolean}
+   */
+  function isDirectLineageRelation(relCode) {
+    if (!relCode) return false;
+    const clean = String(relCode).toUpperCase().trim();
+    return clean === 'FTHR' || clean === 'MTHR' || clean === 'FATHER' || clean === 'MOTHER' ||
+           clean.includes('FATH') || clean.includes('MOTH') || clean.includes('পিতা') || clean.includes('মাতা');
+  }
+
+  function recordRelationSelectionC(relCode) {
+    if (!relCode) return;
+    sessionState.lastSelectedRelationC = relCode;
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      try { chrome.storage.local.set({ gcds_last_relation_c: relCode }); } catch {}
+    }
+  }
+
+  function recordRelationSelectionJ(relCode) {
+    if (!relCode) return;
+    sessionState.lastSelectedRelationJ = relCode;
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      try { chrome.storage.local.set({ gcds_last_relation_j: relCode }); } catch {}
+    }
+  }
+
+  function recordManualBirthPlace(val) {
+    if (!val) return;
+    sessionState.birthPlaceValue = val;
+    sessionState.birthPlaceManualConfirmed = true;
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      try { chrome.storage.local.set({ gcds_birth_place_val: val }); } catch {}
+    }
+  }
+
   // ─── Constants ─────────────────────────────────────────────────────────────
 
   const HIGHLIGHT_CLASS = 'gcds-fill-highlight';
@@ -1380,7 +1446,8 @@
     s.id = 'gcds-sec-c-card-styles';
     s.textContent = `
       #gcds-rel-card,
-      #gcds-family-epic-card {
+      #gcds-family-epic-card,
+      #gcds-birthplace-card {
         position: fixed;
         bottom: 28px;
         right: 28px;
@@ -1656,11 +1723,11 @@
         border-color: #ef4444;
         color: #ffffff;
       }
-      #gcds-aadhaar-card .gcds-btn-row, #gcds-doc-card .gcds-btn-row, #gcds-house-card .gcds-btn-row, #gcds-disability-card .gcds-btn-row, #gcds-family-epic-card .gcds-btn-row, #gcds-declaration-card .gcds-btn-row, #gcds-completion-card .gcds-btn-row {
+      #gcds-aadhaar-card .gcds-btn-row, #gcds-doc-card .gcds-btn-row, #gcds-house-card .gcds-btn-row, #gcds-disability-card .gcds-btn-row, #gcds-family-epic-card .gcds-btn-row, #gcds-birthplace-card .gcds-btn-row, #gcds-declaration-card .gcds-btn-row, #gcds-completion-card .gcds-btn-row {
         display: flex;
         gap: 8px;
       }
-      #gcds-aadhaar-card .gcds-btn-confirm, #gcds-doc-card .gcds-btn-confirm, #gcds-house-card .gcds-btn-confirm, #gcds-disability-card .gcds-btn-confirm, #gcds-family-epic-card .gcds-btn-confirm, #gcds-declaration-card .gcds-btn-confirm, #gcds-completion-card .gcds-btn-confirm {
+      #gcds-aadhaar-card .gcds-btn-confirm, #gcds-doc-card .gcds-btn-confirm, #gcds-house-card .gcds-btn-confirm, #gcds-disability-card .gcds-btn-confirm, #gcds-family-epic-card .gcds-btn-confirm, #gcds-birthplace-card .gcds-btn-confirm, #gcds-declaration-card .gcds-btn-confirm, #gcds-completion-card .gcds-btn-confirm {
         flex: 1;
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
         color: #fff;
@@ -1674,10 +1741,10 @@
         transition: opacity 0.15s, transform 0.1s;
         box-shadow: 0 2px 8px rgba(99,102,241,0.4);
       }
-      #gcds-aadhaar-card .gcds-btn-confirm:hover, #gcds-doc-card .gcds-btn-confirm:hover, #gcds-house-card .gcds-btn-confirm:hover, #gcds-disability-card .gcds-btn-confirm:hover, #gcds-family-epic-card .gcds-btn-confirm:hover, #gcds-declaration-card .gcds-btn-confirm:hover, #gcds-completion-card .gcds-btn-confirm:hover { opacity: 0.9; transform: translateY(-1px); }
-      #gcds-aadhaar-card .gcds-btn-confirm:active, #gcds-doc-card .gcds-btn-confirm:active, #gcds-house-card .gcds-btn-confirm:active, #gcds-disability-card .gcds-btn-confirm:active, #gcds-family-epic-card .gcds-btn-confirm:active, #gcds-declaration-card .gcds-btn-confirm:active, #gcds-completion-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
-      #gcds-aadhaar-card .gcds-btn-confirm:disabled, #gcds-doc-card .gcds-btn-confirm:disabled, #gcds-house-card .gcds-btn-confirm:disabled, #gcds-disability-card .gcds-btn-confirm:disabled, #gcds-family-epic-card .gcds-btn-confirm:disabled, #gcds-declaration-card .gcds-btn-confirm:disabled, #gcds-completion-card .gcds-btn-confirm:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-      #gcds-aadhaar-card .gcds-btn-skip, #gcds-doc-card .gcds-btn-skip, #gcds-house-card .gcds-btn-skip, #gcds-disability-card .gcds-btn-skip, #gcds-family-epic-card .gcds-btn-skip, #gcds-declaration-card .gcds-btn-skip, #gcds-completion-card .gcds-btn-skip {
+      #gcds-aadhaar-card .gcds-btn-confirm:hover, #gcds-doc-card .gcds-btn-confirm:hover, #gcds-house-card .gcds-btn-confirm:hover, #gcds-disability-card .gcds-btn-confirm:hover, #gcds-family-epic-card .gcds-btn-confirm:hover, #gcds-birthplace-card .gcds-btn-confirm:hover, #gcds-declaration-card .gcds-btn-confirm:hover, #gcds-completion-card .gcds-btn-confirm:hover { opacity: 0.9; transform: translateY(-1px); }
+      #gcds-aadhaar-card .gcds-btn-confirm:active, #gcds-doc-card .gcds-btn-confirm:active, #gcds-house-card .gcds-btn-confirm:active, #gcds-disability-card .gcds-btn-confirm:active, #gcds-family-epic-card .gcds-btn-confirm:active, #gcds-birthplace-card .gcds-btn-confirm:active, #gcds-declaration-card .gcds-btn-confirm:active, #gcds-completion-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
+      #gcds-aadhaar-card .gcds-btn-confirm:disabled, #gcds-doc-card .gcds-btn-confirm:disabled, #gcds-house-card .gcds-btn-confirm:disabled, #gcds-disability-card .gcds-btn-confirm:disabled, #gcds-family-epic-card .gcds-btn-confirm:disabled, #gcds-birthplace-card .gcds-btn-confirm:disabled, #gcds-declaration-card .gcds-btn-confirm:disabled, #gcds-completion-card .gcds-btn-confirm:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+      #gcds-aadhaar-card .gcds-btn-skip, #gcds-doc-card .gcds-btn-skip, #gcds-house-card .gcds-btn-skip, #gcds-disability-card .gcds-btn-skip, #gcds-family-epic-card .gcds-btn-skip, #gcds-birthplace-card .gcds-btn-skip, #gcds-declaration-card .gcds-btn-skip, #gcds-completion-card .gcds-btn-skip {
         background: transparent;
         color: #64748b;
         font-size: 12px;
@@ -1687,8 +1754,8 @@
         cursor: pointer;
         transition: color 0.15s, border-color 0.15s;
       }
-      #gcds-aadhaar-card .gcds-btn-skip:hover, #gcds-doc-card .gcds-btn-skip:hover, #gcds-house-card .gcds-btn-skip:hover, #gcds-disability-card .gcds-btn-skip:hover, #gcds-family-epic-card .gcds-btn-skip:hover, #gcds-declaration-card .gcds-btn-skip:hover, #gcds-completion-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
-      #gcds-aadhaar-card .gcds-spinner, #gcds-doc-card .gcds-spinner, #gcds-house-card .gcds-spinner, #gcds-disability-card .gcds-spinner, #gcds-family-epic-card .gcds-spinner, #gcds-declaration-card .gcds-spinner, #gcds-completion-card .gcds-spinner {
+      #gcds-aadhaar-card .gcds-btn-skip:hover, #gcds-doc-card .gcds-btn-skip:hover, #gcds-house-card .gcds-btn-skip:hover, #gcds-disability-card .gcds-btn-skip:hover, #gcds-family-epic-card .gcds-btn-skip:hover, #gcds-birthplace-card .gcds-btn-skip:hover, #gcds-declaration-card .gcds-btn-skip:hover, #gcds-completion-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
+      #gcds-aadhaar-card .gcds-spinner, #gcds-doc-card .gcds-spinner, #gcds-house-card .gcds-spinner, #gcds-disability-card .gcds-spinner, #gcds-family-epic-card .gcds-spinner, #gcds-birthplace-card .gcds-spinner, #gcds-declaration-card .gcds-spinner, #gcds-completion-card .gcds-spinner {
         display: inline-block;
         width: 14px; height: 14px;
         border: 2px solid rgba(255,255,255,0.3);
@@ -1879,6 +1946,43 @@
       #gcds-family-epic-card .gcds-epic-input:focus {
         border-color: #6366f1;
         box-shadow: 0 0 0 3px rgba(99,102,241,0.25);
+      }
+
+      /* ── Section K (Birth Place Manual Input) Card ── */
+      #gcds-birthplace-card {
+        border-color: #f59e0b !important;
+        box-shadow: 0 8px 40px rgba(245, 158, 11, 0.35), 0 2px 12px rgba(0,0,0,0.5) !important;
+      }
+      #gcds-birthplace-card .gcds-card-badge {
+        background: #d97706 !important;
+      }
+      #gcds-birthplace-card .gcds-rec-box {
+        background: rgba(245, 158, 11, 0.12) !important;
+        border: 1px solid rgba(245, 158, 11, 0.4) !important;
+      }
+      #gcds-birthplace-card .gcds-birth-input {
+        width: 100%;
+        box-sizing: border-box;
+        background: #0f172a;
+        border: 1.5px solid #334155;
+        border-radius: 8px;
+        color: #f8fafc;
+        font-size: 14px;
+        font-weight: 600;
+        padding: 9px 12px;
+        text-align: left;
+        outline: none;
+        margin-top: 6px;
+        margin-bottom: 12px;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+      #gcds-birthplace-card .gcds-birth-input:focus {
+        border-color: #f59e0b;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25);
+      }
+      #gcds-birthplace-card .gcds-btn-confirm {
+        background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%) !important;
+        box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4) !important;
       }
 
       /* ── Section K (Declaration) Card ── */
@@ -2179,6 +2283,7 @@
             e.preventDefault();
             e.stopPropagation();
             selectedCode = chip.dataset.code;
+            recordRelationSelectionC(selectedCode);
             activeRelationData = allNames[selectedCode] || {
               code: selectedCode,
               first: '',
@@ -2211,6 +2316,7 @@
           e.preventDefault();
           e.stopPropagation();
           const currentCode = selectedCode;
+          recordRelationSelectionC(currentCode);
           const chosenOpt = RELATION_OPTIONS.find((o) => o.code === currentCode) || recommendation;
           const chosenData = allNames[currentCode] || activeRelationData || {};
 
@@ -5231,6 +5337,8 @@
     else if (familyRecords.HSBN.epic || familyRecords.HSBN.name) selectedCode = 'HSBN';
     else if (familyRecords.GRDN.epic || familyRecords.GRDN.name) selectedCode = 'GRDN';
 
+    recordRelationSelectionJ(selectedCode);
+
     const boxJ = findSectionBox('J') || document;
     try {
       if (boxJ && typeof boxJ.scrollIntoView === 'function') {
@@ -5354,6 +5462,7 @@
             e.stopPropagation();
             try {
               selectedCode = chip.dataset.code;
+              recordRelationSelectionJ(selectedCode);
               const targetRec = familyRecords[selectedCode];
 
               // A. Instantly sync portal dropdown to selected relation
@@ -5387,6 +5496,7 @@
             btnFill.innerHTML = '<span class="gcds-spinner"></span> Filling…';
 
             try {
+              recordRelationSelectionJ(selectedCode);
               const manualVal = (card.querySelector('#gcds-manual-family-epic')?.value || '').trim();
               if (manualVal && familyRecords && familyRecords[selectedCode]) {
                 const cleanEpic = manualVal.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -5412,6 +5522,7 @@
             btnProceed.disabled = true;
             btnProceed.innerHTML = '<span class="gcds-spinner"></span> Advancing to Section K…';
             try {
+              recordRelationSelectionJ(selectedCode);
               try { card.remove(); } catch {}
               await transitionSectionJToK();
               resolve({ action: 'FILLED', filledCount: lastFilledCount || 1 });
@@ -5509,13 +5620,126 @@
   }
 
   /**
-   * Section K (Declaration) — Legal Confirmation Human-in-the-Loop Flow.
+   * Prompts the operator for manual Birth Village/Town input when non-parental
+   * relation (Husband/Guardian) was selected (Scenario 2).
+   *
+   * Displays floating Action Card (#gcds-birthplace-card) with:
+   * - Text input for Birth Village/Town
+   * - "Confirm & Fill Birth Place" button
+   * - Fallback "Same as Current Village" button
+   *
+   * @param {string} currentVillage - Current residence village name from GCDS
+   * @param {string} relCode - Relation code from Section C or J (e.g. HSBN, GRDN)
+   * @returns {Promise<string>} Resolves with confirmed birth village/town name
+   */
+  function promptManualBirthPlace(currentVillage, relCode = '') {
+    return new Promise((resolve) => {
+      injectRelationCardStyles();
+
+      const stale = document.getElementById('gcds-birthplace-card');
+      if (stale) stale.remove();
+
+      const card = document.createElement('div');
+      card.id = 'gcds-birthplace-card';
+      card.setAttribute('role', 'dialog');
+      card.setAttribute('aria-label', 'Section K Birth Place Manual Input');
+
+      const relLabel = relCode === 'HSBN' ? 'Husband' : (relCode === 'GRDN' ? 'Guardian' : 'Spouse/Other');
+
+      card.innerHTML = `
+        <div class="gcds-card-header">
+          <span class="gcds-card-badge">Section K</span>
+          <span class="gcds-card-title">Birth Place Required</span>
+        </div>
+        <div class="gcds-rec-box">
+          <div class="gcds-rec-label">Conditional Check: Non-Parental Relation (${escapeHtml(relLabel)})</div>
+          <div class="gcds-rec-name" style="font-size: 13.5px; color: #f59e0b;">
+            ⚠️ Please enter Birth Village/Town manually
+          </div>
+          <div class="gcds-rec-desc">
+            As applicant's relation is <strong>${escapeHtml(relLabel)}</strong>, their birth place may differ from current residence.
+          </div>
+          <div class="gcds-action-desc" style="color: #cbd5e1; margin-top: 4px; font-size: 11px;">
+            দয়া করে জন্মস্থানের গ্রাম/শহর লিখুন (বর্তমান বাসস্থান থেকে আলাদা হতে পারে):
+          </div>
+        </div>
+        <input
+          type="text"
+          class="gcds-birth-input"
+          id="gcds-manual-birth-village"
+          placeholder="Enter Birth Village/Town (e.g. Rampur)"
+          maxlength="60"
+          autocomplete="off"
+        />
+        <div class="gcds-btn-row">
+          <button type="button" class="gcds-btn-confirm" id="gcds-btn-confirm-birthplace" style="width: 100%;">
+            ✅ Confirm &amp; Fill Birth Place
+          </button>
+        </div>
+        ${currentVillage ? `
+          <button type="button" class="gcds-btn-skip" id="gcds-btn-same-village" style="width: 100%; margin-top: 8px; text-align: center; border-color: #475569; color: #94a3b8; font-size: 11.5px; padding: 7px 10px;">
+            🏠 Same as Current Village (${escapeHtml(currentVillage)})
+          </button>
+        ` : ''}
+      `;
+
+      document.body.appendChild(card);
+
+      const inp = card.querySelector('#gcds-manual-birth-village');
+      if (inp) {
+        setTimeout(() => { try { inp.focus(); } catch {} }, 250);
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            card.querySelector('#gcds-btn-confirm-birthplace')?.click();
+          }
+        });
+      }
+
+      const btnConfirm = card.querySelector('#gcds-btn-confirm-birthplace');
+      if (btnConfirm) {
+        btnConfirm.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const enteredVal = (inp?.value || '').trim();
+          if (!enteredVal) {
+            if (inp) {
+              inp.style.borderColor = '#ef4444';
+              inp.focus();
+            }
+            return;
+          }
+          recordManualBirthPlace(enteredVal);
+          try { card.remove(); } catch {}
+          resolve(enteredVal);
+        });
+      }
+
+      const btnSame = card.querySelector('#gcds-btn-same-village');
+      if (btnSame) {
+        btnSame.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const finalVal = currentVillage || 'Kolkata';
+          recordManualBirthPlace(finalVal);
+          try { card.remove(); } catch {}
+          resolve(finalVal);
+        });
+      }
+    });
+  }
+
+  /**
+   * Section K (Declaration) — Legal Confirmation Human-in-the-Loop Flow (v1.6.2-GOLD).
    *
    * Requirement:
-   * 1. Date of Residence: Use address_since (Month & Year, format: mm-yyyy).
-   * 2. Place: Auto-fill City/Village name from GCDS into #Place.
-   * 3. State, District, Village/Town & Date: Set strictly within Section K box.
-   * 4. Safety Step (Mandatory): Display Confirmation Card:
+   * 1. Place of Birth: Conditional State-Aware Logic:
+   *    - Scenario 1 (Direct Lineage: Father/Mother in Section C or J): Auto-fill with GCDS village.
+   *    - Scenario 2 (Other Relations: Husband/Guardian): STOP and display #gcds-birthplace-card.
+   * 2. Date of Residence: Use address_since (Month & Year, format: mm-yyyy).
+   * 3. Place: Auto-fill City/Village name from GCDS into #Place.
+   * 4. State, District, Village/Town & Date: Set strictly within Section K box.
+   * 5. Safety Step (Mandatory): Display Confirmation Card:
    *    "Legal Declaration: Resident since [Month/Year] at [Place]. Confirm to proceed?"
    *    Action: Only click 'Next' (to reach Section L) after the operator confirms this card.
    *
@@ -5532,16 +5756,38 @@
 
     let filledCount = 0;
 
-    // 1. Resolve Village / Town
+    // 1. Resolve Village / Town of Birth (State-Aware Conditional Logic)
     const rawVillage = data.address?.village || data.village || data.address?.cityTownVillage || data.city || '';
     const decVillageVal = rawVillage.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (decVillageVal) {
-      const villInp = boxK.querySelector('input#village[name="village"], input#village') || findElement(SELECTOR_MAP.declarationVillage);
-      if (villInp) {
-        setInputValue(villInp, decVillageVal);
-        highlightField(villInp);
-        filledCount++;
+    const villInp = boxK.querySelector('input#village[name="village"], input#village') || findElement(SELECTOR_MAP.declarationVillage);
+
+    const relC = sessionState.lastSelectedRelationC;
+    const relJ = sessionState.lastSelectedRelationJ;
+    const hasDirectLineage = isDirectLineageRelation(relC) || isDirectLineageRelation(relJ) ||
+      (!relC && !relJ && isDirectLineageRelation(data.relative_type || data.relationType || (data.relative?.fatherName ? 'FTHR' : '')));
+
+    let finalBirthPlace = '';
+
+    if (hasDirectLineage) {
+      // Scenario 1: Direct Lineage (Father/Mother) -> Auto-fill current village from GCDS
+      console.log(`[GCDS Section K] Direct lineage confirmed (C: ${relC}, J: ${relJ}). Auto-filling birth village: ${decVillageVal}`);
+      finalBirthPlace = decVillageVal;
+      sessionState.birthPlaceValue = decVillageVal;
+    } else {
+      // Scenario 2: Other Relations (Husband/Guardian) -> Human-in-the-Loop Action Card
+      console.log(`[GCDS Section K] Non-parental relation (C: ${relC}, J: ${relJ}). Checking manual birth place...`);
+      if (sessionState.birthPlaceManualConfirmed && sessionState.birthPlaceValue) {
+        finalBirthPlace = sessionState.birthPlaceValue;
+      } else {
+        const manualResult = await promptManualBirthPlace(decVillageVal, relC || relJ || 'Other');
+        finalBirthPlace = manualResult || decVillageVal;
       }
+    }
+
+    if (villInp && finalBirthPlace) {
+      setInputValue(villInp, finalBirthPlace);
+      highlightField(villInp);
+      filledCount++;
     }
 
     // 2. Set State Code and District Code strictly within Section K
@@ -5646,8 +5892,8 @@
             <span class="gcds-decl-val">${escapeHtml(placeVal)}</span>
           </div>
           <div class="gcds-decl-row">
-            <span class="gcds-decl-label">🏛️ Village / Town:</span>
-            <span class="gcds-decl-val">${escapeHtml(decVillageVal || placeVal)}</span>
+            <span class="gcds-decl-label">🏛️ Village / Town (Birth):</span>
+            <span class="gcds-decl-val">${escapeHtml(finalBirthPlace || decVillageVal || placeVal)}</span>
           </div>
         </div>
         <button type="button" class="gcds-btn-confirm" id="gcds-btn-confirm-declaration" style="width: 100%; padding: 11px 0; font-size: 13.5px;">
@@ -6248,6 +6494,7 @@
 
     if (confirmed) {
       const { code: relCode, firstName: relFirst, lastName: relLast, regionalFirst, regionalLast } = confirmed;
+      recordRelationSelectionC(relCode);
 
       // 4. Select radio button for chosen relation type (Father/Mother/Husband/Wife/Other)
       const radioSuccess = selectRelationRadio(relCode);
@@ -7257,7 +7504,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.6.1-GOLD',
+      version: '1.6.2-GOLD',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
@@ -7283,6 +7530,9 @@
 
   // Expose fill engine utilities on window for debugging/testing in console
   window.__GCDS_FILL_ENGINE = {
+    sessionState,
+    isDirectLineageRelation,
+    promptManualBirthPlace,
     selectDropdownSafe,
     setSelectValue,
     getOptionsSafe,
@@ -7365,6 +7615,8 @@
     if (staleDisability) staleDisability.remove();
     const staleFamily = document.getElementById('gcds-family-epic-card');
     if (staleFamily) staleFamily.remove();
+    const staleBirth = document.getElementById('gcds-birthplace-card');
+    if (staleBirth) staleBirth.remove();
     const staleDecl = document.getElementById('gcds-declaration-card');
     if (staleDecl) staleDecl.remove();
     const staleComplete = document.getElementById('gcds-completion-card');
