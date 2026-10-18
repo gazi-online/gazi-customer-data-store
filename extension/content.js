@@ -557,6 +557,18 @@
   }
 
   /**
+   * Dispatches standard input, change, and blur events on any HTML form control.
+   */
+  function dispatchStandardEvents(element) {
+    if (!element) return;
+    element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+    element.dispatchEvent(new Event('blur', { bubbles: true, cancelable: true }));
+    element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+    element.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+  }
+
+  /**
    * Sets a text input value using the React-compatible native setter approach.
    */
   function setInputValue(element, value) {
