@@ -43,7 +43,7 @@ function test(name, fn) {
 }
 
 console.log('================================================================');
-console.log('📋 GAZI SMART FORM FILLER — SECTIONS J, K & L (v1.4.0) TESTS');
+console.log('📋 GAZI SMART FORM FILLER — SECTIONS J, K & L (v1.6.1-GOLD) TESTS');
 console.log('================================================================\n');
 
 const manifest = JSON.parse(fs.readFileSync('extension/manifest.json', 'utf8'));
@@ -52,12 +52,12 @@ const routeTs = fs.readFileSync('src/app/api/extension/customers/[id]/form-fill/
 
 console.log('--- 1. Version & Release Tagging ---');
 
-test('manifest.json version is 1.5.0', () => {
-  assert.strictEqual(manifest.version, '1.5.0');
+test('manifest.json version is 1.6.1', () => {
+  assert.strictEqual(manifest.version, '1.6.1');
 });
 
-test('content.js diagnostic version is 1.5.0-stable', () => {
-  assert.ok(contentJs.includes("version: '1.5.0-stable'"));
+test('content.js diagnostic version is 1.6.1-GOLD', () => {
+  assert.ok(contentJs.includes("version: '1.6.1-GOLD'"));
 });
 
 console.log('\n--- 2. SELECTOR_MAP Section J & K Selectors ---');
@@ -70,6 +70,8 @@ test('SELECTOR_MAP includes Section J selectors (Name, Surname, Relation, EPIC, 
   assert.ok(contentJs.includes("'input#applicantRelativeSurname'"));
   assert.ok(contentJs.includes('familyMemberRelation: ['));
   assert.ok(contentJs.includes("'select#currentRelRelationship'"));
+  assert.ok(contentJs.includes("'select#relationType'"));
+  assert.ok(contentJs.includes("'select[formcontrolname=\"relationType\"]'"));
   assert.ok(contentJs.includes('familyMemberEpic: ['));
   assert.ok(contentJs.includes("'input[aria-label=\"His/Her EPIC Number\" i]'"));
   assert.ok(contentJs.includes("'input[name=\"currentRelEpic\"]'"));
@@ -90,24 +92,54 @@ test('SELECTOR_MAP includes Section K selectors (Place, Village, Date, Residence
   assert.ok(contentJs.includes("'select#districtCdA'"));
 });
 
-console.log('\n--- 3. Section J: Smart Map & Missing EPIC Guard ---');
+console.log('\n--- 3. Section J: Dynamic Family Member Selection & Missing EPIC Guard ---');
 
-test('handleSectionJFamilyMember is defined', () => {
+test('handleSectionJFamilyMember is defined and exported', () => {
   assert.ok(contentJs.includes('async function handleSectionJFamilyMember(data)'));
+  assert.ok(contentJs.includes('handleSectionJFamilyMember,'));
 });
 
-test('handleSectionJFamilyMember auto-picks relative if not explicitly provided', () => {
-  assert.ok(contentJs.includes('relType = relType || \'Father\''));
-  assert.ok(contentJs.includes('relType = relType || (data.gender === \'F\' ? \'Husband\' : \'Wife\')'));
-  assert.ok(contentJs.includes('relType = relType || \'Mother\''));
+test('SECTION_J_RELATIONS defines all 4 family relations (Father, Mother, Husband, Guardian)', () => {
+  assert.ok(contentJs.includes("code: 'FTHR', labelEn: 'Father'"));
+  assert.ok(contentJs.includes("code: 'MTHR', labelEn: 'Mother'"));
+  assert.ok(contentJs.includes("code: 'HSBN', labelEn: 'Husband'"));
+  assert.ok(contentJs.includes("code: 'GRDN', labelEn: 'Guardian'"));
 });
 
-test('handleSectionJFamilyMember displays #gcds-family-epic-card when EPIC is missing', () => {
+test('extractFamilyRecords dynamically maps data for all 4 relations', () => {
+  assert.ok(contentJs.includes('function extractFamilyRecords(data)'));
+  assert.ok(contentJs.includes('father_first_middle_name || data.relative?.fatherName'));
+  assert.ok(contentJs.includes('mother_first_middle_name || data.relative?.motherName'));
+  assert.ok(contentJs.includes('spouse_first_middle_name || data.relative?.spouseName'));
+  assert.ok(contentJs.includes('guardian_first_middle_name || data.relative?.guardianName'));
+});
+
+test('selectSectionJDropdown synchronizes portal dropdown with selected relation', () => {
+  assert.ok(contentJs.includes('function selectSectionJDropdown(relCode, familyRecords)'));
+  assert.ok(contentJs.includes('select#currentRelRelationship'));
+  assert.ok(contentJs.includes('dispatchStandardEvents(relSelect)'));
+  assert.ok(contentJs.includes('relSelect[propKey].onChange'));
+});
+
+test('handleSectionJFamilyMember renders 4 relation chips in #gcds-family-epic-card', () => {
   assert.ok(contentJs.includes('card.id = \'gcds-family-epic-card\''));
-  assert.ok(contentJs.includes('⚠️ No Family EPIC found'));
+  assert.ok(contentJs.includes('Family Relation Picker'));
+  assert.ok(contentJs.includes('id="gcds-sec-j-chips"'));
+  assert.ok(contentJs.includes('family-chip-${o.code.toLowerCase()}'));
+  assert.ok(contentJs.includes('SECTION_J_RELATIONS.map'));
+});
+
+test('handleSectionJFamilyMember provides manual fallback prompt when EPIC is missing', () => {
+  assert.ok(contentJs.includes('EPIC not found in GCDS'));
   assert.ok(contentJs.includes('id="gcds-manual-family-epic"'));
+  assert.ok(contentJs.includes('id="gcds-btn-fill-family"'));
   assert.ok(contentJs.includes('id="gcds-btn-skip-family-epic"'));
-  assert.ok(contentJs.includes('id="gcds-btn-fill-family-epic"'));
+});
+
+test('handleSectionJFamilyMember stays in Section J to allow operator verification', () => {
+  assert.ok(contentJs.includes('id="gcds-btn-proceed-family"'));
+  assert.ok(contentJs.includes('Proceed to Section K'));
+  assert.ok(contentJs.includes('Family details are optional. Verify fields before advancing.'));
 });
 
 test('transitionSectionJToK transitions to Section K and verifies active state', () => {

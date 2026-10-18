@@ -562,12 +562,22 @@ export async function GET(req: NextRequest, context: RouteContext) {
       father_name: customer.father_name || null,
       father_first_name: (customer as any).father_first_middle_name || null,
       father_last_name: (customer as any).father_surname || null,
+      father_epic: (customer as any).father_epic || (customer as any).father_epic_number || null,
+
       mother_name: customer.mother_name || null,
       mother_first_name: (customer as any).mother_first_middle_name || null,
       mother_last_name: (customer as any).mother_surname || null,
+      mother_epic: (customer as any).mother_epic || (customer as any).mother_epic_number || null,
+
       spouse_name: customer.spouse_name || null,
       spouse_first_name: (customer as any).spouse_first_middle_name || null,
       spouse_last_name: (customer as any).spouse_surname || null,
+      spouse_epic: (customer as any).spouse_epic || (customer as any).spouse_epic_number || null,
+
+      guardian_name: (customer as any).guardian_name || (customer as any).legal_guardian_name || null,
+      guardian_first_name: (customer as any).guardian_first_middle_name || null,
+      guardian_last_name: (customer as any).guardian_surname || null,
+      guardian_epic: (customer as any).guardian_epic || (customer as any).guardian_epic_number || null,
 
       relative: {
         fatherName: customer.father_name || null,
@@ -576,6 +586,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
         father_first_name: (customer as any).father_first_middle_name || null,
         father_last_name: (customer as any).father_surname || null,
         father_regional_name: (customer as any).father_regional_name || null,
+        father_epic: (customer as any).father_epic || (customer as any).father_epic_number || null,
+        fatherEpic: (customer as any).father_epic || (customer as any).father_epic_number || null,
 
         motherName: customer.mother_name || null,
         motherFirstMiddleName: (customer as any).mother_first_middle_name || null,
@@ -583,6 +595,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
         mother_first_name: (customer as any).mother_first_middle_name || null,
         mother_last_name: (customer as any).mother_surname || null,
         mother_regional_name: (customer as any).mother_regional_name || null,
+        mother_epic: (customer as any).mother_epic || (customer as any).mother_epic_number || null,
+        motherEpic: (customer as any).mother_epic || (customer as any).mother_epic_number || null,
 
         spouseName: customer.spouse_name || null,
         spouseFirstMiddleName: (customer as any).spouse_first_middle_name || null,
@@ -590,6 +604,17 @@ export async function GET(req: NextRequest, context: RouteContext) {
         spouse_first_name: (customer as any).spouse_first_middle_name || null,
         spouse_last_name: (customer as any).spouse_surname || null,
         spouse_regional_name: (customer as any).spouse_regional_name || null,
+        spouse_epic: (customer as any).spouse_epic || (customer as any).spouse_epic_number || null,
+        spouseEpic: (customer as any).spouse_epic || (customer as any).spouse_epic_number || null,
+
+        guardianName: (customer as any).guardian_name || (customer as any).legal_guardian_name || null,
+        guardianFirstMiddleName: (customer as any).guardian_first_middle_name || null,
+        guardianSurname: (customer as any).guardian_surname || null,
+        guardian_first_name: (customer as any).guardian_first_middle_name || null,
+        guardian_last_name: (customer as any).guardian_surname || null,
+        guardian_regional_name: (customer as any).guardian_regional_name || null,
+        guardian_epic: (customer as any).guardian_epic || (customer as any).guardian_epic_number || null,
+        guardianEpic: (customer as any).guardian_epic || (customer as any).guardian_epic_number || null,
       },
 
       address: {

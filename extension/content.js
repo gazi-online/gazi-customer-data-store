@@ -295,7 +295,12 @@
     familyMemberRelation: [
       'select#currentRelRelationship',
       'select[name="currentRelRelationship"]',
+      'select#relationType',
+      'select[name="relationType"]',
+      'select[formcontrolname="relationType"]',
+      'select[formcontrolname="relationship"]',
       'select[aria-label*="Relationship with applicant" i]',
+      'select[aria-label*="Select Relation" i]',
     ],
     familyMemberEpic: [
       'input[aria-label="His/Her EPIC Number" i]',
@@ -1362,7 +1367,8 @@
     const s = document.createElement('style');
     s.id = 'gcds-sec-c-card-styles';
     s.textContent = `
-      #gcds-rel-card {
+      #gcds-rel-card,
+      #gcds-family-epic-card {
         position: fixed;
         bottom: 28px;
         right: 28px;
@@ -1382,13 +1388,15 @@
         from { opacity: 0; transform: translateY(20px) scale(0.96); }
         to   { opacity: 1; transform: translateY(0)  scale(1); }
       }
-      #gcds-rel-card .gcds-card-header {
+      #gcds-rel-card .gcds-card-header,
+      #gcds-family-epic-card .gcds-card-header {
         display: flex;
         align-items: center;
         gap: 8px;
         margin-bottom: 12px;
       }
-      #gcds-rel-card .gcds-card-badge {
+      #gcds-rel-card .gcds-card-badge,
+      #gcds-family-epic-card .gcds-card-badge {
         background: #6366f1;
         color: #fff;
         font-size: 10px;
@@ -1398,43 +1406,50 @@
         border-radius: 20px;
         text-transform: uppercase;
       }
-      #gcds-rel-card .gcds-card-title {
+      #gcds-rel-card .gcds-card-title,
+      #gcds-family-epic-card .gcds-card-title {
         font-size: 13px;
         font-weight: 600;
         color: #94a3b8;
       }
-      #gcds-rel-card .gcds-rec-box {
+      #gcds-rel-card .gcds-rec-box,
+      #gcds-family-epic-card .gcds-rec-box {
         background: rgba(99,102,241,0.12);
         border: 1px solid rgba(99,102,241,0.4);
         border-radius: 10px;
         padding: 10px 12px;
         margin-bottom: 12px;
       }
-      #gcds-rel-card .gcds-rec-label {
+      #gcds-rel-card .gcds-rec-label,
+      #gcds-family-epic-card .gcds-rec-label {
         font-size: 11px;
         color: #94a3b8;
         margin-bottom: 4px;
         text-transform: uppercase;
         letter-spacing: 0.06em;
       }
-      #gcds-rel-card .gcds-rec-name {
+      #gcds-rel-card .gcds-rec-name,
+      #gcds-family-epic-card .gcds-rec-name {
         font-size: 18px;
         font-weight: 700;
         color: #a5b4fc;
         letter-spacing: -0.01em;
       }
-      #gcds-rel-card .gcds-rec-name-en {
+      #gcds-rel-card .gcds-rec-name-en,
+      #gcds-family-epic-card .gcds-rec-name-en {
         font-size: 12px;
         color: #64748b;
         margin-top: 2px;
       }
-      #gcds-rel-card .gcds-select-row {
+      #gcds-rel-card .gcds-select-row,
+      #gcds-family-epic-card .gcds-select-row {
         display: flex;
         gap: 6px;
         flex-wrap: wrap;
         margin-bottom: 14px;
       }
-      #gcds-rel-card .gcds-rel-chip {
+      #gcds-rel-card .gcds-rel-chip,
+      #gcds-family-epic-card .gcds-rel-chip {
         background: #1e293b;
         border: 1.5px solid #334155;
         color: #94a3b8;
@@ -1445,21 +1460,25 @@
         cursor: pointer;
         transition: border-color 0.15s, color 0.15s, background 0.15s;
       }
-      #gcds-rel-card .gcds-rel-chip:hover {
+      #gcds-rel-card .gcds-rel-chip:hover,
+      #gcds-family-epic-card .gcds-rel-chip:hover {
         border-color: #6366f1;
         color: #e0e7ff;
       }
-      #gcds-rel-card .gcds-rel-chip.active {
+      #gcds-rel-card .gcds-rel-chip.active,
+      #gcds-family-epic-card .gcds-rel-chip.active {
         background: rgba(99,102,241,0.18);
         border-color: #6366f1;
         color: #a5b4fc;
         font-weight: 700;
       }
-      #gcds-rel-card .gcds-btn-row {
+      #gcds-rel-card .gcds-btn-row,
+      #gcds-family-epic-card .gcds-btn-row {
         display: flex;
         gap: 8px;
       }
-      #gcds-rel-card .gcds-btn-confirm {
+      #gcds-rel-card .gcds-btn-confirm,
+      #gcds-family-epic-card .gcds-btn-confirm {
         flex: 1;
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
         color: #fff;
@@ -1473,9 +1492,12 @@
         transition: opacity 0.15s, transform 0.1s;
         box-shadow: 0 2px 8px rgba(99,102,241,0.4);
       }
-      #gcds-rel-card .gcds-btn-confirm:hover  { opacity: 0.9; transform: translateY(-1px); }
-      #gcds-rel-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
-      #gcds-rel-card .gcds-btn-skip {
+      #gcds-rel-card .gcds-btn-confirm:hover,
+      #gcds-family-epic-card .gcds-btn-confirm:hover  { opacity: 0.9; transform: translateY(-1px); }
+      #gcds-rel-card .gcds-btn-confirm:active,
+      #gcds-family-epic-card .gcds-btn-confirm:active { opacity: 0.8; transform: translateY(0); }
+      #gcds-rel-card .gcds-btn-skip,
+      #gcds-family-epic-card .gcds-btn-skip {
         background: transparent;
         color: #64748b;
         font-size: 12px;
@@ -1485,7 +1507,8 @@
         cursor: pointer;
         transition: color 0.15s, border-color 0.15s;
       }
-      #gcds-rel-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
+      #gcds-rel-card .gcds-btn-skip:hover,
+      #gcds-family-epic-card .gcds-btn-skip:hover { color: #f87171; border-color: #f87171; }
       #gcds-rel-card .gcds-spinner {
         display: inline-block;
         width: 14px; height: 14px;
@@ -4955,28 +4978,73 @@
   }
 
   /**
-   * Section J: Family Member Details — Smart Map & Missing EPIC Guard.
+   * Section J: Family Member Details — Dynamic Relation Picker & Missing EPIC Guard (v1.6.1-GOLD).
    *
-   * Requirement:
-   * 1. Relation Type: Map relative_type to portal select dropdown (#currentRelRelationship) or radio buttons.
-   * 2. Name Fields: Fill First Name (#applicantRelativeName) & Surname (#applicantRelativeSurname),
-   *    or combined Full Name into input[aria-label="Name of Family Member"].
-   * 3. Regional Name: Transliterate regional name into #regRelatName / #regRelatSurName if present.
-   * 4. EPIC Number: Fill 10-digit EPIC number into #epicNumber / input[name="currentRelEpic"].
-   * 5. Guard: If EPIC is missing, show an alert card:
-   *    "No Family EPIC found. Please enter manually or Skip."
-   *    - [ ⏭️ Skip Section J ] (bypasses Section J immediately)
-   *    - [ ✅ Fill & Proceed ] (fills with operator-entered EPIC)
-   *
-   * @param {Object} data - GCDS Form Fill DTO
-   * @returns {Promise<{ action: 'FILLED'|'SKIPPED', filledCount: number }>}
+   * Features:
+   * 1. Dynamic Relation Picker Action Card: 4 Chips (Father, Mother, Husband, Guardian).
+   * 2. Live Dropdown Sync: Immediately selects matching relation in portal dropdown.
+   * 3. Intelligent Name & Regional Transliteration: Injects relative's full name & Bengali script.
+   * 4. Smart EPIC Auto-Fill: If relative has an EPIC in GCDS, fills it into the portal.
+   * 5. Manual Fallback: If EPIC is missing for selected relative, prompts manual input UI.
+   * 6. Safety Gate: Stays in Section J for operator verification before advancing to Section K.
    */
-  async function handleSectionJFamilyMember(data) {
-    // 1. Resolve Family Member Details
-    let relName = (data.relative_name || data.relative?.fatherFirstMiddleName || data.relative?.fatherName || data.father_first_name || data.father_name || '').trim();
-    let relSurname = (data.relative_surname || data.relative?.fatherSurname || data.father_last_name || '').trim();
-    let relType = (data.relative_type || data.relativeType || '').trim();
-    let relEpic = (
+  const SECTION_J_RELATIONS = [
+    { code: 'FTHR', labelEn: 'Father',   labelBn: 'পিতা',              portalValue: 'Father', portalBn: 'পিতা' },
+    { code: 'MTHR', labelEn: 'Mother',   labelBn: 'মাতা',              portalValue: 'Mother', portalBn: 'মাতা' },
+    { code: 'HSBN', labelEn: 'Husband',  labelBn: 'স্বামী',           portalValue: 'Husband', portalBn: 'স্বামী' },
+    { code: 'GRDN', labelEn: 'Guardian', labelBn: 'আইনসম্মত অভিভাবক', portalValue: 'Legal Guardian in case of orphan', portalBn: 'অভিভাবক' },
+  ];
+
+  function extractFamilyRecords(data) {
+    const records = {
+      FTHR: {
+        code: 'FTHR',
+        labelEn: 'Father',
+        labelBn: 'পিতা',
+        portalValues: ['Father', 'পিতা', 'FTHR', 'F'],
+        name: (data.relative?.fatherFirstMiddleName || data.relative?.father_first_middle_name || data.relative?.fatherName || data.father_first_middle_name || data.father_first_name || data.father_name || '').trim(),
+        surname: (data.relative?.fatherSurname || data.relative?.father_surname || data.father_surname || data.father_last_name || '').trim(),
+        epic: (data.relative?.father_epic || data.relative?.fatherEpic || data.father_epic || data.father_epic_number || '').trim(),
+        regionalFirst: (data.relative?.father_regional_name || '').trim(),
+        regionalSurname: '',
+      },
+      MTHR: {
+        code: 'MTHR',
+        labelEn: 'Mother',
+        labelBn: 'মাতা',
+        portalValues: ['Mother', 'মাতা', 'MTHR', 'M'],
+        name: (data.relative?.motherFirstMiddleName || data.relative?.mother_first_middle_name || data.relative?.motherName || data.mother_first_middle_name || data.mother_first_name || data.mother_name || '').trim(),
+        surname: (data.relative?.motherSurname || data.relative?.mother_surname || data.mother_surname || data.mother_last_name || '').trim(),
+        epic: (data.relative?.mother_epic || data.relative?.motherEpic || data.mother_epic || data.mother_epic_number || '').trim(),
+        regionalFirst: (data.relative?.mother_regional_name || '').trim(),
+        regionalSurname: '',
+      },
+      HSBN: {
+        code: 'HSBN',
+        labelEn: 'Husband',
+        labelBn: 'স্বামী',
+        portalValues: ['Husband', 'স্বামী', 'HSBN', 'H', 'Spouse', 'Wife', 'স্ত্রী'],
+        name: (data.relative?.spouseFirstMiddleName || data.relative?.spouse_first_middle_name || data.relative?.spouseName || data.spouse_first_middle_name || data.spouse_first_name || data.spouse_name || '').trim(),
+        surname: (data.relative?.spouseSurname || data.relative?.spouse_surname || data.spouse_surname || data.spouse_last_name || '').trim(),
+        epic: (data.relative?.spouse_epic || data.relative?.spouseEpic || data.spouse_epic || data.spouse_epic_number || '').trim(),
+        regionalFirst: (data.relative?.spouse_regional_name || '').trim(),
+        regionalSurname: '',
+      },
+      GRDN: {
+        code: 'GRDN',
+        labelEn: 'Guardian',
+        labelBn: 'আইনসম্মত অভিভাবক',
+        portalValues: ['Legal Guardian in case of orphan', 'Legal Guardian', 'Guardian', 'অভিভাবক', 'GRDN', 'LGRD'],
+        name: (data.relative?.guardianFirstMiddleName || data.relative?.guardian_first_middle_name || data.relative?.guardianName || data.guardian_first_middle_name || data.guardian_first_name || data.guardian_name || '').trim(),
+        surname: (data.relative?.guardianSurname || data.relative?.guardian_surname || data.guardian_surname || data.guardian_last_name || '').trim(),
+        epic: (data.relative?.guardian_epic || data.relative?.guardianEpic || data.guardian_epic || data.guardian_epic_number || '').trim(),
+        regionalFirst: (data.relative?.guardian_regional_name || '').trim(),
+        regionalSurname: '',
+      },
+    };
+
+    // Generic relative_epic fallback if single EPIC present in GCDS
+    const genericEpic = (
       data.relative_epic_number ||
       data.relative_epic ||
       data.family_epic ||
@@ -4986,35 +5054,168 @@
       ''
     ).trim();
 
-    // Auto-pick fallback: If relative name or type is empty, intelligently derive from customer data
-    if (!relName) {
-      if (data.father_name || data.relative?.fatherName) {
-        relName = (data.relative?.fatherFirstMiddleName || data.father_first_name || data.father_name || '').trim();
-        relSurname = (data.relative?.fatherSurname || data.father_last_name || '').trim();
-        relType = relType || 'Father';
-      } else if (data.spouse_name || data.relative?.spouseName) {
-        relName = (data.relative?.spouseFirstMiddleName || data.spouse_first_name || data.spouse_name || '').trim();
-        relSurname = (data.relative?.spouseSurname || data.spouse_last_name || '').trim();
-        relType = relType || (data.gender === 'F' ? 'Husband' : 'Wife');
-      } else if (data.mother_name || data.relative?.motherName) {
-        relName = (data.relative?.motherFirstMiddleName || data.mother_first_name || data.mother_name || '').trim();
-        relSurname = (data.relative?.motherSurname || data.mother_last_name || '').trim();
-        relType = relType || 'Mother';
+    const genericType = (data.relative_type || data.relativeType || '').toUpperCase();
+    if (genericEpic) {
+      if (genericType.includes('MOTH') && !records.MTHR.epic) records.MTHR.epic = genericEpic;
+      else if (genericType.includes('HUSB') && !records.HSBN.epic) records.HSBN.epic = genericEpic;
+      else if (genericType.includes('GUARD') && !records.GRDN.epic) records.GRDN.epic = genericEpic;
+      else if (genericType.includes('FATH') && !records.FTHR.epic) records.FTHR.epic = genericEpic;
+      else if (!records.FTHR.epic && !records.MTHR.epic && !records.HSBN.epic && !records.GRDN.epic) {
+        if (records.FTHR.name) records.FTHR.epic = genericEpic;
+        else if (records.MTHR.name) records.MTHR.epic = genericEpic;
+        else if (records.HSBN.name) records.HSBN.epic = genericEpic;
+        else records.FTHR.epic = genericEpic;
       }
     }
 
-    if (!relType) {
-      relType = 'Father';
-    }
+    // Split surname if surname is blank but name has spaces
+    Object.values(records).forEach((r) => {
+      if (!r.surname && r.name && r.name.includes(' ')) {
+        const parts = r.name.split(/\s+/);
+        if (parts.length > 1) {
+          r.surname = parts.pop();
+          r.name = parts.join(' ');
+        }
+      }
+    });
 
-    // Split surname if name has multiple words and surname is empty
-    if (!relSurname && relName.includes(' ')) {
-      const parts = relName.split(/\s+/);
-      if (parts.length > 1) {
-        relSurname = parts.pop();
-        relName = parts.join(' ');
+    return records;
+  }
+
+  function selectSectionJDropdown(relCode, familyRecords) {
+    const boxJ = findSectionBox('J') || document;
+    const relSelect = boxJ.querySelector('select#currentRelRelationship, select[name="currentRelRelationship"], select#relationType, select[name="relationType"], select[formcontrolname="relationType"], select[formcontrolname="relationship"]') ||
+      findElement(SELECTOR_MAP.familyMemberRelation);
+
+    if (!relSelect) return false;
+
+    const rec = familyRecords[relCode] || familyRecords.FTHR;
+    const options = Array.from(relSelect.options || []);
+    let matchedOption = null;
+
+    if (options.length > 0) {
+      for (const pv of rec.portalValues) {
+        const cleanPv = pv.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        matchedOption = options.find((opt) => {
+          const optVal = (opt.value || '').trim().toUpperCase();
+          const optText = (opt.text || opt.textContent || '').trim().toUpperCase();
+          const cleanVal = optVal.replace(/[^A-Z0-9]/g, '');
+          const cleanText = optText.replace(/[^A-Z0-9]/g, '');
+          return optVal === pv.toUpperCase() ||
+                 optText === pv.toUpperCase() ||
+                 (cleanVal && cleanVal === cleanPv) ||
+                 (cleanText && cleanText === cleanPv) ||
+                 optText.includes(pv.toUpperCase());
+        });
+        if (matchedOption) break;
       }
     }
+
+    if (matchedOption) {
+      relSelect.value = matchedOption.value;
+    } else {
+      setSelectValue(relSelect, rec.labelEn);
+    }
+
+    dispatchStandardEvents(relSelect);
+    const propKey = Object.keys(relSelect).find((k) => k.startsWith('__reactProps'));
+    if (propKey && relSelect[propKey]?.onChange) {
+      try { relSelect[propKey].onChange({ target: relSelect }); } catch {}
+    }
+    highlightField(relSelect);
+    return true;
+  }
+
+  async function applySectionJFill(relCode, familyRecords, manualEpic = '') {
+    const boxJ = findSectionBox('J') || document;
+    const rec = familyRecords[relCode] || familyRecords.FTHR;
+    let filled = 0;
+
+    // A. Sync Dropdown
+    if (selectSectionJDropdown(relCode, familyRecords)) {
+      filled++;
+    }
+
+    // B. Fill Name (Single or Split Inputs)
+    const singleNameInp = boxJ.querySelector('input[aria-label*="Name of Family Member" i], input[name="currentRelFullName"]') ||
+      findElement(SELECTOR_MAP.familyMemberName);
+    const sepFirstInp = boxJ.querySelector('input#applicantRelativeName, input[name="applicantRelativeName"]');
+    const sepSurInp = boxJ.querySelector('input#applicantRelativeSurname, input[name="applicantRelativeSurname"]') ||
+      findElement(SELECTOR_MAP.familyMemberSurname);
+
+    const combinedFullName = [rec.name, rec.surname].filter(Boolean).join(' ');
+
+    if (singleNameInp && combinedFullName) {
+      setInputValue(singleNameInp, combinedFullName);
+      highlightField(singleNameInp);
+      filled++;
+    } else if (sepFirstInp && rec.name) {
+      setInputValue(sepFirstInp, rec.name);
+      highlightField(sepFirstInp);
+      filled++;
+      if (sepSurInp && rec.surname) {
+        setInputValue(sepSurInp, rec.surname);
+        highlightField(sepSurInp);
+        filled++;
+      }
+    }
+
+    // C. Transliterate and Fill Regional Name
+    const regNameInp = boxJ.querySelector('input#regRelatName, input[name="regRelatName"]') ||
+      findElement(SELECTOR_MAP.familyMemberRegionalName);
+    const regSurInp = boxJ.querySelector('input#regRelatSurName, input[name="regRelatSurName"]') ||
+      findElement(SELECTOR_MAP.familyMemberRegionalSurname);
+
+    if (regNameInp && rec.name) {
+      if (!rec.regionalFirst) {
+        rec.regionalFirst = await requestTransliteration(rec.name);
+      }
+      if (rec.regionalFirst) {
+        setInputValue(regNameInp, rec.regionalFirst);
+        highlightField(regNameInp);
+        filled++;
+      }
+    }
+    if (regSurInp && rec.surname) {
+      if (!rec.regionalSurname) {
+        rec.regionalSurname = await requestTransliteration(rec.surname);
+      }
+      if (rec.regionalSurname) {
+        setInputValue(regSurInp, rec.regionalSurname);
+        highlightField(regSurInp);
+        filled++;
+      }
+    }
+
+    // D. EPIC Number
+    const finalEpic = (manualEpic || rec.epic || '').trim();
+    if (finalEpic) {
+      const cleanEpic = finalEpic.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const epicInp = boxJ.querySelector('input[aria-label*="EPIC Number" i], input[name="currentRelEpic"], input#epicNumber, input#epicNo') ||
+        findElement(SELECTOR_MAP.familyMemberEpic);
+      if (epicInp) {
+        setInputValue(epicInp, cleanEpic);
+        highlightField(epicInp);
+        filled++;
+      }
+    }
+
+    return filled;
+  }
+
+  async function handleSectionJFamilyMember(data) {
+    const familyRecords = extractFamilyRecords(data);
+
+    // Initial selected relation code derivation
+    let selectedCode = 'FTHR';
+    const reqType = (data.relative_type || data.relativeType || '').toUpperCase();
+    if (reqType.includes('MOTH')) selectedCode = 'MTHR';
+    else if (reqType.includes('HUSB') || reqType.includes('SPOUS')) selectedCode = 'HSBN';
+    else if (reqType.includes('GUARD')) selectedCode = 'GRDN';
+    else if (familyRecords.FTHR.epic || familyRecords.FTHR.name) selectedCode = 'FTHR';
+    else if (familyRecords.MTHR.epic || familyRecords.MTHR.name) selectedCode = 'MTHR';
+    else if (familyRecords.HSBN.epic || familyRecords.HSBN.name) selectedCode = 'HSBN';
+    else if (familyRecords.GRDN.epic || familyRecords.GRDN.name) selectedCode = 'GRDN';
 
     const boxJ = findSectionBox('J') || document;
     try {
@@ -5023,166 +5224,189 @@
       }
     } catch {}
 
-    // Inner helper to perform the actual DOM filling into Section J
-    const applySectionJFill = async (epicValue) => {
-      let filled = 0;
-      const combinedFullName = [relName, relSurname].filter(Boolean).join(' ');
+    return new Promise((resolve) => {
+      injectRelationCardStyles();
 
-      // A. Fill Full Name / First Name
-      const singleNameInp = boxJ.querySelector('input[aria-label*="Name of Family Member" i], input[name="currentRelFullName"]') ||
-        findElement(SELECTOR_MAP.familyMemberName);
-      const sepFirstInp = boxJ.querySelector('input#applicantRelativeName, input[name="applicantRelativeName"]');
-      const sepSurInp = boxJ.querySelector('input#applicantRelativeSurname, input[name="applicantRelativeSurname"]') ||
-        findElement(SELECTOR_MAP.familyMemberSurname);
+      const stale = document.getElementById('gcds-family-epic-card');
+      if (stale) stale.remove();
 
-      if (singleNameInp) {
-        setInputValue(singleNameInp, combinedFullName);
-        highlightField(singleNameInp);
-        filled++;
-      } else if (sepFirstInp) {
-        setInputValue(sepFirstInp, relName);
-        highlightField(sepFirstInp);
-        filled++;
-        if (sepSurInp && relSurname) {
-          setInputValue(sepSurInp, relSurname);
-          highlightField(sepSurInp);
-          filled++;
+      const card = document.createElement('div');
+      card.id = 'gcds-family-epic-card';
+      card.setAttribute('role', 'dialog');
+      card.setAttribute('aria-label', 'Section J Family Relation Picker');
+
+      let lastFilledCount = 0;
+
+      const renderCard = (wasAutoFilled = false) => {
+        const rec = familyRecords[selectedCode] || familyRecords.FTHR;
+        const fullName = [rec.name, rec.surname].filter(Boolean).join(' ');
+        const hasData = Boolean(rec.name || rec.epic);
+        const hasEpic = Boolean(rec.epic);
+
+        let displayName = fullName
+          ? (rec.regionalFirst ? `${fullName} (${[rec.regionalFirst, rec.regionalSurname].filter(Boolean).join(' ')})` : fullName)
+          : '(No record in GCDS)';
+
+        let statusBoxHtml = '';
+        let manualInputHtml = '';
+        let actionBtnHtml = '';
+
+        if (wasAutoFilled && hasEpic) {
+          statusBoxHtml = `
+            <div class="gcds-rec-name" style="font-size: 13.5px; color: #10b981;">✅ ${escapeHtml(rec.labelEn)}'s details &amp; EPIC populated</div>
+            <div class="gcds-rec-desc">EPIC: <strong>${escapeHtml(rec.epic)}</strong> populated on portal. Please verify details, then proceed:</div>
+          `;
+          actionBtnHtml = `
+            <button type="button" class="gcds-btn-confirm" id="gcds-btn-proceed-family" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;">
+              ➡️ Proceed to Section K
+            </button>
+          `;
+        } else if (hasEpic) {
+          statusBoxHtml = `
+            <div class="gcds-rec-name" style="font-size: 13.5px; color: #10b981;">✅ EPIC Available in GCDS</div>
+            <div class="gcds-rec-desc">EPIC: <strong>${escapeHtml(rec.epic)}</strong> found. Click Confirm &amp; Fill to populate:</div>
+          `;
+          actionBtnHtml = `
+            <button type="button" class="gcds-btn-confirm" id="gcds-btn-fill-family">
+              ✅ Confirm &amp; Fill ${escapeHtml(rec.labelEn)}
+            </button>
+          `;
+        } else if (hasData && !hasEpic) {
+          statusBoxHtml = `
+            <div class="gcds-rec-name" style="font-size: 13.5px; color: #fbbf24;">⚠️ ${escapeHtml(rec.labelEn)}'s EPIC not found in GCDS</div>
+            <div class="gcds-rec-desc">${escapeHtml(rec.labelEn)}'s EPIC not found in GCDS. Please enter manually:</div>
+          `;
+          manualInputHtml = `
+            <input type="text" class="gcds-epic-input" id="gcds-manual-family-epic" placeholder="Enter ${escapeHtml(rec.labelEn)}'s EPIC (e.g. WBG1234567)" maxlength="20" autocomplete="off" />
+          `;
+          actionBtnHtml = `
+            <button type="button" class="gcds-btn-confirm" id="gcds-btn-fill-family">
+              ✅ Fill &amp; Proceed
+            </button>
+          `;
+        } else {
+          // No record at all in GCDS
+          statusBoxHtml = `
+            <div class="gcds-rec-name" style="font-size: 13.5px; color: #fbbf24;">⚠️ No record for ${escapeHtml(rec.labelEn)} in GCDS</div>
+            <div class="gcds-rec-desc">Please enter ${escapeHtml(rec.labelEn)}'s Name and EPIC manually on portal, or Skip:</div>
+          `;
+          actionBtnHtml = `
+            <button type="button" class="gcds-btn-confirm" id="gcds-btn-proceed-family">
+              ➡️ Done, Proceed to Section K
+            </button>
+          `;
         }
-      }
-
-      // B. Relation Dropdown / Radios
-      const relSelect = boxJ.querySelector('select#currentRelRelationship, select[name="currentRelRelationship"]') ||
-        findElement(SELECTOR_MAP.familyMemberRelation);
-      if (relSelect) {
-        setSelectValue(relSelect, relType);
-        const propKey = Object.keys(relSelect).find((k) => k.startsWith('__reactProps'));
-        if (propKey && relSelect[propKey]?.onChange) {
-          try { relSelect[propKey].onChange({ target: relSelect }); } catch {}
-        }
-        highlightField(relSelect);
-        filled++;
-      }
-
-      // C. Regional Name transliteration (if inputs exist)
-      const regNameInp = boxJ.querySelector('input#regRelatName, input[name="regRelatName"]') ||
-        findElement(SELECTOR_MAP.familyMemberRegionalName);
-      const regSurInp = boxJ.querySelector('input#regRelatSurName, input[name="regRelatSurName"]') ||
-        findElement(SELECTOR_MAP.familyMemberRegionalSurname);
-
-      if (regNameInp && relName) {
-        const regionalFirst = await requestTransliteration(relName);
-        if (regionalFirst) {
-          setInputValue(regNameInp, regionalFirst);
-          highlightField(regNameInp);
-          filled++;
-        }
-      }
-      if (regSurInp && relSurname) {
-        const regionalSur = await requestTransliteration(relSurname);
-        if (regionalSur) {
-          setInputValue(regSurInp, regionalSur);
-          highlightField(regSurInp);
-          filled++;
-        }
-      }
-
-      // D. EPIC Number
-      if (epicValue) {
-        const cleanEpic = String(epicValue).toUpperCase().replace(/[^A-Z0-9]/g, '');
-        const epicInp = boxJ.querySelector('input[aria-label*="EPIC Number" i], input[name="currentRelEpic"], input#epicNumber, input#epicNo') ||
-          findElement(SELECTOR_MAP.familyMemberEpic);
-        if (epicInp) {
-          setInputValue(epicInp, cleanEpic);
-          highlightField(epicInp);
-          filled++;
-        }
-      }
-
-      return filled;
-    };
-
-    // 2. Guard: If EPIC Number is missing, show Action Card with Manual Input & Skip Option
-    if (!relEpic) {
-      return new Promise((resolve) => {
-        injectRelationCardStyles();
-
-        const stale = document.getElementById('gcds-family-epic-card');
-        if (stale) stale.remove();
-
-        const card = document.createElement('div');
-        card.id = 'gcds-family-epic-card';
-        card.setAttribute('role', 'dialog');
-        card.setAttribute('aria-label', 'Section J Family Member EPIC Guard');
-
-        const combinedName = [relName, relSurname].filter(Boolean).join(' ');
 
         card.innerHTML = `
           <div class="gcds-card-header">
             <span class="gcds-card-badge">Section J</span>
-            <span class="gcds-card-title">Family Member Details</span>
+            <span class="gcds-card-title">Family Relation Picker</span>
           </div>
           <div class="gcds-rec-box">
-            <div class="gcds-rec-label">Optional Section &bull; Guard</div>
-            <div class="gcds-rec-name" style="font-size: 13.5px; color: #fbbf24;">⚠️ No Family EPIC found</div>
-            <div class="gcds-rec-desc">Please enter the 10-digit EPIC number of <strong>${escapeHtml(combinedName || 'Family Member')}</strong> (${escapeHtml(relType)}) manually, or Skip this section:</div>
+            <div class="gcds-rec-label">Selected Relation</div>
+            <div class="gcds-rec-name">${escapeHtml(rec.labelEn)} (${escapeHtml(rec.labelBn)})</div>
+            <div class="gcds-rec-name-en">${escapeHtml(displayName)}</div>
+            ${statusBoxHtml}
           </div>
-          <input type="text" class="gcds-epic-input" id="gcds-manual-family-epic" placeholder="Enter EPIC (e.g. WBG1234567)" maxlength="20" autocomplete="off" />
+          <div class="gcds-select-row" id="gcds-sec-j-chips">
+            ${SECTION_J_RELATIONS.map((o) => `
+              <button type="button" class="gcds-rel-chip${o.code === selectedCode ? ' active' : ''}" data-code="${o.code}" data-testid="family-chip-${o.code.toLowerCase()}" title="${escapeHtml(familyRecords[o.code]?.name || 'Select ' + o.labelEn)}">
+                ${escapeHtml(o.labelEn)}
+              </button>
+            `).join('')}
+          </div>
+          ${manualInputHtml}
           <div class="gcds-btn-row">
-            <button type="button" class="gcds-btn-confirm" id="gcds-btn-fill-family-epic">
-              ✅ Fill &amp; Proceed
-            </button>
+            ${actionBtnHtml}
             <button type="button" class="gcds-btn-skip" id="gcds-btn-skip-family-epic">
               ⏭️ Skip Section J
             </button>
           </div>
-          <div class="gcds-action-desc" style="margin-top: 8px;">Family EPIC is optional. You can safely skip to Section K.</div>
+          <div class="gcds-action-desc" style="margin-top: 8px;">
+            Family details are optional. Verify fields before advancing.
+          </div>
         `;
 
-        const btnSkip = card.querySelector('#gcds-btn-skip-family-epic');
-        const btnFill = card.querySelector('#gcds-btn-fill-family-epic');
+        // Focus manual input if present
         const inpEpic = card.querySelector('#gcds-manual-family-epic');
+        if (inpEpic) {
+          setTimeout(() => { try { inpEpic.focus(); } catch {} }, 250);
+        }
 
-        // Focus the EPIC input for convenient operator entry
-        setTimeout(() => {
-          try { inpEpic?.focus(); } catch {}
-        }, 300);
+        // 1. Chip selection: syncs dropdown and auto-populates if EPIC exists
+        card.querySelectorAll('.gcds-rel-chip').forEach((chip) => {
+          chip.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            selectedCode = chip.dataset.code;
+            const targetRec = familyRecords[selectedCode];
 
-        // Skip handler
-        btnSkip.addEventListener('click', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          btnSkip.disabled = true;
-          btnFill.disabled = true;
-          btnSkip.innerHTML = '<span class="gcds-spinner"></span> Skipping to Section K…';
-          try { card.remove(); } catch {}
-          await transitionSectionJToK();
-          resolve({ action: 'SKIPPED', filledCount: 0 });
+            // A. Instantly sync portal dropdown to selected relation
+            selectSectionJDropdown(selectedCode, familyRecords);
+
+            // B. If EPIC exists, auto-fill portal details immediately (checklist item #2)
+            if (targetRec && targetRec.epic) {
+              lastFilledCount = await applySectionJFill(selectedCode, familyRecords, targetRec.epic);
+              renderCard(true);
+            } else if (targetRec && targetRec.name) {
+              // Fill name and present manual input for EPIC
+              lastFilledCount = await applySectionJFill(selectedCode, familyRecords, '');
+              renderCard(false);
+            } else {
+              // No record in GCDS — prompt operator to enter manually on portal (checklist item #3)
+              renderCard(false);
+            }
+          });
         });
 
-        // Fill handler
-        btnFill.addEventListener('click', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const manualVal = (inpEpic?.value || '').trim();
-          btnSkip.disabled = true;
-          btnFill.disabled = true;
-          btnFill.innerHTML = '<span class="gcds-spinner"></span> Saving &amp; Proceeding…';
+        // 2. Fill / Confirm button
+        const btnFill = card.querySelector('#gcds-btn-fill-family');
+        if (btnFill) {
+          btnFill.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            btnFill.disabled = true;
+            btnFill.innerHTML = '<span class="gcds-spinner"></span> Filling…';
 
-          const filled = await applySectionJFill(manualVal);
-          try { card.remove(); } catch {}
-          await transitionSectionJToK();
-          resolve({ action: 'FILLED', filledCount: filled });
-        });
+            const manualVal = (card.querySelector('#gcds-manual-family-epic')?.value || '').trim();
+            const filled = await applySectionJFill(selectedCode, familyRecords, manualVal);
+            lastFilledCount = filled;
+            renderCard(true);
+          });
+        }
 
-        document.body.appendChild(card);
-      });
-    }
+        // 3. Proceed button: operator verified details and advances to Section K
+        const btnProceed = card.querySelector('#gcds-btn-proceed-family');
+        if (btnProceed) {
+          btnProceed.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            btnProceed.disabled = true;
+            btnProceed.innerHTML = '<span class="gcds-spinner"></span> Advancing to Section K…';
+            try { card.remove(); } catch {}
+            await transitionSectionJToK();
+            resolve({ action: 'FILLED', filledCount: lastFilledCount || 1 });
+          });
+        }
 
-    // 3. Auto-Fill Section J directly when EPIC exists in GCDS
-    const filledCount = await applySectionJFill(relEpic);
-    await sleep(250);
-    await transitionSectionJToK();
-    return { action: 'FILLED', filledCount };
+        // 4. Skip button: immediately bypasses Section J
+        const btnSkip = card.querySelector('#gcds-btn-skip-family-epic');
+        if (btnSkip) {
+          btnSkip.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            btnSkip.disabled = true;
+            btnSkip.innerHTML = '<span class="gcds-spinner"></span> Skipping to Section K…';
+            try { card.remove(); } catch {}
+            await transitionSectionJToK();
+            resolve({ action: 'SKIPPED', filledCount: 0 });
+          });
+        }
+      };
+
+      renderCard(false);
+      document.body.appendChild(card);
+    });
   }
 
   /**
@@ -6993,7 +7217,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.5.0-stable',
+      version: '1.6.1-GOLD',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
@@ -7039,6 +7263,9 @@
     transitionSectionIToJ,
     transitionSectionJToK,
     handleSectionJFamilyMember,
+    extractFamilyRecords,
+    selectSectionJDropdown,
+    SECTION_J_RELATIONS,
     transitionSectionKToL,
     handleSectionKDeclaration,
     showSectionLCompletionCard,
