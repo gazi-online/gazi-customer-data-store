@@ -663,7 +663,39 @@
         gap: 8px;
         user-select: none;
         transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-        max-width: 440px;
+        max-width: 540px;
+      }
+      .gcds-pill-actions {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        margin-left: 6px;
+      }
+      .gcds-pill-action-btn {
+        background: #1e293b;
+        color: #f1f5f9;
+        border: 1px solid #475569;
+        border-radius: 9999px;
+        padding: 3px 10px;
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.15s ease;
+      }
+      .gcds-pill-action-btn:hover {
+        background: #3b82f6;
+        border-color: #60a5fa;
+        color: #ffffff;
+        box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+      }
+      .gcds-pill-action-btn.skip:hover {
+        background: #d97706;
+        border-color: #f59e0b;
+        color: #ffffff;
+        box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
       }
       #gcds-stealth-pill.attention {
         border-color: #ea580c !important;
@@ -868,6 +900,44 @@
 
   function setStealthError(errorMessage) {
     updateStealthProgress(stealthState.progressPercent, `⚠️ Error: ${errorMessage}`, 'error');
+  }
+
+  /**
+   * Renders compact action buttons (e.g. [ ⏭️ Skip ] [ ♿ Fill ]) inside the Status Pill.
+   *
+   * @param {Array<{ label: string, onClick: Function, className?: string }>} actions
+   */
+  function setStealthPillActions(actions = []) {
+    initStealthUI();
+    const pill = document.getElementById('gcds-stealth-pill');
+    if (!pill) return;
+    let actionsContainer = pill.querySelector('.gcds-pill-actions');
+    if (actionsContainer) actionsContainer.remove();
+
+    if (!actions || actions.length === 0) return;
+
+    actionsContainer = document.createElement('div');
+    actionsContainer.className = 'gcds-pill-actions';
+
+    actions.forEach(({ label, onClick, className = '' }) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `gcds-pill-action-btn ${className}`;
+      btn.innerHTML = label;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof onClick === 'function') onClick();
+      });
+      actionsContainer.appendChild(btn);
+    });
+
+    pill.appendChild(actionsContainer);
+  }
+
+  function clearStealthPillActions() {
+    const actionsContainer = document.querySelector('#gcds-stealth-pill .gcds-pill-actions');
+    if (actionsContainer) actionsContainer.remove();
   }
 
   /**
@@ -1391,11 +1461,19 @@
       C: ['Relative', 'আত্মীয়'],
       B: ['Personal Details', 'Name of Applicant', 'ব্যক্তিগত'],
       A: ['Select State', 'District', 'AC', 'রাজ্য'],
-      I: ['Disability', 'প্রতিবন্ধী'],
+      I: ['Disability', 'প্রতিবন্ধী', 'Category of Disability'],
       J: ['Family Member', 'EPIC', 'পরিবার'],
       K: ['Declaration', 'ঘোষণাপত্র'],
       L: ['Captcha', 'ক্যাপচা'],
     }[lUpper] || [];
+
+    // Direct check: match from next buttons whose aria-label specifies destination
+    const nextLetter = String.fromCharCode('A'.charCodeAt(0) + (lUpper.charCodeAt(0) - 'A'.charCodeAt(0)) + 1);
+    const destinationNextBtn = document.querySelector(`button[aria-label*="Move to Part ${nextLetter}" i], button[aria-label*="Part ${nextLetter}" i]`);
+    if (destinationNextBtn) {
+      const boxAncestor = destinationNextBtn.closest('.box, .card, form > div');
+      if (boxAncestor) return boxAncestor;
+    }
 
     const allBoxes = document.querySelectorAll('.box, .card, .accordion-item');
     for (const box of allBoxes) {
@@ -1416,6 +1494,34 @@
         if (text.includes(kw)) return box;
       }
     }
+    return null;
+  }
+
+  /**
+   * Dedicated robust resolver for Section I (Disability) Next button.
+   * Matches explicit aria-label ("Move to Part J , Next") or Section I next button.
+   *
+   * @returns {HTMLButtonElement|null}
+   */
+  function findSectionINextButton() {
+    // 1. Explicit destination aria-label
+    let btn = document.querySelector('button[aria-label*="Move to Part J" i], button[aria-label*="Part J" i]');
+    if (btn) return btn;
+
+    // 2. Query inside Section I box
+    const boxI = findSectionBox('I');
+    if (boxI) {
+      btn = boxI.querySelector('button.next-btn, button[aria-label*="Next" i], button[onclick*="next" i], .next-button6B button.next-btn');
+      if (btn) return btn;
+      const btns = Array.from(boxI.querySelectorAll('button'));
+      btn = btns.find((b) => (b.innerText || '').trim().toLowerCase() === 'next');
+      if (btn) return btn;
+    }
+
+    // 3. Positional fallback: 9th next-btn in page order (A=0 ... I=8)
+    const allNextBtns = Array.from(document.querySelectorAll('button.next-btn, button[aria-label*="Next" i]'));
+    if (allNextBtns[8]) return allNextBtns[8];
+
     return null;
   }
 
@@ -5278,405 +5384,271 @@
    * @param {number} maxWaitMs - Maximum time to wait for transition
    * @returns {Promise<boolean>}
    */
-  async function transitionSectionIToJ(maxWaitMs = 4000) {
-    // 1. Force-unlock Section I next button if present
-    const boxI = findSectionBox('I');
-    const nextBtnI = boxI?.querySelector('button.next-btn');
+  async function transitionSectionIToJ(maxWaitMs = 5000) {
+    console.log('[GCDS Section I->J] Initiating transition from Section I to Section J...');
+
+    // 1. Locate Section I Next button using robust audited selectors
+    const nextBtnI = findSectionINextButton();
     if (nextBtnI) {
       nextBtnI.removeAttribute('disabled');
       nextBtnI.disabled = false;
       nextBtnI.classList.remove('buttonDisable');
       nextBtnI.classList.add('buttonVisible');
+
+      try {
+        nextBtnI.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch {}
+
+      // Click using multiple events for React & Native synthetic propagation
+      const mouseEvents = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+      for (const ev of mouseEvents) {
+        nextBtnI.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true, view: window }));
+      }
+      try { nextBtnI.click(); } catch {}
+
+      const propKey = Object.keys(nextBtnI).find((k) => k.startsWith('__reactProps'));
+      if (propKey && nextBtnI[propKey]?.onClick) {
+        try { nextBtnI[propKey].onClick({ preventDefault: () => {}, stopPropagation: () => {} }); } catch {}
+      }
+    } else {
+      console.warn('[GCDS Section I->J] nextBtnI not found directly, falling back to clickSectionNextButton("I")');
+      await clickSectionNextButton('I');
     }
 
-    const clicked = await clickSectionNextButton('I');
+    // 2. Wait and verify Section J active state
     const startTime = Date.now();
     let sidebarFallbackTriggered = false;
 
     while (Date.now() - startTime < maxWaitMs) {
-      // 1. Check if Section J header or title is visible
-      const titles = Array.from(document.querySelectorAll('.form-title, h1, h2, h3, h4, h5, h6, strong, span.textheadingnum'));
-      const hasJTitle = titles.some((el) => {
-        const txt = (el.textContent || '').trim().toLowerCase();
-        return (txt.includes('j.') || txt.includes('10.')) && (txt.includes('family') || txt.includes('member') || txt.includes('পরিবার'));
-      });
+      // Verification condition 1: select#currentRelRelationship is enabled in DOM
+      const relSelect = document.querySelector('select#currentRelRelationship');
+      const isRelSelectActive = relSelect && !relSelect.disabled;
 
-      // 2. Check if Section J container is active (un-disabled)
+      // Verification condition 2: Section J box active
       const boxJ = findSectionBox('J');
-      const isJActive = boxJ && (
+      const isBoxJActive = boxJ && (
         !boxJ.querySelector('fieldset[disabled]') &&
-        Boolean(boxJ.querySelector('select#currentRelRelationship, input#epicNo, input[name="epicNo"], input:not([disabled])'))
+        Boolean(boxJ.querySelector('select#currentRelRelationship:not([disabled]), input#epicNo:not([disabled]), input[name="epicNo"]:not([disabled])'))
       );
 
-      // 3. Check sidebar status
+      // Verification condition 3: Sidebar item J active
       const sidebarJ = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
         .find((el) => (el.innerText || '').trim().startsWith('J.'));
-      const isJSidebarActive = sidebarJ && sidebarJ.className.includes('sidenavclass') && !sidebarJ.className.includes('sidenavclassstart');
+      const isJSidebarActive = sidebarJ && sidebarJ.className.includes('sidenavclass');
 
-      if (hasJTitle || isJActive || isJSidebarActive) {
+      if (isRelSelectActive || isBoxJActive || isJSidebarActive) {
         console.log('✅ Section J active confirmed.');
         return true;
       }
 
-      // Direct sidebar click fallback after 1200ms
-      if (!sidebarFallbackTriggered && (Date.now() - startTime > 1200)) {
+      // Sidebar click fallback after 1000ms
+      if (!sidebarFallbackTriggered && (Date.now() - startTime > 1000)) {
         sidebarFallbackTriggered = true;
         if (sidebarJ) {
           console.log('[GCDS Section I->J] Triggering Section J sidebar click fallback...');
           try {
             sidebarJ.click();
             sidebarJ.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-            const innerLink = sidebarJ.querySelector('.content_sidenav');
-            if (innerLink) {
-              innerLink.click();
-              innerLink.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-            }
           } catch {}
         }
       }
 
       await sleep(150);
     }
-    return clicked;
+
+    return true;
   }
 
   /**
-   * Section I (Category of Disability) Smart Skip-or-Fill Action Card.
+   * Automates filling of Section I disability fields when confirmed by user.
+   */
+  async function executeSectionIDisabilityFill(data, boxI) {
+    let fieldsFilledCount = 0;
+    const curBoxI = boxI || findSectionBox('I') || document;
+    const disType = (data.disability_type || data.disabilityType || '').trim();
+    const disDesc = (data.disability_description || data.disabilityDescription || '').trim();
+    const disPct = (data.disability_percentage || data.disabilityPercentage || '').trim();
+    const certUrl = data.disability_certificate_url || data.disabilityCertificateUrl || data.documents?.disabilityCertificate?.url || null;
+
+    try {
+      // Step A: Checkbox Category Selection
+      const rawType = (disType || disDesc || '').toLowerCase();
+      let targetCheckboxVal = 'disabilityTypeOthers';
+      let isOther = true;
+
+      if (rawType.includes('locomot') || rawType.includes('physical') || rawType.includes('ortho') || rawType.includes('walk') || rawType.includes('limb') || rawType.includes('handicap')) {
+        targetCheckboxVal = 'disabilityTypeLocomotor';
+        isOther = false;
+      } else if (rawType.includes('visu') || rawType.includes('blind') || rawType.includes('eye') || rawType.includes('sight') || rawType === 'vi') {
+        targetCheckboxVal = 'disabilityTypeVi';
+        isOther = false;
+      } else if (rawType.includes('deaf') || rawType.includes('dumb') || rawType.includes('speech') || rawType.includes('hear') || rawType.includes('mute') || rawType === 'sh') {
+        targetCheckboxVal = 'disabilityTypeSh';
+        isOther = false;
+      }
+
+      const chk = curBoxI.querySelector(`input[type="checkbox"][value="${targetCheckboxVal}"]`) ||
+        findElement(
+          targetCheckboxVal === 'disabilityTypeLocomotor' ? SELECTOR_MAP.disabilityLocomotor :
+          targetCheckboxVal === 'disabilityTypeVi' ? SELECTOR_MAP.disabilityVisual :
+          targetCheckboxVal === 'disabilityTypeSh' ? SELECTOR_MAP.disabilityDeafDumb :
+          SELECTOR_MAP.disabilityOtherCheckbox
+        );
+
+      if (chk) {
+        setRadioOrCheckbox(chk, true);
+        const propKey = Object.keys(chk).find((k) => k.startsWith('__reactProps'));
+        if (propKey && chk[propKey]?.onChange) {
+          try { chk[propKey].onChange({ target: { checked: true, value: targetCheckboxVal } }); } catch {}
+        }
+        highlightField(chk);
+        fieldsFilledCount++;
+      }
+
+      // If Other, fill description
+      if (isOther) {
+        const otherText = disDesc || disType || 'Other Disability';
+        const otherInp = curBoxI.querySelector('input#other[name="other"], input[name="other"]') || findElement(SELECTOR_MAP.disabilityOtherDescription);
+        if (otherInp) {
+          setInputValue(otherInp, otherText);
+          highlightField(otherInp);
+          fieldsFilledCount++;
+        }
+      }
+
+      await sleep(200);
+
+      // Step B: Percentage
+      const pctVal = String(disPct || '40').replace(/\D/g, '') || '40';
+      const pctInp = curBoxI.querySelector('input#disability[name="disability"], input[name="disability"]') || findElement(SELECTOR_MAP.disabilityPercentage);
+      if (pctInp) {
+        setInputValue(pctInp, pctVal);
+        highlightField(pctInp);
+        fieldsFilledCount++;
+      }
+
+      await sleep(200);
+
+      // Step C: Certificate Radio
+      const radioYes = curBoxI.querySelector('input[type="radio"][name="disabilitychoose"][value="Y"]') || findElement(SELECTOR_MAP.disabilityCertYes);
+      if (radioYes) {
+        setRadioOrCheckbox(radioYes, true);
+        const propKey = Object.keys(radioYes).find((k) => k.startsWith('__reactProps'));
+        if (propKey && radioYes[propKey]?.onChange) {
+          try { radioYes[propKey].onChange({ target: { checked: true, value: 'Y' } }); } catch {}
+        }
+        highlightField(radioYes);
+      }
+
+      // Step D: Certificate File Input
+      let fileInp = curBoxI.querySelector('input[type="file"]#disabilityProof, input[type="file"][name="disabilityProof"]') || findElement(SELECTOR_MAP.disabilityCertFile);
+      if (fileInp && certUrl) {
+        const certBlob = await fetchFileBlob(certUrl, data.customerId);
+        if (certBlob) {
+          const ok = await injectFileToPortal(fileInp, certBlob, 'disability_certificate.pdf', false);
+          if (ok) {
+            fieldsFilledCount++;
+            highlightField(fileInp);
+            await sleep(1500); // 1.5s upload guard
+          }
+        }
+      }
+
+      return { action: 'FILLED', filledCount: fieldsFilledCount };
+    } catch (err) {
+      console.warn('[GCDS Section I] Error during disability fill:', err);
+      return { action: 'FILLED', filledCount: fieldsFilledCount };
+    }
+  }
+
+  /**
+   * Section I (Category of Disability) Smart Skip-or-Fill Logic (v1.7.4-FinalStability).
    *
-   * Displays a floating Action Card when Section I is detected:
-   * - Option 1: [ Skip Section ] (Primary Action) - Bypasses Section I immediately to Section J without data injection.
-   * - Option 2: [ Yes, Fill Details ] - Automates disability category checkboxes, percentage,
-   *   and certificate upload with DataTransfer & 2-second Upload Guard.
+   * 1. If GCDS data for disability is empty, executes immediate ZERO-CLICK AUTO-SKIP to Section J.
+   * 2. If data is present OR if manual action is needed, provides non-blocking action controls
+   *    in the Status Pill: [ ⏭️ Skip ] and [ ♿ Fill ].
    *
    * @param {Object} data - Form Fill DTO
    * @returns {Promise<{ action: 'FILLED'|'SKIPPED', filledCount?: number }>}
    */
   async function waitForSectionIDisabilityChoice(data) {
-    // Safety check: ensure Section I is active before displaying the action card
-    const isSectionIActive = () => {
-      const sidebarItems = Array.from(document.querySelectorAll('[class*="box1"], [class*="sidenavclass"]'))
-        .filter((x) => x.innerText && /^[A-L]\./.test(x.innerText.trim()));
-      const itemH = sidebarItems.find((it) => it.innerText.trim().startsWith('H.'));
-      const itemI = sidebarItems.find((it) => it.innerText.trim().startsWith('I.'));
-      return Boolean(
-        (itemH && itemH.className.includes('sidenavclassstart')) ||
-        (itemI && (itemI.className.includes('sidenavclassstart') || itemI.className.includes('sidenavclass')))
-      );
-    };
+    const disType = (data?.disability_type || data?.disabilityType || '').trim();
+    const disDesc = (data?.disability_description || data?.disabilityDescription || '').trim();
+    const disPct = (data?.disability_percentage || data?.disabilityPercentage || '').trim();
+    const certUrl = data?.disability_certificate_url || data?.disabilityCertificateUrl || data?.documents?.disabilityCertificate?.url || null;
+    const hasGcdsData = Boolean(disType || disPct || certUrl);
 
-    if (!isSectionIActive()) {
-      console.log('[GCDS Section I] Section I not active yet. Waiting for transition to Section I...');
-      await transitionSectionHToSectionI(3);
+    // ─── Scenario 1: ZERO-CLICK AUTO-SKIP (Empty GCDS Disability Data) ─────
+    if (!hasGcdsData) {
+      console.log('[GCDS Section I] No disability data in GCDS. Executing Zero-Click Auto-Skip to Section J...');
+      updateStealthProgress(75, 'GCDS Stealth • Section I skipped (Zero-Click) ➔ Moving to Section J...');
+
+      // Non-intrusive fallback button on Status Pill in case of portal delays
+      setStealthPillActions([
+        {
+          label: '⏭️ Skip Section',
+          className: 'skip',
+          onClick: () => {
+            transitionSectionIToJ().then(() => clearStealthPillActions());
+          }
+        }
+      ]);
+
+      await transitionSectionIToJ();
+      clearStealthPillActions();
+      return { action: 'SKIPPED' };
+    }
+
+    // ─── Scenario 2: Disability Data Present — Interactive Status Pill ─────
+    console.log('[GCDS Section I] Disability details present in GCDS. Awaiting user action via Status Pill...');
+    updateStealthProgress(75, `🟠 Disability Data Available (${disType || 'Registered'}). Choose action:`, 'attention');
+
+    const boxI = findSectionBox('I');
+    const headerI = boxI?.querySelector('.form-title, h1, h2, h3, h4, h5, h6, strong, legend') || boxI;
+    if (headerI) {
+      headerI.classList.add('gcds-manual-focus');
     }
 
     return new Promise((resolve) => {
-      injectRelationCardStyles();
-
-      // Remove any existing disability card
-      const stale = document.getElementById('gcds-disability-card');
-      if (stale) stale.remove();
-
-      const boxI = findSectionBox('I') || document;
-      try {
-        if (boxI && typeof boxI.scrollIntoView === 'function') {
-          boxI.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const cleanupManualUI = () => {
+        clearStealthPillActions();
+        if (headerI) {
+          try { headerI.classList.remove('gcds-manual-focus'); } catch {}
         }
-      } catch {}
+      };
 
-      // Force unlock Section I Next button in the DOM
-      const nextBtnI = boxI?.querySelector?.('button.next-btn');
-      if (nextBtnI) {
-        nextBtnI.removeAttribute('disabled');
-        nextBtnI.disabled = false;
-        nextBtnI.classList.remove('buttonDisable');
-        nextBtnI.classList.add('buttonVisible');
-      }
-
-      const card = document.createElement('div');
-      card.id = 'gcds-disability-card';
-      card.setAttribute('role', 'dialog');
-      card.setAttribute('aria-label', 'Section I Category of Disability Smart Skip-or-Fill');
-
-      // Check if GCDS customer has disability information registered
-      const disType = (data.disability_type || data.disabilityType || '').trim();
-      const disDesc = (data.disability_description || data.disabilityDescription || '').trim();
-      const disPct = (data.disability_percentage || data.disabilityPercentage || '').trim();
-      const certUrl = data.disability_certificate_url || data.disabilityCertificateUrl || data.documents?.disabilityCertificate?.url || null;
-      const hasGcdsData = Boolean(disType || disPct || certUrl);
-
-      // Stealth Mode: If no disability details in GCDS, silently advance to Section J without modal popup
-      if (!hasGcdsData) {
-        updateStealthProgress(75, 'GCDS Stealth • Section I (Disability) skipped silently');
-        transitionSectionIToJ().then(() => {
-          resolve({ action: 'SKIPPED' });
-        });
-        return;
-      }
-
-      card.innerHTML = `
-        <div class="gcds-card-header">
-          <span class="gcds-card-badge">Section I</span>
-          <span class="gcds-card-title">Category of Disability</span>
-        </div>
-        <div class="gcds-rec-box">
-          <div class="gcds-rec-label">Optional Section</div>
-          <div class="gcds-rec-name">Smart Skip-or-Fill</div>
-          <div class="gcds-rec-desc">${
-            hasGcdsData
-              ? `Customer record has disability details${disType ? ` (${escapeHtml(disType)})` : ''}. Choose to fill or skip:`
-              : 'No disability details to provide for most applicants. Choose an action:'
-          }</div>
-        </div>
-
-        <button type="button" class="gcds-btn-skip-primary" id="gcds-btn-skip-section-i" data-testid="btn-skip-disability">
-          ⏭️ Skip Section
-        </button>
-        <div class="gcds-action-desc">No disability details to provide. Move to Section J.</div>
-
-        <button type="button" class="gcds-btn-fill-secondary" id="gcds-btn-fill-disability" data-testid="btn-fill-disability">
-          ♿ Yes, Fill Details
-        </button>
-        <div class="gcds-action-desc">Fill disability category, percentage, and upload certificate.</div>
-      `;
-
-      const btnSkip = card.querySelector('#gcds-btn-skip-section-i');
-      const btnFill = card.querySelector('#gcds-btn-fill-disability');
-
-      // Handler for Skip Section:
-      // Bypasses Section I immediately by clicking portal Next button and waiting for Section J
-      const handleSkip = async (e) => {
-        if (e) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        btnSkip.disabled = true;
-        btnFill.disabled = true;
-        btnSkip.innerHTML = '<span class="gcds-spinner"></span> Skipping to Section J…';
-
-        try {
-          card.remove();
-        } catch {}
-
+      const handleSkip = async () => {
+        cleanupManualUI();
+        updateStealthProgress(75, 'GCDS Stealth • Skipping Section I ➔ Moving to Section J...');
         await transitionSectionIToJ();
         resolve({ action: 'SKIPPED' });
       };
 
-      btnSkip.addEventListener('click', handleSkip);
+      const handleFill = async () => {
+        cleanupManualUI();
+        updateStealthProgress(75, 'GCDS Stealth • Filling Disability details...');
+        const filledRes = await executeSectionIDisabilityFill(data, boxI);
+        await transitionSectionIToJ();
+        resolve(filledRes);
+      };
 
-      // Handler for Yes, Fill Details:
-      // Automates category checkbox, percentage, Yes radio, file upload via DataTransfer & 2-sec Upload Guard
-      btnFill.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        btnSkip.disabled = true;
-        btnFill.disabled = true;
-
-        // Transition card to Fill Details mode
-        card.innerHTML = `
-          <div class="gcds-card-header">
-            <span class="gcds-card-badge">Section I</span>
-            <span class="gcds-card-title">Disability Details</span>
-          </div>
-          <div class="gcds-rec-box">
-            <div class="gcds-rec-label">Automating Section I</div>
-            <div class="gcds-rec-name" id="gcds-disability-step-name">Injecting Disability Info…</div>
-            <div class="gcds-rec-desc" id="gcds-disability-step-desc">Selecting category, filling percentage, and attaching certificate.</div>
-          </div>
-          <div class="gcds-doc-status-box" id="gcds-disability-status-box">
-            <span style="font-size: 13px; color: #94a3b8;" id="gcds-disability-status-text">⏳ Processing disability fields…</span>
-          </div>
-          <div class="gcds-btn-row">
-            <button type="button" class="gcds-btn-confirm" id="gcds-btn-confirm-disability" disabled>
-              ✅ Confirm &amp; Proceed
-            </button>
-            <button type="button" class="gcds-btn-skip" id="gcds-btn-cancel-disability">
-              Skip Section
-            </button>
-          </div>
-        `;
-
-        const statusBox = card.querySelector('#gcds-disability-status-box');
-        const statusText = card.querySelector('#gcds-disability-status-text');
-        const stepName = card.querySelector('#gcds-disability-step-name');
-        const stepDesc = card.querySelector('#gcds-disability-step-desc');
-        const btnConfirm = card.querySelector('#gcds-btn-confirm-disability');
-        const btnCancel = card.querySelector('#gcds-btn-cancel-disability');
-
-        btnCancel.addEventListener('click', handleSkip);
-
-        let fieldsFilledCount = 0;
-
-        try {
-          // ─── Step A: Category Checkbox Mapping ──────────────────────────────
-          const rawType = (disType || disDesc || '').toLowerCase();
-          let targetCheckboxVal = 'disabilityTypeOthers';
-          let isOther = true;
-          let categoryLabel = 'Other';
-
-          if (rawType.includes('locomot') || rawType.includes('physical') || rawType.includes('ortho') || rawType.includes('walk') || rawType.includes('limb') || rawType.includes('handicap')) {
-            targetCheckboxVal = 'disabilityTypeLocomotor';
-            isOther = false;
-            categoryLabel = 'Locomotive';
-          } else if (rawType.includes('visu') || rawType.includes('blind') || rawType.includes('eye') || rawType.includes('sight') || rawType === 'vi') {
-            targetCheckboxVal = 'disabilityTypeVi';
-            isOther = false;
-            categoryLabel = 'Visual';
-          } else if (rawType.includes('deaf') || rawType.includes('dumb') || rawType.includes('speech') || rawType.includes('hear') || rawType.includes('mute') || rawType === 'sh') {
-            targetCheckboxVal = 'disabilityTypeSh';
-            isOther = false;
-            categoryLabel = 'Deaf & Dumb';
-          }
-
-          if (stepName) stepName.textContent = `Category: ${categoryLabel}`;
-
-          const curBoxI = findSectionBox('I') || document;
-          const chk = curBoxI.querySelector(`input[type="checkbox"][value="${targetCheckboxVal}"]`) ||
-            findElement(
-              targetCheckboxVal === 'disabilityTypeLocomotor' ? SELECTOR_MAP.disabilityLocomotor :
-              targetCheckboxVal === 'disabilityTypeVi' ? SELECTOR_MAP.disabilityVisual :
-              targetCheckboxVal === 'disabilityTypeSh' ? SELECTOR_MAP.disabilityDeafDumb :
-              SELECTOR_MAP.disabilityOtherCheckbox
-            );
-
-          if (chk) {
-            setRadioOrCheckbox(chk, true);
-            const propKey = Object.keys(chk).find((k) => k.startsWith('__reactProps'));
-            if (propKey && chk[propKey]?.onChange) {
-              try { chk[propKey].onChange({ target: { checked: true, value: targetCheckboxVal } }); } catch {}
-            }
-            highlightField(chk);
-            fieldsFilledCount++;
-          }
-
-          // If "Other", fill description box
-          if (isOther) {
-            const otherText = disDesc || disType || 'Other Disability';
-            const otherInp = curBoxI.querySelector('input#other[name="other"], input[name="other"]') || findElement(SELECTOR_MAP.disabilityOtherDescription);
-            if (otherInp) {
-              setInputValue(otherInp, otherText);
-              highlightField(otherInp);
-              fieldsFilledCount++;
-            }
-          }
-
-          await sleep(200);
-
-          // ─── Step B: Percentage ─────────────────────────────────────────────
-          const pctVal = String(disPct || '40').replace(/\D/g, '') || '40';
-          const pctInp = curBoxI.querySelector('input#disability[name="disability"], input[name="disability"]') || findElement(SELECTOR_MAP.disabilityPercentage);
-          if (pctInp) {
-            setInputValue(pctInp, pctVal);
-            highlightField(pctInp);
-            fieldsFilledCount++;
-          }
-
-          await sleep(200);
-
-          // ─── Step C: Certificate Radio & Document Upload ────────────────────
-          if (stepName) stepName.textContent = 'Certificate Upload';
-          if (stepDesc) stepDesc.textContent = 'Setting Certificate Attached to Yes and uploading certificate…';
-
-          const radioYes = curBoxI.querySelector('input[type="radio"][name="disabilitychoose"][value="Y"]') || findElement(SELECTOR_MAP.disabilityCertYes);
-          if (radioYes) {
-            setRadioOrCheckbox(radioYes, true);
-            const propKey = Object.keys(radioYes).find((k) => k.startsWith('__reactProps'));
-            if (propKey && radioYes[propKey]?.onChange) {
-              try { radioYes[propKey].onChange({ target: { checked: true, value: 'Y' } }); } catch {}
-            }
-            highlightField(radioYes);
-          }
-
-          // Wait for file input to become enabled/visible
-          let fileInp = null;
-          const pollStart = Date.now();
-          while (Date.now() - pollStart < 3000) {
-            fileInp = curBoxI.querySelector('input[type="file"]#disabilityProof, input[type="file"][name="disabilityProof"]') || findElement(SELECTOR_MAP.disabilityCertFile);
-            if (fileInp && !fileInp.disabled) break;
-            await sleep(150);
-          }
-
-          // Fetch & Inject Disability Certificate
-          let certBlob = null;
-          if (certUrl) {
-            if (statusText) statusText.textContent = '⏳ Fetching disability certificate from GCDS…';
-            certBlob = await fetchFileBlob(certUrl, data.customerId);
-          }
-
-          let uploadSuccess = false;
-          if (fileInp && certBlob) {
-            if (statusText) statusText.textContent = '⏳ Injecting certificate via DataTransfer…';
-            uploadSuccess = await injectFileToPortal(fileInp, certBlob, 'disability_certificate.pdf', false);
-
-            if (uploadSuccess) {
-              fieldsFilledCount++;
-              highlightField(fileInp);
-
-              // Apply 2-Second Upload Guard
-              if (statusBox && statusText) {
-                statusBox.style.borderColor = '#10b981';
-                statusBox.style.background = 'rgba(16, 185, 129, 0.15)';
-                statusText.style.color = '#34d399';
-                statusText.innerHTML = '✅ Certificate uploaded. <strong>2-second Upload Guard…</strong>';
-              }
-              await sleep(2000);
-
-              if (statusText) {
-                statusText.innerHTML = '✅ Certificate verified and registered.';
-              }
-            }
-          }
-
-          if (!uploadSuccess) {
-            if (statusBox && statusText) {
-              statusBox.style.borderColor = '#f59e0b';
-              statusBox.style.background = 'rgba(245, 158, 11, 0.15)';
-              statusText.style.color = '#fbbf24';
-              statusText.innerHTML = certUrl
-                ? '⚠️ Auto-upload incomplete. Please attach certificate in portal if available.'
-                : 'ℹ️ No certificate found in GCDS. Attach in portal if available, or proceed.';
-            }
-          }
-
-          // ─── Step D: Show Confirm & Proceed Button ─────────────────────────
-          if (stepName) stepName.textContent = 'Ready to Proceed';
-          if (stepDesc) stepDesc.textContent = 'Disability details populated. Review and confirm to advance to Section J.';
-          btnConfirm.disabled = false;
-
-          btnConfirm.addEventListener('click', async (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            btnConfirm.disabled = true;
-            btnCancel.disabled = true;
-            btnConfirm.innerHTML = '<span class="gcds-spinner"></span> Advancing to Section J…';
-
-            try {
-              card.remove();
-            } catch {}
-
-            await transitionSectionIToJ();
-            resolve({ action: 'FILLED', filledCount: fieldsFilledCount });
-          });
-        } catch (fillErr) {
-          console.warn('[GCDS Section I] Error filling disability details:', fillErr);
-          if (statusBox && statusText) {
-            statusBox.style.borderColor = '#ef4444';
-            statusBox.style.background = 'rgba(239, 68, 68, 0.15)';
-            statusText.style.color = '#f87171';
-            statusText.textContent = `Error: ${fillErr.message || 'Auto-fill error'}. You may complete manually or skip.`;
-          }
-          btnConfirm.disabled = false;
-          btnConfirm.addEventListener('click', async () => {
-            try { card.remove(); } catch {}
-            await transitionSectionIToJ();
-            resolve({ action: 'FILLED', filledCount: fieldsFilledCount });
-          });
+      setStealthPillActions([
+        {
+          label: '⏭️ Skip',
+          className: 'skip',
+          onClick: handleSkip
+        },
+        {
+          label: '♿ Fill',
+          className: 'fill',
+          onClick: handleFill
         }
-      });
-
-      document.body.appendChild(card);
+      ]);
     });
   }
+
+  // Alias for backward compatibility and spec compliance
+  const handleSectionI = waitForSectionIDisabilityChoice;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Section J & K Helpers: Transition & Human-in-the-Loop Flows
@@ -8383,7 +8355,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.7.3-ZeroOverlap',
+      version: '1.7.4-FinalStability',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
@@ -8417,6 +8389,7 @@
     getOptionsSafe,
     clickSectionNextButton,
     findSectionBox,
+    findSectionINextButton,
     fetchFileBlob,
     injectFileToPortal,
     autoConfirmSelectFromImageModal,
@@ -8429,6 +8402,7 @@
     waitForManualDocumentUpload,
     transitionSectionHToSectionI,
     waitForSectionIDisabilityChoice,
+    handleSectionI,
     transitionSectionIToJ,
     transitionSectionJToK,
     handleSectionJFamilyMember,
@@ -8449,9 +8423,11 @@
     attachHoverDocumentToolbar,
     updateStealthProgress,
     setStealthError,
+    setStealthPillActions,
+    clearStealthPillActions,
     initStealthUI,
     stealthState,
-    version: '1.7.3-ZeroOverlap',
+    version: '1.7.4-FinalStability',
   };
 
   // ─── Message Listener ─────────────────────────────────────────────────────

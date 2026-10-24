@@ -52,16 +52,23 @@ const routeTs = fs.readFileSync('src/app/api/extension/customers/[id]/form-fill/
 
 console.log('--- 1. Version & Release Tagging ---');
 
-test('manifest.json version is 1.7.3', () => {
-  assert.strictEqual(manifest.version, '1.7.3');
+test('manifest.json version is 1.7.4', () => {
+  assert.strictEqual(manifest.version, '1.7.4');
 });
 
-test('content.js diagnostic version is 1.7.3-ZeroOverlap', () => {
-  assert.ok(contentJs.includes("version: '1.7.3-ZeroOverlap'"));
+test('content.js diagnostic version is 1.7.4-FinalStability', () => {
+  assert.ok(contentJs.includes("version: '1.7.4-FinalStability'"));
 });
 
 test('content.js exports repositionStealthUI for coordinate-based positioning', () => {
   assert.ok(contentJs.includes("repositionStealthUI,"));
+});
+
+test('content.js exports handleSectionI, findSectionINextButton, and Status Pill actions', () => {
+  assert.ok(contentJs.includes("handleSectionI,"));
+  assert.ok(contentJs.includes("findSectionINextButton,"));
+  assert.ok(contentJs.includes("setStealthPillActions,"));
+  assert.ok(contentJs.includes("clearStealthPillActions,"));
 });
 
 console.log('\n--- 2. SELECTOR_MAP Section J & K Selectors ---');
