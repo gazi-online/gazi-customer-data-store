@@ -558,10 +558,13 @@
   // ─── Inject Highlight Styles ──────────────────────────────────────────────
 
   function injectHighlightStyles() {
-    if (document.getElementById('gcds-highlight-styles')) return;
-
-    const style = document.createElement('style');
-    style.id = 'gcds-highlight-styles';
+    let style = document.getElementById('gcds-highlight-styles');
+    if (!style) {
+      style = document.createElement('style');
+      style.id = 'gcds-highlight-styles';
+      if (document.head) document.head.appendChild(style);
+      else if (document.body) document.body.appendChild(style);
+    }
     style.textContent = `
       .${HIGHLIGHT_CLASS} {
         outline: 2px solid #6366f1 !important;
@@ -573,8 +576,380 @@
         outline-color: #34d399 !important;
         box-shadow: 0 0 12px rgba(52, 211, 153, 0.3) !important;
       }
+      .gcds-manual-focus {
+        outline: 4px solid #ea580c !important;
+        outline-offset: 4px !important;
+        box-shadow: 0 0 15px #ea580c !important;
+        animation: gcds-pulse 1.5s infinite !important;
+      }
+      @keyframes gcds-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.7); }
+        70% { box-shadow: 0 0 0 15px rgba(234, 88, 12, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0); }
+      }
+      .gcds-focus-tooltip {
+        position: absolute;
+        z-index: 2147483647;
+        background: #0f172a;
+        color: #fed7aa;
+        border: 1px solid #ea580c;
+        border-radius: 6px;
+        padding: 5px 11px;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        font-size: 11.5px;
+        font-weight: 600;
+        box-shadow: 0 4px 16px rgba(234, 88, 12, 0.45);
+        pointer-events: none !important;
+        white-space: nowrap;
+        animation: gcds-tooltip-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .gcds-focus-tooltip::after {
+        content: '';
+        position: absolute;
+        bottom: -5px;
+        left: 14px;
+        border-width: 5px 5px 0;
+        border-style: solid;
+        border-color: #ea580c transparent transparent;
+        display: block;
+        width: 0;
+      }
+      .gcds-focus-tooltip.gcds-tooltip-flipped::after {
+        top: -5px;
+        bottom: auto;
+        border-width: 0 5px 5px;
+        border-color: transparent transparent #ea580c;
+      }
+      @keyframes gcds-tooltip-in {
+        from { opacity: 0; transform: translateY(-4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      #gcds-stealth-progress-bar-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: rgba(15, 23, 42, 0.15);
+        z-index: 2147483647;
+        pointer-events: none;
+      }
+      #gcds-stealth-progress-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+        transition: width 0.4s ease-out;
+      }
+      #gcds-stealth-pill {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 2147483647;
+        background: rgba(15, 23, 42, 0.92);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(99, 102, 241, 0.45);
+        border-radius: 9999px;
+        padding: 7px 15px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 12px rgba(99, 102, 241, 0.2);
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        color: #f1f5f9;
+        font-size: 12px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        user-select: none;
+        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        max-width: 440px;
+      }
+      #gcds-stealth-pill.attention {
+        border-color: #ea580c !important;
+        box-shadow: 0 8px 32px rgba(234, 88, 12, 0.45), 0 0 16px rgba(234, 88, 12, 0.35) !important;
+        color: #ffedd5 !important;
+        animation: gcds-pill-pulse-orange 1.5s infinite !important;
+      }
+      #gcds-stealth-pill.attention .beacon-dot {
+        background: #ea580c !important;
+        box-shadow: 0 0 10px #ea580c !important;
+        animation: gcds-pulse 1.2s infinite !important;
+      }
+      @keyframes gcds-pill-pulse-orange {
+        0% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.7); }
+        70% { box-shadow: 0 0 0 12px rgba(234, 88, 12, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0); }
+      }
+      #gcds-stealth-pill.error {
+        border-color: #ef4444 !important;
+        box-shadow: 0 8px 32px rgba(239, 68, 68, 0.5), 0 0 16px rgba(239, 68, 68, 0.4) !important;
+        color: #fee2e2 !important;
+        animation: gcds-pill-pulse-red 1.5s infinite !important;
+      }
+      #gcds-stealth-pill.error .beacon-dot {
+        background: #ef4444 !important;
+        box-shadow: 0 0 10px #ef4444 !important;
+        animation: gcds-pulse-red 1.2s infinite !important;
+      }
+      @keyframes gcds-pill-pulse-red {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+        70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+      }
+      @keyframes gcds-pulse-red {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
+        70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+      }
+      #gcds-stealth-pill .beacon-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 8px #10b981;
+        animation: gcds-beacon-blink 2s infinite;
+        flex-shrink: 0;
+      }
+      @keyframes gcds-beacon-blink {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.55; transform: scale(0.85); }
+      }
+      .gcds-hover-picker-toolbar {
+        position: absolute;
+        top: calc(100% + 12px);
+        left: 0;
+        margin-top: 0;
+        z-index: 2147483645;
+        background: rgba(15, 23, 42, 0.95);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(99, 102, 241, 0.5);
+        border-radius: 8px;
+        padding: 6px 10px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+        pointer-events: auto;
+        animation: gcds-tooltip-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .gcds-hover-picker-toolbar::before {
+        content: '';
+        position: absolute;
+        top: -14px;
+        left: 0;
+        right: 0;
+        height: 14px;
+        background: transparent;
+      }
+      .gcds-hover-chip {
+        background: #1e293b;
+        border: 1px solid #475569;
+        color: #cbd5e1;
+        border-radius: 14px;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 3px 9px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .gcds-hover-chip:hover {
+        background: #3b82f6;
+        border-color: #60a5fa;
+        color: #fff;
+        box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+      }
+
+      /* ── Full Stealth Mode (v1.7.1-UltraStealth): Hide All Large Floating Action Cards ── */
+      #gcds-action-card,
+      .gcds-action-card,
+      #gcds-rel-card,
+      #gcds-family-epic-card,
+      #gcds-birthplace-card,
+      #gcds-aadhaar-card,
+      #gcds-doc-card,
+      #gcds-house-card,
+      #gcds-disability-card,
+      #gcds-declaration-card,
+      #gcds-completion-card,
+      .gcds-card,
+      .gcds-stealth-hidden-card {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        position: absolute !important;
+        top: -9999px !important;
+        left: -9999px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+      }
     `;
     document.head.appendChild(style);
+  }
+
+  // ─── Stealth Mode Helpers (v1.7.1-UltraStealth) ──────────────────────────────
+
+  const stealthState = {
+    progressPercent: 0,
+    currentSection: '',
+    statusText: 'Ready',
+    isAttention: false,
+    isError: false,
+    focusedElement: null,
+    activeTooltip: null,
+  };
+  window.__GCDS_STEALTH_STATE = stealthState;
+
+  function initStealthUI() {
+    injectHighlightStyles();
+
+    // 1. Subtle Blue Progress Bar at top
+    if (typeof document !== 'undefined' && document.body) {
+      let container = document.getElementById('gcds-stealth-progress-bar-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'gcds-stealth-progress-bar-container';
+        container.innerHTML = '<div id="gcds-stealth-progress-bar"></div>';
+        document.body.appendChild(container);
+      }
+
+      // 2. Non-intrusive Floating Status Pill in corner
+      let pill = document.getElementById('gcds-stealth-pill');
+      if (!pill) {
+        pill = document.createElement('div');
+        pill.id = 'gcds-stealth-pill';
+        pill.setAttribute('role', 'status');
+        pill.setAttribute('aria-live', 'polite');
+        pill.innerHTML = `
+          <span class="beacon-dot"></span>
+          <span id="gcds-pill-text">GCDS Stealth • Ready</span>
+        `;
+        document.body.appendChild(pill);
+      }
+    }
+  }
+
+  function updateStealthProgress(percent, label, mode = false) {
+    initStealthUI();
+    stealthState.progressPercent = Math.min(100, Math.max(0, percent));
+    stealthState.statusText = label;
+    const isAttention = mode === true || mode === 'attention';
+    const isError = mode === 'error';
+    stealthState.isAttention = isAttention;
+    stealthState.isError = isError;
+
+    if (typeof document !== 'undefined') {
+      const bar = document.getElementById('gcds-stealth-progress-bar');
+      if (bar) {
+        bar.style.width = `${stealthState.progressPercent}%`;
+        if (isError) {
+          bar.style.background = 'linear-gradient(90deg, #dc2626 0%, #ef4444 100%)';
+        } else {
+          bar.style.background = 'linear-gradient(90deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%)';
+        }
+      }
+
+      const pill = document.getElementById('gcds-stealth-pill');
+      const pillText = document.getElementById('gcds-pill-text');
+      if (pill) {
+        pill.classList.remove('attention', 'error');
+        if (isAttention) {
+          pill.classList.add('attention');
+        } else if (isError) {
+          pill.classList.add('error');
+        }
+      }
+      if (pillText) {
+        pillText.textContent = label;
+      }
+    }
+  }
+
+  function setStealthError(errorMessage) {
+    updateStealthProgress(stealthState.progressPercent, `⚠️ Error: ${errorMessage}`, 'error');
+  }
+
+  function setManualFocus(element, hintText) {
+    if (!element) return;
+    initStealthUI();
+    clearManualFocus();
+
+    stealthState.focusedElement = element;
+    if (element.classList && typeof element.classList.add === 'function') {
+      element.classList.add('gcds-manual-focus');
+    }
+
+    if (typeof document !== 'undefined' && document.body) {
+      const tooltip = document.createElement('div');
+      tooltip.className = 'gcds-focus-tooltip';
+      tooltip.id = 'gcds-active-focus-tooltip';
+      tooltip.textContent = hintText;
+
+      document.body.appendChild(tooltip);
+      stealthState.activeTooltip = tooltip;
+
+      const rect = (typeof element.getBoundingClientRect === 'function')
+        ? element.getBoundingClientRect()
+        : { top: 0, left: 0, height: 30, width: 100 };
+      const scrollTop = (typeof window !== 'undefined' && window.pageYOffset) || (document.documentElement && document.documentElement.scrollTop) || 0;
+      const scrollLeft = (typeof window !== 'undefined' && window.pageXOffset) || (document.documentElement && document.documentElement.scrollLeft) || 0;
+
+      const tooltipHeight = tooltip.offsetHeight || 30;
+      let calculatedTop = rect.top + scrollTop - tooltipHeight - 12;
+
+      // Safety check: ensure tooltips don't render off-screen if input is at the very top of viewport/page
+      if (rect.top < tooltipHeight + 16 && (rect.top + scrollTop) < (tooltipHeight + 16)) {
+        calculatedTop = rect.top + scrollTop + (rect.height || 32) + 12;
+        tooltip.classList.add('gcds-tooltip-flipped');
+      }
+
+      tooltip.style.top = `${Math.max(8, Math.round(calculatedTop))}px`;
+      tooltip.style.left = `${Math.max(10, Math.round(rect.left + scrollLeft))}px`;
+    }
+
+    try {
+      if (typeof element.scrollIntoView === 'function') {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      if (typeof element.focus === 'function') {
+        element.focus();
+      }
+    } catch {}
+
+    const displayMsg = hintText ? `🟠 Manual Action Required: ${hintText}` : '🟠 Manual Action Required';
+    updateStealthProgress(stealthState.progressPercent, displayMsg, 'attention');
+  }
+
+  function clearManualFocus(element) {
+    const target = element || stealthState.focusedElement;
+    if (target && target.classList && typeof target.classList.remove === 'function') {
+      try { target.classList.remove('gcds-manual-focus'); } catch {}
+    }
+    if (typeof document !== 'undefined') {
+      const tooltip = document.getElementById('gcds-active-focus-tooltip') || stealthState.activeTooltip;
+      if (tooltip) {
+        try { tooltip.remove(); } catch {}
+      }
+      const allFocusEls = document.querySelectorAll?.('.gcds-manual-focus');
+      if (allFocusEls) {
+        allFocusEls.forEach((el) => {
+          try { el.classList.remove('gcds-manual-focus'); } catch {}
+        });
+      }
+    }
+    stealthState.focusedElement = null;
+    stealthState.activeTooltip = null;
+    stealthState.isAttention = false;
+
+    if (typeof document !== 'undefined') {
+      const pill = document.getElementById('gcds-stealth-pill');
+      if (pill && pill.classList) {
+        pill.classList.remove('attention', 'error');
+      }
+    }
   }
 
   // ─── DOM Helpers ──────────────────────────────────────────────────────────
@@ -1441,26 +1816,30 @@
    * Injects the GCDS Section C floating Action Card styles (once per page).
    */
   function injectRelationCardStyles() {
-    if (document.getElementById('gcds-sec-c-card-styles')) return;
-    const s = document.createElement('style');
-    s.id = 'gcds-sec-c-card-styles';
+    let s = document.getElementById('gcds-sec-c-card-styles');
+    if (!s) {
+      s = document.createElement('style');
+      s.id = 'gcds-sec-c-card-styles';
+      if (document.head) document.head.appendChild(s);
+      else if (document.body) document.body.appendChild(s);
+    }
     s.textContent = `
+      #gcds-action-card,
       #gcds-rel-card,
       #gcds-family-epic-card,
       #gcds-birthplace-card {
-        position: fixed;
-        bottom: 28px;
-        right: 28px;
-        z-index: 2147483647;
-        width: 320px;
-        background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
-        border: 1.5px solid #6366f1;
-        border-radius: 14px;
-        padding: 18px 18px 14px;
-        box-shadow: 0 8px 40px rgba(99,102,241,0.35), 0 2px 12px rgba(0,0,0,0.5);
-        font-family: 'Inter', system-ui, sans-serif;
-        color: #f1f5f9;
-        animation: gcds-card-in 0.25s cubic-bezier(0.34,1.56,0.64,1);
+        display: none !important;
+        visibility: hidden !important;
+        position: absolute !important;
+        top: -9999px !important;
+        left: -9999px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
         user-select: none;
       }
       @keyframes gcds-card-in {
@@ -1601,20 +1980,26 @@
       @keyframes gcds-spin { to { transform: rotate(360deg); } }
 
       /* ── Section E, G, H, I, J, K & L Floating Action Cards ── */
-      #gcds-aadhaar-card, #gcds-doc-card, #gcds-house-card, #gcds-disability-card, #gcds-family-epic-card, #gcds-declaration-card, #gcds-completion-card {
-        position: fixed;
-        bottom: 28px;
-        right: 28px;
-        z-index: 2147483647;
-        width: 330px;
-        background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
-        border: 1.5px solid #6366f1;
-        border-radius: 14px;
-        padding: 18px 18px 14px;
-        box-shadow: 0 8px 40px rgba(99,102,241,0.35), 0 2px 12px rgba(0,0,0,0.5);
-        font-family: 'Inter', system-ui, sans-serif;
-        color: #f1f5f9;
-        animation: gcds-card-in 0.25s cubic-bezier(0.34,1.56,0.64,1);
+      #gcds-action-card,
+      #gcds-aadhaar-card,
+      #gcds-doc-card,
+      #gcds-house-card,
+      #gcds-disability-card,
+      #gcds-family-epic-card,
+      #gcds-declaration-card,
+      #gcds-completion-card {
+        display: none !important;
+        visibility: hidden !important;
+        position: absolute !important;
+        top: -9999px !important;
+        left: -9999px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
         user-select: none;
       }
       #gcds-aadhaar-card .gcds-card-header, #gcds-doc-card .gcds-card-header, #gcds-house-card .gcds-card-header, #gcds-disability-card .gcds-card-header, #gcds-family-epic-card .gcds-card-header, #gcds-declaration-card .gcds-card-header, #gcds-completion-card .gcds-card-header {
@@ -2554,6 +2939,85 @@
    * @param {HTMLElement} [options.boxG] - Section G box container
    * @returns {Promise<{ action: 'UPLOADED'|'CONFIRMED'|'SKIP', code?: string, label?: string, isOther?: boolean, description?: string }>}
    */
+  /**
+   * Attaches a floating quick-chip toolbar on hover over an upload container.
+   *
+   * @param {HTMLElement} containerElement
+   * @param {Array} optionsList
+   * @param {Function} onSelectOption
+   * @returns {Function} cleanup callback
+   */
+  function attachHoverDocumentToolbar(containerElement, optionsList, onSelectOption) {
+    if (!containerElement || typeof document === 'undefined') return () => {};
+    const staleTb = containerElement.querySelector?.('.gcds-hover-picker-toolbar');
+    if (staleTb) staleTb.remove();
+
+    const tb = document.createElement('div');
+    tb.className = 'gcds-hover-picker-toolbar';
+    tb.style.display = 'none';
+
+    optionsList.forEach((opt) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'gcds-hover-chip';
+      chip.innerHTML = `${opt.icon || '📄'} ${escapeHtml(opt.label)}`;
+      chip.title = opt.isAvailable ? `Auto-upload ${opt.label}` : `Select ${opt.label}`;
+      chip.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        tb.style.display = 'none';
+        try { tb.remove(); } catch {}
+        updateStealthProgress(stealthState.progressPercent, `Document selected: ${opt.label}. Injecting...`);
+        onSelectOption(opt);
+      });
+      tb.appendChild(chip);
+    });
+
+    try {
+      if (typeof window !== 'undefined' && window.getComputedStyle) {
+        if (window.getComputedStyle(containerElement).position === 'static') {
+          containerElement.style.position = 'relative';
+        }
+      }
+      containerElement.appendChild(tb);
+    } catch {}
+
+    let leaveTimer = null;
+    const onEnter = () => {
+      if (leaveTimer) {
+        clearTimeout(leaveTimer);
+        leaveTimer = null;
+      }
+      tb.style.display = 'flex';
+    };
+    const onLeave = () => {
+      if (leaveTimer) clearTimeout(leaveTimer);
+      leaveTimer = setTimeout(() => {
+        tb.style.display = 'none';
+      }, 200);
+    };
+
+    if (typeof containerElement.addEventListener === 'function') {
+      containerElement.addEventListener('mouseenter', onEnter);
+      containerElement.addEventListener('mouseleave', onLeave);
+    }
+    tb.addEventListener('mouseenter', onEnter);
+    tb.addEventListener('mouseleave', onLeave);
+
+    return () => {
+      try {
+        if (leaveTimer) clearTimeout(leaveTimer);
+        if (typeof containerElement.removeEventListener === 'function') {
+          containerElement.removeEventListener('mouseenter', onEnter);
+          containerElement.removeEventListener('mouseleave', onLeave);
+        }
+        tb.removeEventListener('mouseenter', onEnter);
+        tb.removeEventListener('mouseleave', onLeave);
+        tb.remove();
+      } catch {}
+    };
+  }
+
   function waitForAgeProofSmartPicker({
     candidates = [],
     customerId = null,
@@ -3386,9 +3850,45 @@
         }
       };
 
-      // Initial View
+      // Initial View: Stealth Auto-Upload or Focus-Highlight Mode
       renderPickerView();
       document.body.appendChild(card);
+
+      const autoCandidateOpt = enrichedOptions.find((o) => o.isAvailable && o.candidate?.url);
+      if (autoCandidateOpt) {
+        updateStealthProgress(52, `GCDS Stealth • Auto-uploading ${autoCandidateOpt.label}...`);
+        handleAutoUpload(autoCandidateOpt);
+      } else {
+        const targetFileInput =
+          fileInput ||
+          (boxG || document).querySelector('input[type="file"]#ageProof, input[type="file"][name="ageProof"]') ||
+          findElement(SELECTOR_MAP.ageProofFile);
+
+        setManualFocus(targetFileInput, 'Please select Birth / Age Proof file');
+
+        const uploadContainer = targetFileInput?.parentElement || boxG || document.body;
+        const detachHoverToolbar = attachHoverDocumentToolbar(uploadContainer, enrichedOptions, async (selectedOpt) => {
+          await applyOption1ToPortal(selectedOpt);
+          if (targetFileInput) {
+            try { targetFileInput.click(); } catch {}
+          }
+        });
+
+        const onFileChosen = () => {
+          if (targetFileInput && targetFileInput.files && targetFileInput.files.length > 0) {
+            cleanupListeners();
+            detachHoverToolbar();
+            clearManualFocus(targetFileInput);
+            updateStealthProgress(58, `Age proof attached. Resuming silent fill...`);
+            try { card.remove(); } catch {}
+            resolve({ action: 'UPLOADED', code: 'ADHR', label: 'Age Proof' });
+          }
+        };
+
+        if (targetFileInput && typeof targetFileInput.addEventListener === 'function') {
+          targetFileInput.addEventListener('change', onFileChosen);
+        }
+      }
 
       // Auto-scroll Section G box into view
       if (boxG) {
@@ -4245,9 +4745,45 @@
         }
       };
 
-      // Initial View
+      // Initial View: Stealth Auto-Upload or Focus-Highlight Mode
       renderPickerView();
       document.body.appendChild(card);
+
+      const autoCandidateOpt = enrichedOptions.find((o) => o.isAvailable && o.candidate?.url);
+      if (autoCandidateOpt) {
+        updateStealthProgress(68, `GCDS Stealth • Auto-uploading ${autoCandidateOpt.label}...`);
+        handleAutoUpload(autoCandidateOpt);
+      } else {
+        const targetFileInput =
+          fileInput ||
+          (boxH || document).querySelector('input[type="file"]#currentAddressProof, input[type="file"][name="currentAddressProof"]') ||
+          findElement(SELECTOR_MAP.addressProofFile);
+
+        setManualFocus(targetFileInput, 'Please select Address Proof file');
+
+        const uploadContainer = targetFileInput?.parentElement || boxH || document.body;
+        const detachHoverToolbar = attachHoverDocumentToolbar(uploadContainer, enrichedOptions, async (selectedOpt) => {
+          await applyOption1ToPortal(selectedOpt);
+          if (targetFileInput) {
+            try { targetFileInput.click(); } catch {}
+          }
+        });
+
+        const onFileChosen = () => {
+          if (targetFileInput && targetFileInput.files && targetFileInput.files.length > 0) {
+            cleanupListeners();
+            detachHoverToolbar();
+            clearManualFocus(targetFileInput);
+            updateStealthProgress(72, `Address proof attached. Resuming silent fill...`);
+            try { card.remove(); } catch {}
+            resolve({ action: 'UPLOADED', code: 'ADHR', label: 'Address Proof' });
+          }
+        };
+
+        if (targetFileInput && typeof targetFileInput.addEventListener === 'function') {
+          targetFileInput.addEventListener('change', onFileChosen);
+        }
+      }
 
       // Auto-scroll Section H box into view
       if (boxH) {
@@ -4347,9 +4883,9 @@
       const boxH = findSectionBox('H');
       const doorInput = (boxH || document).querySelector('input#doorD, input[name="houseNo"]') || findElement(SELECTOR_MAP.houseNo);
 
-      // Focus portal input and scroll to Section H
+      // Focus portal input and scroll to Section H with Orange Pulse Focus
       if (doorInput) {
-        highlightField(doorInput);
+        setManualFocus(doorInput, 'Please enter House No (e.g. 12/A)');
         try { doorInput.focus(); } catch {}
       }
       if (boxH) {
@@ -4374,30 +4910,68 @@
         }
       };
 
+      let autoResumeTimer = null;
+      let isResolved = false;
+
+      const triggerAutoConfirm = () => {
+        if (isResolved) return;
+        const currentVal = doorInput ? doorInput.value.trim() : '';
+        if (currentVal.length > 0) {
+          isResolved = true;
+          cleanup();
+          updateStealthProgress(62, `House No (${currentVal}) recorded. Resuming silent fill...`);
+          try { card.remove(); } catch {}
+          resolve({ action: 'CONFIRMED', houseNo: currentVal });
+        }
+      };
+
+      const onDoorInput = () => {
+        updateHousePreview();
+        const currentVal = doorInput ? doorInput.value.trim() : '';
+        if (currentVal.length > 0) {
+          if (autoResumeTimer) clearTimeout(autoResumeTimer);
+          autoResumeTimer = setTimeout(triggerAutoConfirm, 800);
+        }
+      };
+
+      const onDoorKeyDown = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (autoResumeTimer) clearTimeout(autoResumeTimer);
+          triggerAutoConfirm();
+        }
+      };
+
       if (doorInput) {
-        doorInput.addEventListener('input', updateHousePreview);
-        doorInput.addEventListener('change', updateHousePreview);
+        doorInput.addEventListener('input', onDoorInput);
+        doorInput.addEventListener('change', onDoorInput);
+        doorInput.addEventListener('keydown', onDoorKeyDown);
       }
       const pollTimer = setInterval(updateHousePreview, 300);
       updateHousePreview();
 
       const cleanup = () => {
         clearInterval(pollTimer);
+        if (autoResumeTimer) clearTimeout(autoResumeTimer);
+        clearManualFocus(doorInput);
         if (doorInput) {
-          doorInput.removeEventListener('input', updateHousePreview);
-          doorInput.removeEventListener('change', updateHousePreview);
+          doorInput.removeEventListener('input', onDoorInput);
+          doorInput.removeEventListener('change', onDoorInput);
+          doorInput.removeEventListener('keydown', onDoorKeyDown);
         }
       };
 
       btnConfirm.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (isResolved) return;
+        isResolved = true;
         cleanup();
         const currentVal = doorInput ? doorInput.value.trim() : '';
         btnConfirm.innerHTML = '<span class="gcds-spinner"></span> Filling Remaining…';
         btnConfirm.disabled = true;
         setTimeout(() => {
-          card.remove();
+          try { card.remove(); } catch {}
           resolve({ action: 'CONFIRMED', houseNo: currentVal });
         }, 150);
       });
@@ -4405,8 +4979,10 @@
       btnSkip.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (isResolved) return;
+        isResolved = true;
         cleanup();
-        card.remove();
+        try { card.remove(); } catch {}
         resolve({ action: 'SKIP', houseNo: '' });
       });
 
@@ -4766,6 +5342,15 @@
       const disPct = (data.disability_percentage || data.disabilityPercentage || '').trim();
       const certUrl = data.disability_certificate_url || data.disabilityCertificateUrl || data.documents?.disabilityCertificate?.url || null;
       const hasGcdsData = Boolean(disType || disPct || certUrl);
+
+      // Stealth Mode: If no disability details in GCDS, silently advance to Section J without modal popup
+      if (!hasGcdsData) {
+        updateStealthProgress(75, 'GCDS Stealth • Section I (Disability) skipped silently');
+        transitionSectionIToJ().then(() => {
+          resolve({ action: 'SKIPPED' });
+        });
+        return;
+      }
 
       card.innerHTML = `
         <div class="gcds-card-header">
@@ -5557,6 +6142,57 @@
 
       renderCard(false);
       document.body.appendChild(card);
+
+      const initialTargetRec = familyRecords[selectedCode] || familyRecords.FTHR;
+      if (initialTargetRec && initialTargetRec.epic) {
+        selectSectionJDropdown(selectedCode, familyRecords);
+        applySectionJFill(selectedCode, familyRecords, initialTargetRec.epic).then(async (filled) => {
+          lastFilledCount = filled;
+          renderCard(true);
+          updateStealthProgress(85, `GCDS Stealth • Family Member (${initialTargetRec.labelEn}) populated`);
+          await sleep(1000);
+          try { card.remove(); } catch {}
+          await transitionSectionJToK();
+          resolve({ action: 'FILLED', filledCount: lastFilledCount || 1 });
+        });
+      } else {
+        const epicInp = (boxJ || document).querySelector('input[aria-label*="EPIC Number" i], input[name="currentRelEpic"], input#epicNumber, input#epicNo') ||
+          findElement(SELECTOR_MAP.familyMemberEpic);
+        if (epicInp) {
+          setManualFocus(epicInp, `Please enter ${initialTargetRec.labelEn}'s EPIC (or press Enter/Skip)`);
+          
+          let debounceTimer = null;
+          const advanceJ = async () => {
+            clearManualFocus(epicInp);
+            try { epicInp.removeEventListener('keydown', onEpicKey); } catch {}
+            try { epicInp.removeEventListener('input', onEpicInput); } catch {}
+            try { card.remove(); } catch {}
+            await transitionSectionJToK();
+            resolve({ action: 'FILLED', filledCount: 1 });
+          };
+
+          const onEpicKey = async (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              clearTimeout(debounceTimer);
+              await advanceJ();
+            }
+          };
+
+          const onEpicInput = () => {
+            clearTimeout(debounceTimer);
+            const val = (epicInp.value || '').trim();
+            if (val.length >= 10) {
+              debounceTimer = setTimeout(advanceJ, 1000);
+            }
+          };
+
+          if (typeof epicInp.addEventListener === 'function') {
+            epicInp.addEventListener('keydown', onEpicKey);
+            epicInp.addEventListener('input', onEpicInput);
+          }
+        }
+      }
     });
   }
 
@@ -5685,6 +6321,13 @@
 
       document.body.appendChild(card);
 
+      const boxK = findSectionBox('K');
+      const villInp = (boxK || document).querySelector('input#village[name="village"], input#village') || findElement(SELECTOR_MAP.declarationVillage);
+      if (villInp) {
+        setManualFocus(villInp, 'Please enter Birth Village/Town');
+      }
+      updateStealthProgress(92, '🟠 Attention: Enter Birth Village/Town in Section K', true);
+
       const inp = card.querySelector('#gcds-manual-birth-village');
       if (inp) {
         setTimeout(() => { try { inp.focus(); } catch {} }, 250);
@@ -5696,12 +6339,36 @@
         });
       }
 
+      let autoResumeTimer = null;
+      let isDone = false;
+      const onVillDirectInput = () => {
+        if (isDone) return;
+        const enteredVal = (villInp?.value || '').trim();
+        if (enteredVal) {
+          if (autoResumeTimer) clearTimeout(autoResumeTimer);
+          autoResumeTimer = setTimeout(() => {
+            if (isDone) return;
+            isDone = true;
+            clearManualFocus(villInp || inp);
+            recordManualBirthPlace(enteredVal);
+            try { card.remove(); } catch {}
+            resolve(enteredVal);
+          }, 800);
+        }
+      };
+
+      if (villInp && typeof villInp.addEventListener === 'function') {
+        villInp.addEventListener('input', onVillDirectInput);
+        villInp.addEventListener('change', onVillDirectInput);
+      }
+
       const btnConfirm = card.querySelector('#gcds-btn-confirm-birthplace');
       if (btnConfirm) {
         btnConfirm.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const enteredVal = (inp?.value || '').trim();
+          if (isDone) return;
+          const enteredVal = (inp?.value || villInp?.value || '').trim();
           if (!enteredVal) {
             if (inp) {
               inp.style.borderColor = '#ef4444';
@@ -5709,6 +6376,9 @@
             }
             return;
           }
+          isDone = true;
+          if (autoResumeTimer) clearTimeout(autoResumeTimer);
+          clearManualFocus(villInp || inp);
           recordManualBirthPlace(enteredVal);
           try { card.remove(); } catch {}
           resolve(enteredVal);
@@ -5720,6 +6390,10 @@
         btnSame.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
+          if (isDone) return;
+          isDone = true;
+          if (autoResumeTimer) clearTimeout(autoResumeTimer);
+          clearManualFocus(villInp || inp);
           const finalVal = currentVillage || 'Kolkata';
           recordManualBirthPlace(finalVal);
           try { card.remove(); } catch {}
@@ -5915,6 +6589,16 @@
       });
 
       document.body.appendChild(card);
+
+      // Stealth auto-advance: in real browser with stealth state active, auto-advance after brief visual verification
+      if (typeof window !== 'undefined' && window.__GCDS_STEALTH_STATE) {
+        updateStealthProgress(95, 'GCDS Stealth • Declaration confirmed. Advancing to Captcha...');
+        setTimeout(() => {
+          if (btnConfirm && !btnConfirm.disabled) {
+            btnConfirm.click();
+          }
+        }, 1200);
+      }
     });
   }
 
@@ -5960,6 +6644,12 @@
     `;
 
     document.body.appendChild(card);
+
+    const captchaInp = (boxL || document).querySelector('input#captcha, input[name="captcha"], input.captcha-input') || findElement(SELECTOR_MAP.captcha);
+    if (captchaInp) {
+      setManualFocus(captchaInp, 'Please solve Captcha & Click Preview / Submit');
+    }
+    updateStealthProgress(98, '🟢 Form Entry Complete: Please solve Captcha & Submit', false);
 
     // Task 1: As soon as Section L card is displayed, initiate watchForFinalSubmission
     watchForFinalSubmission(customerData);
@@ -6049,6 +6739,7 @@
 
           const finalRef = refNumber || 'ECI-REGISTERED';
           console.log(`[GCDS Extension] 🎉 Final Submission Acknowledgment Detected! Ref: ${finalRef}`);
+          updateStealthProgress(100, `🎉 Submission Recorded! Ref: ${finalRef}`, false);
 
           // Task 2: "Sync & Farewell" UI Update
           const card = document.getElementById('gcds-completion-card');
@@ -6147,6 +6838,8 @@
    */
   async function fillForm(data) {
     injectHighlightStyles();
+    initStealthUI();
+    updateStealthProgress(5, 'GCDS Stealth • Starting Form 6 Silent Fill...');
 
     // Fail-safe: detect DOM changes
     const missingFields = detectDomChanges();
@@ -6252,6 +6945,7 @@
     // Section A: State, District & AC (Cascading Dropdowns)
     // ═══════════════════════════════════════════════════════════════════════════
 
+    updateStealthProgress(8, 'GCDS Stealth • Filling Section A (State, District, AC)...');
     const stateVal = (addr.state || data.state || data.address_state || '').trim();
     const districtVal = (addr.district || data.district || data.address_district || '').trim();
     const acVal = (
@@ -6316,11 +7010,13 @@
 
     // Auto-advance Section A
     await clickSectionNextButton('A');
+    updateStealthProgress(16, 'GCDS Stealth • Section A Complete');
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Section B: Personal Details
     // ═══════════════════════════════════════════════════════════════════════════
 
+    updateStealthProgress(18, 'GCDS Stealth • Filling Section B (Personal Details)...');
     const firstName = name.firstName || data.firstName || data.first_name || '';
     const middleName = name.middleName || data.middleName || data.middle_name || '';
     const lastName = name.lastName || data.lastName || data.last_name || '';
@@ -6360,14 +7056,10 @@
 
     // Auto-advance Section B
     await clickSectionNextButton('B');
+    updateStealthProgress(25, 'GCDS Stealth • Section B Complete');
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Section C: Relatives Details  ←  HUMAN-IN-THE-LOOP (HITL)
-    //
-    // Instead of auto-filling, we build a recommendation from GCDS data,
-    // display a floating "Relation Recommendation" Action Card, and WAIT for
-    // the operator to click "Confirm & Fill" (or "Skip").
-    // Priority: Father > Mother > Husband/Wife > Other.
+    // Section C: Relatives Details (Stealth Auto-Fill with Focus-Highlight)
     // ═══════════════════════════════════════════════════════════════════════════
 
     // Helper: extracts and splits relative first/last and regional names
@@ -6484,13 +7176,86 @@
     };
     const defaultNames = relAvailableNames[recommendedCode] || { first: '', last: '' };
 
-    // 3. ── HITL: Show floating Action Card and await operator confirmation ──
-    const confirmed = await waitForRelationConfirmation(
-      recommendedOpt,
-      defaultNames.first,
-      defaultNames.last,
-      relAvailableNames
-    );
+    // 3. ── Stealth Mode: Auto-fill recommended relation silently if data present ──
+    updateStealthProgress(26, 'GCDS Stealth • Filling Section C (Relatives Details)...');
+    let confirmed = null;
+    if (defaultNames.first) {
+      let rf = defaultNames.regionalFirst || '';
+      let rl = defaultNames.regionalLast || '';
+      if (!rf && defaultNames.first) {
+        rf = await requestTransliteration(defaultNames.first);
+      }
+      if (!rl && defaultNames.last) {
+        rl = await requestTransliteration(defaultNames.last);
+      }
+      confirmed = {
+        code: recommendedCode,
+        firstName: defaultNames.first,
+        lastName: defaultNames.last,
+        regionalFirst: rf,
+        regionalLast: rl,
+      };
+
+      // Glow the chosen relation radio subtly for feedback
+      const radioBox = document.querySelector(`input[type="radio"][value="${recommendedCode}"], input[type="radio"][id*="${recommendedCode}" i]`);
+      if (radioBox) {
+        highlightField(radioBox.parentElement || radioBox);
+      }
+
+      // Dynamic switch: if operator clicks a different relation radio on portal, update
+      const allRelationRadios = document.querySelectorAll('input[type="radio"][name*="relation" i], input[type="radio"][name*="relat" i]');
+      allRelationRadios.forEach((radio) => {
+        radio.addEventListener('change', async () => {
+          const clickedCode = radio.value;
+          if (relAvailableNames[clickedCode]) {
+            const newRel = relAvailableNames[clickedCode];
+            recordRelationSelectionC(clickedCode);
+            const fEl = document.querySelector('input#fNameSur, #fNameSur, input[name="applicantRelativeName"]');
+            const lEl = document.querySelector('input#fNameSurname, #fNameSurname, input[name="applicantRelativeSurname"]');
+            if (fEl && newRel.first) setInputValue(fEl, newRel.first);
+            if (lEl && newRel.last) setInputValue(lEl, newRel.last);
+            const rfEl = document.querySelector('input#regRelatName, #regRelatName');
+            const rlEl = document.querySelector('input#regRelatSurName, #regRelatSurName');
+            let nrf = newRel.regionalFirst || await requestTransliteration(newRel.first);
+            let nrl = newRel.regionalLast || (newRel.last ? await requestTransliteration(newRel.last) : '');
+            if (rfEl && nrf) setInputValue(rfEl, nrf);
+            if (rlEl && nrl) setInputValue(rlEl, nrl);
+          }
+        });
+      });
+    } else {
+      const boxC = findSectionBox('C') || document;
+      const relGroup = boxC.querySelector('.form-check, .radio-group, [class*="relation" i]') || boxC;
+      setManualFocus(relGroup, 'Please select relation on portal');
+
+      confirmed = await new Promise((res) => {
+        const radios = (boxC || document).querySelectorAll('input[type="radio"]');
+        let resolved = false;
+        const onRadioChange = (e) => {
+          if (resolved) return;
+          resolved = true;
+          clearManualFocus(relGroup);
+          const rCode = e.target.value || 'FTHR';
+          const rData = relAvailableNames[rCode] || { first: '', last: '' };
+          res({
+            code: rCode,
+            firstName: rData.first || '',
+            lastName: rData.last || '',
+            regionalFirst: rData.regionalFirst || '',
+            regionalLast: rData.regionalLast || '',
+          });
+        };
+        radios.forEach(r => r.addEventListener('change', onRadioChange, { once: true }));
+        setTimeout(() => {
+          if (!resolved) {
+            waitForRelationConfirmation(recommendedOpt, defaultNames.first, defaultNames.last, relAvailableNames).then((c) => {
+              clearManualFocus(relGroup);
+              res(c);
+            });
+          }
+        }, 10000);
+      });
+    }
 
     if (confirmed) {
       const { code: relCode, firstName: relFirst, lastName: relLast, regionalFirst, regionalLast } = confirmed;
@@ -6570,6 +7335,7 @@
       // If the chosen relation has no name in GCDS, focus the name input for manual entry!
       if (relFirst) {
         await clickSectionNextButton('C');
+        updateStealthProgress(36, 'GCDS Stealth • Section C Complete');
       } else {
         if (fNameSurEl) {
           try { fNameSurEl.focus(); } catch {}
@@ -6586,6 +7352,7 @@
     // Section D: Contact Details
     // ═══════════════════════════════════════════════════════════════════════════
 
+    updateStealthProgress(38, 'GCDS Stealth • Filling Section D (Mobile & Email)...');
     let mobileNumber = String(data.mobile || data.phone || data.phone_number || '').trim();
     if (mobileNumber.startsWith('+91')) {
       mobileNumber = mobileNumber.replace(/^\+91[-\s]?/, '');
@@ -6619,6 +7386,7 @@
 
     // Auto-advance Section D
     await clickSectionNextButton('D');
+    updateStealthProgress(44, 'GCDS Stealth • Section D Complete');
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Section E: Aadhaar Details (3-Tier Decision Tree)
@@ -6638,13 +7406,63 @@
     const cleanAadhaar = String(rawAadhaar).replace(/\D/g, '');
     const hasValidAadhaar = cleanAadhaar.length === 12;
 
+    updateStealthProgress(46, 'GCDS Stealth • Checking Section E (Aadhaar)...');
+
     let aadhaarDecision = null;
     if (hasValidAadhaar) {
-      // Scenario A: Aadhaar Exists in GCDS — bypass manual prompt & auto-fill
+      // Scenario A: Aadhaar Exists in GCDS — bypass manual prompt & auto-fill silently
       aadhaarDecision = { action: 'AADHAAR', aadhaarNumber: cleanAadhaar };
     } else {
-      // Scenario B / C: Missing in GCDS — prompt operator via floating Kiosk UI card
-      aadhaarDecision = await waitForAadhaarConfirmation();
+      // Scenario B / C: Missing in GCDS — Focus-Highlight portal Aadhaar inputs
+      const boxE = findSectionBox('E') || document;
+      const aadhaarInp = boxE.querySelector('input#aadhaarNumber, input[name="aadhaarNumber"]');
+      const noAadhaarCb = boxE.querySelector('input[type="checkbox"][value="noaadhaarnum"]');
+
+      setManualFocus(aadhaarInp || noAadhaarCb, 'Please enter Aadhaar or check Declaration');
+
+      aadhaarDecision = await new Promise((res) => {
+        let done = false;
+        const checkInput = () => {
+          if (done) return;
+          if (aadhaarInp && aadhaarInp.value.replace(/\D/g, '').length === 12) {
+            done = true;
+            cleanup();
+            res({ action: 'AADHAAR', aadhaarNumber: aadhaarInp.value.replace(/\D/g, '') });
+          } else if (noAadhaarCb && noAadhaarCb.checked) {
+            done = true;
+            cleanup();
+            res({ action: 'NO_AADHAAR' });
+          }
+        };
+
+        const cleanup = () => {
+          clearManualFocus(aadhaarInp || noAadhaarCb);
+          if (aadhaarInp) {
+            aadhaarInp.removeEventListener('input', checkInput);
+            aadhaarInp.removeEventListener('change', checkInput);
+          }
+          if (noAadhaarCb) {
+            noAadhaarCb.removeEventListener('change', checkInput);
+          }
+        };
+
+        if (aadhaarInp) {
+          aadhaarInp.addEventListener('input', checkInput);
+          aadhaarInp.addEventListener('change', checkInput);
+        }
+        if (noAadhaarCb) {
+          noAadhaarCb.addEventListener('change', checkInput);
+        }
+
+        setTimeout(() => {
+          if (!done) {
+            waitForAadhaarConfirmation().then((cardDecision) => {
+              cleanup();
+              res(cardDecision);
+            });
+          }
+        }, 10000);
+      });
     }
 
     if (aadhaarDecision && aadhaarDecision.action === 'AADHAAR') {
@@ -7504,7 +8322,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.6.2-GOLD',
+      version: '1.7.2-UI-Fix-Stable',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
@@ -7564,6 +8382,14 @@
     runFill,
     fillForm,
     generateDiagnosticReport,
+    setManualFocus,
+    clearManualFocus,
+    attachHoverDocumentToolbar,
+    updateStealthProgress,
+    setStealthError,
+    initStealthUI,
+    stealthState,
+    version: '1.7.2-UI-Fix-Stable',
   };
 
   // ─── Message Listener ─────────────────────────────────────────────────────
@@ -7597,6 +8423,9 @@
     });
   }
 
+  // Automatically initialize stealth UI and hide all action cards on script load
+  try { initStealthUI(); } catch {}
+
   // Register re-injection cleanup hook
   window.__GCDS_CONTENT_SCRIPT_CLEANUP = () => {
     if (window.__GCDS_SUBMISSION_OBSERVER) {
@@ -7621,6 +8450,20 @@
     if (staleDecl) staleDecl.remove();
     const staleComplete = document.getElementById('gcds-completion-card');
     if (staleComplete) staleComplete.remove();
+    const stalePill = document.getElementById('gcds-stealth-pill');
+    if (stalePill) stalePill.remove();
+    const staleProgress = document.getElementById('gcds-stealth-progress-bar-container');
+    if (staleProgress) staleProgress.remove();
+    const staleTooltip = document.getElementById('gcds-active-focus-tooltip');
+    if (staleTooltip) staleTooltip.remove();
+    if (typeof document !== 'undefined') {
+      const allFocusEls = document.querySelectorAll?.('.gcds-manual-focus');
+      if (allFocusEls) {
+        allFocusEls.forEach((el) => {
+          try { el.classList.remove('gcds-manual-focus'); } catch {}
+        });
+      }
+    }
   };
 })();
 
