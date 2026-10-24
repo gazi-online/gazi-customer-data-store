@@ -588,37 +588,39 @@
         100% { box-shadow: 0 0 0 0 rgba(234, 88, 12, 0); }
       }
       .gcds-focus-tooltip {
-        position: absolute;
-        z-index: 2147483647;
-        background: #0f172a;
-        color: #fed7aa;
-        border: 1px solid #ea580c;
-        border-radius: 6px;
-        padding: 5px 11px;
-        font-family: 'Inter', system-ui, -apple-system, sans-serif;
-        font-size: 11.5px;
-        font-weight: 600;
-        box-shadow: 0 4px 16px rgba(234, 88, 12, 0.45);
+        position: absolute !important;
+        z-index: 2147483647 !important;
+        background: #0f172a !important;
+        color: #fed7aa !important;
+        border: 1px solid #ea580c !important;
+        border-radius: 6px !important;
+        padding: 5px 11px !important;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+        font-size: 11.5px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 16px rgba(234, 88, 12, 0.45) !important;
         pointer-events: none !important;
-        white-space: nowrap;
-        animation: gcds-tooltip-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        white-space: nowrap !important;
+        transform: translateX(-50%) !important;
+        animation: gcds-tooltip-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
       }
       .gcds-focus-tooltip::after {
-        content: '';
-        position: absolute;
-        bottom: -5px;
-        left: 14px;
-        border-width: 5px 5px 0;
-        border-style: solid;
-        border-color: #ea580c transparent transparent;
-        display: block;
-        width: 0;
+        content: '' !important;
+        position: absolute !important;
+        bottom: -5px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        border-width: 5px 5px 0 !important;
+        border-style: solid !important;
+        border-color: #ea580c transparent transparent !important;
+        display: block !important;
+        width: 0 !important;
       }
       .gcds-focus-tooltip.gcds-tooltip-flipped::after {
-        top: -5px;
-        bottom: auto;
-        border-width: 0 5px 5px;
-        border-color: transparent transparent #ea580c;
+        top: -5px !important;
+        bottom: auto !important;
+        border-width: 0 5px 5px !important;
+        border-color: transparent transparent #ea580c !important;
       }
       @keyframes gcds-tooltip-in {
         from { opacity: 0; transform: translateY(-4px); }
@@ -714,31 +716,27 @@
         50% { opacity: 0.55; transform: scale(0.85); }
       }
       .gcds-hover-picker-toolbar {
-        position: absolute;
-        top: calc(100% + 12px);
-        left: 0;
-        margin-top: 0;
-        z-index: 2147483645;
-        background: rgba(15, 23, 42, 0.95);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(99, 102, 241, 0.5);
-        border-radius: 8px;
-        padding: 6px 10px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-        align-items: center;
-        pointer-events: auto;
-        animation: gcds-tooltip-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        position: absolute !important;
+        left: 50% !important; /* Will be adjusted by JS to match button center */
+        transform: translateX(-50%) !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+        z-index: 2147483647 !important;
+        background: #1e293b !important;
+        padding: 10px !important;
+        border-radius: 8px !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4) !important;
+        pointer-events: auto !important;
+        animation: gcds-tooltip-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
       }
       .gcds-hover-picker-toolbar::before {
         content: '';
         position: absolute;
-        top: -14px;
+        top: -18px;
         left: 0;
         right: 0;
-        height: 14px;
+        height: 18px;
         background: transparent;
       }
       .gcds-hover-chip {
@@ -872,6 +870,46 @@
     updateStealthProgress(stealthState.progressPercent, `⚠️ Error: ${errorMessage}`, 'error');
   }
 
+  /**
+   * Dynamically positions the tooltip strictly ABOVE and toolbar strictly BELOW
+   * the target element using coordinate-based getBoundingClientRect() and scroll offsets.
+   * Both elements are anchored directly to document.body to prevent parent clipping.
+   */
+  function repositionStealthUI(targetEl, tooltipEl, toolbarEl) {
+    if (!targetEl || typeof document === 'undefined') return;
+    const rect = (typeof targetEl.getBoundingClientRect === 'function')
+      ? targetEl.getBoundingClientRect()
+      : { top: 0, bottom: 40, left: 0, width: 200, height: 40 };
+    const scrollY = (typeof window !== 'undefined' && window.pageYOffset) || (document.documentElement && document.documentElement.scrollTop) || 0;
+    const scrollX = (typeof window !== 'undefined' && window.pageXOffset) || (document.documentElement && document.documentElement.scrollLeft) || 0;
+    const centerX = rect.left + scrollX + ((rect.width || 120) / 2);
+
+    if (tooltipEl) {
+      const tooltipHeight = tooltipEl.offsetHeight || 30;
+      let calculatedTop = (rect.top + scrollY) - tooltipHeight - 15;
+
+      // Safety check: flip below if input is at the very top of viewport
+      if (rect.top < tooltipHeight + 16 && (rect.top + scrollY) < (tooltipHeight + 16)) {
+        calculatedTop = (rect.bottom + scrollY) + 15;
+        tooltipEl.classList.add('gcds-tooltip-flipped');
+      } else {
+        tooltipEl.classList.remove('gcds-tooltip-flipped');
+      }
+
+      tooltipEl.style.position = 'absolute';
+      tooltipEl.style.top = `${Math.max(8, Math.round(calculatedTop))}px`;
+      tooltipEl.style.left = `${Math.round(centerX)}px`;
+      tooltipEl.style.transform = 'translateX(-50%)';
+    }
+
+    if (toolbarEl) {
+      toolbarEl.style.position = 'absolute';
+      toolbarEl.style.top = `${Math.round(rect.bottom + scrollY + 15)}px`;
+      toolbarEl.style.left = `${Math.round(centerX)}px`;
+      toolbarEl.style.transform = 'translateX(-50%)';
+    }
+  }
+
   function setManualFocus(element, hintText) {
     if (!element) return;
     initStealthUI();
@@ -891,23 +929,7 @@
       document.body.appendChild(tooltip);
       stealthState.activeTooltip = tooltip;
 
-      const rect = (typeof element.getBoundingClientRect === 'function')
-        ? element.getBoundingClientRect()
-        : { top: 0, left: 0, height: 30, width: 100 };
-      const scrollTop = (typeof window !== 'undefined' && window.pageYOffset) || (document.documentElement && document.documentElement.scrollTop) || 0;
-      const scrollLeft = (typeof window !== 'undefined' && window.pageXOffset) || (document.documentElement && document.documentElement.scrollLeft) || 0;
-
-      const tooltipHeight = tooltip.offsetHeight || 30;
-      let calculatedTop = rect.top + scrollTop - tooltipHeight - 12;
-
-      // Safety check: ensure tooltips don't render off-screen if input is at the very top of viewport/page
-      if (rect.top < tooltipHeight + 16 && (rect.top + scrollTop) < (tooltipHeight + 16)) {
-        calculatedTop = rect.top + scrollTop + (rect.height || 32) + 12;
-        tooltip.classList.add('gcds-tooltip-flipped');
-      }
-
-      tooltip.style.top = `${Math.max(8, Math.round(calculatedTop))}px`;
-      tooltip.style.left = `${Math.max(10, Math.round(rect.left + scrollLeft))}px`;
+      repositionStealthUI(element, tooltip, null);
     }
 
     try {
@@ -918,6 +940,12 @@
         element.focus();
       }
     } catch {}
+
+    setTimeout(() => {
+      if (stealthState.activeTooltip) {
+        repositionStealthUI(element, stealthState.activeTooltip, null);
+      }
+    }, 150);
 
     const displayMsg = hintText ? `🟠 Manual Action Required: ${hintText}` : '🟠 Manual Action Required';
     updateStealthProgress(stealthState.progressPercent, displayMsg, 'attention');
@@ -2948,10 +2976,20 @@
    * @returns {Function} cleanup callback
    */
   function attachHoverDocumentToolbar(containerElement, optionsList, onSelectOption) {
-    if (!containerElement || typeof document === 'undefined') return () => {};
-    const staleTb = containerElement.querySelector?.('.gcds-hover-picker-toolbar');
-    if (staleTb) staleTb.remove();
+    if (!containerElement || typeof document === 'undefined' || !document.body) return () => {};
 
+    // 1. Resolve exact target element for coordinate bounding box
+    const targetFileInput = (containerElement && containerElement.tagName === 'INPUT')
+      ? containerElement
+      : (containerElement.querySelector?.('input[type="file"]') || containerElement);
+
+    // 2. Remove any stale toolbars from document.body or container
+    const staleTbs = document.body.querySelectorAll('.gcds-hover-picker-toolbar');
+    staleTbs.forEach((t) => {
+      try { t.remove(); } catch {}
+    });
+
+    // 3. Create toolbar element
     const tb = document.createElement('div');
     tb.className = 'gcds-hover-picker-toolbar';
     tb.style.display = 'none';
@@ -2973,14 +3011,8 @@
       tb.appendChild(chip);
     });
 
-    try {
-      if (typeof window !== 'undefined' && window.getComputedStyle) {
-        if (window.getComputedStyle(containerElement).position === 'static') {
-          containerElement.style.position = 'relative';
-        }
-      }
-      containerElement.appendChild(tb);
-    } catch {}
+    // 4. Body-Level Anchoring: attach directly to document.body
+    document.body.appendChild(tb);
 
     let leaveTimer = null;
     const onEnter = () => {
@@ -2988,29 +3020,58 @@
         clearTimeout(leaveTimer);
         leaveTimer = null;
       }
+      repositionStealthUI(targetFileInput, stealthState.activeTooltip, tb);
       tb.style.display = 'flex';
     };
+
     const onLeave = () => {
       if (leaveTimer) clearTimeout(leaveTimer);
       leaveTimer = setTimeout(() => {
         tb.style.display = 'none';
-      }, 200);
+      }, 250);
     };
 
-    if (typeof containerElement.addEventListener === 'function') {
-      containerElement.addEventListener('mouseenter', onEnter);
-      containerElement.addEventListener('mouseleave', onLeave);
+    // Attach hover listeners to targetFileInput and its parent wrapper
+    const hoverTargets = [targetFileInput];
+    if (targetFileInput.parentElement && targetFileInput.parentElement !== document.body) {
+      hoverTargets.push(targetFileInput.parentElement);
     }
+    if (containerElement && !hoverTargets.includes(containerElement)) {
+      hoverTargets.push(containerElement);
+    }
+
+    hoverTargets.forEach((el) => {
+      if (el && typeof el.addEventListener === 'function') {
+        el.addEventListener('mouseenter', onEnter);
+        el.addEventListener('mouseleave', onLeave);
+      }
+    });
+
     tb.addEventListener('mouseenter', onEnter);
     tb.addEventListener('mouseleave', onLeave);
+
+    const onScrollOrResize = () => {
+      if (tb.style.display !== 'none') {
+        repositionStealthUI(targetFileInput, stealthState.activeTooltip, tb);
+      } else if (stealthState.activeTooltip) {
+        repositionStealthUI(targetFileInput, stealthState.activeTooltip, null);
+      }
+    };
+
+    window.addEventListener('scroll', onScrollOrResize, { passive: true });
+    window.addEventListener('resize', onScrollOrResize, { passive: true });
 
     return () => {
       try {
         if (leaveTimer) clearTimeout(leaveTimer);
-        if (typeof containerElement.removeEventListener === 'function') {
-          containerElement.removeEventListener('mouseenter', onEnter);
-          containerElement.removeEventListener('mouseleave', onLeave);
-        }
+        hoverTargets.forEach((el) => {
+          if (el && typeof el.removeEventListener === 'function') {
+            el.removeEventListener('mouseenter', onEnter);
+            el.removeEventListener('mouseleave', onLeave);
+          }
+        });
+        window.removeEventListener('scroll', onScrollOrResize);
+        window.removeEventListener('resize', onScrollOrResize);
         tb.removeEventListener('mouseenter', onEnter);
         tb.removeEventListener('mouseleave', onLeave);
         tb.remove();
@@ -3867,7 +3928,7 @@
         setManualFocus(targetFileInput, 'Please select Birth / Age Proof file');
 
         const uploadContainer = targetFileInput?.parentElement || boxG || document.body;
-        const detachHoverToolbar = attachHoverDocumentToolbar(uploadContainer, enrichedOptions, async (selectedOpt) => {
+        const detachHoverToolbar = attachHoverDocumentToolbar(targetFileInput || uploadContainer, enrichedOptions, async (selectedOpt) => {
           await applyOption1ToPortal(selectedOpt);
           if (targetFileInput) {
             try { targetFileInput.click(); } catch {}
@@ -4762,7 +4823,7 @@
         setManualFocus(targetFileInput, 'Please select Address Proof file');
 
         const uploadContainer = targetFileInput?.parentElement || boxH || document.body;
-        const detachHoverToolbar = attachHoverDocumentToolbar(uploadContainer, enrichedOptions, async (selectedOpt) => {
+        const detachHoverToolbar = attachHoverDocumentToolbar(targetFileInput || uploadContainer, enrichedOptions, async (selectedOpt) => {
           await applyOption1ToPortal(selectedOpt);
           if (targetFileInput) {
             try { targetFileInput.click(); } catch {}
@@ -8322,7 +8383,7 @@
     // 5. Assemble diagnostic report
     return {
       reportType: 'GCDS_PRIVACY_SAFE_DIAGNOSTIC',
-      version: '1.7.2-UI-Fix-Stable',
+      version: '1.7.3-ZeroOverlap',
       timestamp: new Date().toISOString(),
       portal: {
         url: redactedUrl,
@@ -8382,6 +8443,7 @@
     runFill,
     fillForm,
     generateDiagnosticReport,
+    repositionStealthUI,
     setManualFocus,
     clearManualFocus,
     attachHoverDocumentToolbar,
@@ -8389,7 +8451,7 @@
     setStealthError,
     initStealthUI,
     stealthState,
-    version: '1.7.2-UI-Fix-Stable',
+    version: '1.7.3-ZeroOverlap',
   };
 
   // ─── Message Listener ─────────────────────────────────────────────────────
