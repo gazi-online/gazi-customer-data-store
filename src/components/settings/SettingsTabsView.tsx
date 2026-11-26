@@ -21,6 +21,7 @@ import {
   Plug,
 } from "lucide-react";
 import { ExtensionIntegrationsTab } from "@/components/settings/ExtensionIntegrationsTab";
+import { WhatsAppProfileLinkCard } from "@/components/settings/WhatsAppProfileLinkCard";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys, DASHBOARD_MEMORY_SCOPE } from "@/lib/queryKeys";
 import {
@@ -1030,6 +1031,8 @@ export function SettingsTabsView({ initialSettings, teamMembers: initialTeamMemb
               </div>
             </div>
           </div>
+
+          <WhatsAppProfileLinkCard />
         </div>
       )}
 

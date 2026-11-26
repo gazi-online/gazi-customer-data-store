@@ -6,9 +6,13 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, MessageCircle, KeyRound, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { login } from "./actions";
+import {
+  login,
+  requestWhatsAppOtpAction,
+  verifyWhatsAppOtpLoginAction,
+} from "./actions";
 
 // ── Validation schema (strictly preserved) ──────────────────────────────────
 const loginSchema = z.object({
@@ -19,9 +23,16 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
+  const [authMode, setAuthMode] = useState<"password" | "whatsapp_otp">("password");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  // WhatsApp 6-digit OTP state
+  const [waIdentifier, setWaIdentifier] = useState("");
+  const [waOtpSent, setWaOtpSent] = useState(false);
+  const [waMaskedPhone, setWaMaskedPhone] = useState<string | null>(null);
+  const [waOtpCode, setWaOtpCode] = useState("");
 
   const {
     register,
@@ -32,7 +43,7 @@ export default function LoginPage() {
     defaultValues: { email: "", password: "" },
   });
 
-  // ── Preserved auth submission flow ──────────────────────────────────────────
+  // ── Password auth submission flow ───────────────────────────────────────────
   const onSubmit = async (data: LoginFormValues) => {
     if (isLoading) return;
     setIsLoading(true);
@@ -56,11 +67,46 @@ export default function LoginPage() {
     // On success the server action redirects to /dashboard
   };
 
+  // ── WhatsApp 6-digit OTP request ────────────────────────────────────────────
+  const handleSendWhatsAppOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading) return;
+    setIsLoading(true);
+    setAuthError(null);
+
+    const res = await requestWhatsAppOtpAction(waIdentifier);
+    if (res?.error) {
+      setAuthError(res.error);
+      toast.error(res.error);
+      setIsLoading(false);
+      return;
+    }
+
+    setWaOtpSent(true);
+    setWaMaskedPhone(res.maskedPhone || null);
+    toast.success("6-digit OTP sent to your WhatsApp!");
+    setIsLoading(false);
+  };
+
+  // ── WhatsApp 6-digit OTP verify & login ─────────────────────────────────────
+  const handleVerifyWhatsAppOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading) return;
+    setIsLoading(true);
+    setAuthError(null);
+
+    const res = await verifyWhatsAppOtpLoginAction({ otp: waOtpCode });
+    if (res?.error) {
+      setAuthError(res.error);
+      toast.error(res.error);
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center px-4 py-8 sm:py-12">
       {/* Login Card */}
       <div className="w-full max-w-[400px] bg-white rounded-[22px] border border-slate-200/80 shadow-[0_12px_36px_-6px_rgba(99,102,241,0.09),0_2px_8px_-2px_rgba(0,0,0,0.04)] p-6 sm:p-8">
-
         {/* Brand & Heading */}
         <div className="flex flex-col items-center text-center mb-5 sm:mb-6">
           <div className="mb-3 flex justify-center">
@@ -82,6 +128,48 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {/* Auth Mode Switcher: Password vs WhatsApp 6-Digit OTP */}
+        <div
+          className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-[14px] mb-5"
+          role="tablist"
+          aria-label="Login method"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={authMode === "password"}
+            onClick={() => {
+              setAuthMode("password");
+              setAuthError(null);
+            }}
+            className={`h-10 rounded-[10px] text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              authMode === "password"
+                ? "bg-white text-slate-900 shadow-xs"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Password</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={authMode === "whatsapp_otp"}
+            onClick={() => {
+              setAuthMode("whatsapp_otp");
+              setAuthError(null);
+            }}
+            className={`h-10 rounded-[10px] text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              authMode === "whatsapp_otp"
+                ? "bg-white text-emerald-700 shadow-xs"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>WhatsApp OTP</span>
+          </button>
+        </div>
+
         {/* Auth error message (rendered only when actual error occurs) */}
         <div aria-live="polite" aria-atomic="true">
           {authError && (
@@ -95,109 +183,214 @@ export default function LoginPage() {
           )}
         </div>
 
-        {/* Form */}
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          noValidate
-          className="space-y-4"
-        >
-          {/* Email field */}
-          <div className="space-y-1.5">
-            <label
-              htmlFor="email-input"
-              className="block text-sm font-medium text-slate-700"
-            >
-              Email
-            </label>
-            <input
-              id="email-input"
-              {...register("email")}
-              type="email"
-              autoComplete="email"
-              inputMode="email"
-              placeholder="you@example.com"
-              aria-invalid={errors.email ? "true" : "false"}
-              aria-describedby={errors.email ? "email-error" : undefined}
-              className={`block w-full h-12 rounded-[13px] border px-4 text-sm text-slate-900 placeholder:text-slate-400 transition-all duration-150 focus:outline-none focus:ring-4 ${
-                errors.email
-                  ? "border-red-300 focus:border-red-400 focus:ring-red-100"
-                  : "border-slate-200 hover:border-slate-300 focus:border-violet-500 focus:ring-violet-500/15"
-              }`}
-            />
-            {errors.email && (
-              <p id="email-error" role="alert" className="text-xs text-red-600 font-medium">
-                {errors.email.message}
-              </p>
-            )}
-          </div>
-
-          {/* Password field */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
+        {authMode === "password" ? (
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+            {/* Email field */}
+            <div className="space-y-1.5">
               <label
-                htmlFor="password-input"
+                htmlFor="email-input"
                 className="block text-sm font-medium text-slate-700"
               >
-                Password
+                Email
               </label>
-              <Link
-                href="/forgot-password"
-                className="text-xs font-semibold text-violet-600 hover:text-violet-700 transition-colors"
-              >
-                Forgot password?
-              </Link>
-            </div>
-            <div className="relative">
               <input
-                id="password-input"
-                {...register("password")}
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                placeholder="••••••••"
-                aria-invalid={errors.password ? "true" : "false"}
-                aria-describedby={errors.password ? "password-error" : undefined}
-                className={`block w-full h-12 rounded-[13px] border pl-4 pr-11 text-sm text-slate-900 placeholder:text-slate-400 transition-all duration-150 focus:outline-none focus:ring-4 ${
-                  errors.password
+                id="email-input"
+                {...register("email")}
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                placeholder="you@example.com"
+                aria-invalid={errors.email ? "true" : "false"}
+                aria-describedby={errors.email ? "email-error" : undefined}
+                className={`block w-full h-12 rounded-[13px] border px-4 text-sm text-slate-900 placeholder:text-slate-400 transition-all duration-150 focus:outline-none focus:ring-4 ${
+                  errors.email
                     ? "border-red-300 focus:border-red-400 focus:ring-red-100"
                     : "border-slate-200 hover:border-slate-300 focus:border-violet-500 focus:ring-violet-500/15"
                 }`}
               />
+              {errors.email && (
+                <p id="email-error" role="alert" className="text-xs text-red-600 font-medium">
+                  {errors.email.message}
+                </p>
+              )}
+            </div>
+
+            {/* Password field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="password-input"
+                  className="block text-sm font-medium text-slate-700"
+                >
+                  Password
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-semibold text-violet-600 hover:text-violet-700 transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <div className="relative">
+                <input
+                  id="password-input"
+                  {...register("password")}
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  aria-invalid={errors.password ? "true" : "false"}
+                  aria-describedby={errors.password ? "password-error" : undefined}
+                  className={`block w-full h-12 rounded-[13px] border pl-4 pr-11 text-sm text-slate-900 placeholder:text-slate-400 transition-all duration-150 focus:outline-none focus:ring-4 ${
+                    errors.password
+                      ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                      : "border-slate-200 hover:border-slate-300 focus:border-violet-500 focus:ring-violet-500/15"
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((p) => !p)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute inset-y-0 right-0 w-11 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded-r-[13px]"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+              {errors.password && (
+                <p id="password-error" role="alert" className="text-xs text-red-600 font-medium">
+                  {errors.password.message}
+                </p>
+              )}
+            </div>
+
+            {/* Login button */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="mt-2 w-full h-12 rounded-[13px] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 active:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 flex items-center justify-center gap-2 transition-all duration-150 shadow-sm hover:shadow-md hover:shadow-violet-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <span>Logging in…</span>
+                </>
+              ) : (
+                <span>Login</span>
+              )}
+            </button>
+          </form>
+        ) : !waOtpSent ? (
+          <form onSubmit={handleSendWhatsAppOtp} className="space-y-4">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="wa-identifier-input"
+                className="block text-sm font-medium text-slate-700"
+              >
+                Linked Mobile Number or Email
+              </label>
+              <input
+                id="wa-identifier-input"
+                type="text"
+                value={waIdentifier}
+                onChange={(e) => setWaIdentifier(e.target.value)}
+                placeholder="e.g. 9876543210 or you@example.com"
+                required
+                className="block w-full h-12 rounded-[13px] border border-slate-200 hover:border-slate-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 px-4 text-sm text-slate-900 placeholder:text-slate-400 transition-all duration-150 focus:outline-none"
+              />
+              <p className="text-xs text-slate-500">
+                We will send a 6-digit login OTP to your profile-linked WhatsApp number.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading || !waIdentifier.trim()}
+              className="mt-2 w-full h-12 rounded-[13px] bg-emerald-600 hover:bg-emerald-700 active:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 flex items-center justify-center gap-2 transition-all duration-150 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <span>Sending OTP…</span>
+                </>
+              ) : (
+                <>
+                  <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                  <span>Send 6-Digit WhatsApp OTP</span>
+                </>
+              )}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyWhatsAppOtp} className="space-y-4">
+            <div className="flex items-center gap-2 rounded-[12px] bg-emerald-50 border border-emerald-200 px-3.5 py-2.5 text-xs text-emerald-800">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+              <span>
+                6-digit OTP sent to WhatsApp <strong>{waMaskedPhone || "your number"}</strong>
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <label
+                htmlFor="wa-otp-input"
+                className="block text-sm font-medium text-slate-700"
+              >
+                Enter 6-Digit OTP
+              </label>
+              <input
+                id="wa-otp-input"
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={waOtpCode}
+                onChange={(e) => setWaOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="123456"
+                required
+                autoFocus
+                className="block w-full h-12 rounded-[13px] border border-slate-200 hover:border-slate-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 px-4 text-center text-lg tracking-[0.35em] font-semibold text-slate-900 placeholder:text-slate-300 transition-all duration-150 focus:outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading || waOtpCode.length !== 6}
+              className="w-full h-12 rounded-[13px] bg-emerald-600 hover:bg-emerald-700 active:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 flex items-center justify-center gap-2 transition-all duration-150 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <span>Verifying OTP…</span>
+                </>
+              ) : (
+                <span>Verify &amp; Login</span>
+              )}
+            </button>
+
+            <div className="flex items-center justify-between text-xs pt-1">
               <button
                 type="button"
-                onClick={() => setShowPassword((p) => !p)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                className="absolute inset-y-0 right-0 w-11 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded-r-[13px]"
+                onClick={() => {
+                  setWaOtpSent(false);
+                  setWaOtpCode("");
+                  setAuthError(null);
+                }}
+                className="text-slate-500 hover:text-slate-700 font-medium"
               >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" aria-hidden="true" />
-                ) : (
-                  <Eye className="h-4 w-4" aria-hidden="true" />
-                )}
+                Change number / email
+              </button>
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={handleSendWhatsAppOtp}
+                className="text-emerald-600 hover:text-emerald-700 font-semibold"
+              >
+                Resend OTP
               </button>
             </div>
-            {errors.password && (
-              <p id="password-error" role="alert" className="text-xs text-red-600 font-medium">
-                {errors.password.message}
-              </p>
-            )}
-          </div>
-
-          {/* Login button */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="mt-2 w-full h-12 rounded-[13px] bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 active:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 flex items-center justify-center gap-2 transition-all duration-150 shadow-sm hover:shadow-md hover:shadow-violet-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                <span>Logging in…</span>
-              </>
-            ) : (
-              <span>Login</span>
-            )}
-          </button>
-        </form>
+          </form>
+        )}
       </div>
     </div>
   );

@@ -159,3 +159,56 @@ export async function getTeamMembers(): Promise<TeamMemberItem[]> {
     createdAt: String(m.created_at),
   }));
 }
+
+export async function getUserWhatsAppProfileAction(): Promise<{
+  fullName: string;
+  whatsappPhone: string;
+  email: string;
+}> {
+  const supabase = await createClient();
+  await requireAal2(supabase);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error("Authentication required");
+  }
+
+  const meta = (user.user_metadata || {}) as Record<string, unknown>;
+  return {
+    fullName: String(meta.full_name || meta.name || ""),
+    whatsappPhone: String(meta.whatsapp_phone || meta.phone || user.phone || ""),
+    email: user.email || "",
+  };
+}
+
+export async function updateUserWhatsAppProfileAction(params: {
+  fullName: string;
+  whatsappPhone: string;
+}) {
+  const supabase = await createClient();
+  await requireAal2(supabase);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error("Authentication required");
+  }
+
+  const fullName = params.fullName.trim();
+  const whatsappPhone = params.whatsappPhone.trim();
+
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      full_name: fullName,
+      whatsapp_phone: whatsappPhone,
+    },
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/settings");
+  return { success: true };
+}
