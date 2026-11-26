@@ -11,6 +11,7 @@ import { isWhatsAppConfigured, sendWhatsAppText } from "@/lib/whatsapp/openwaCli
 import {
   WA_OTP_COOKIE_NAME,
   createOtpChallengeToken,
+  formatLocationFromHeaders,
   generateSixDigitOtp,
   generateSupabaseMagicLinkToken,
   maskPhoneNumber,
@@ -95,10 +96,30 @@ export async function requestWhatsAppOtpAction(identifier: string): Promise<{
     otp,
   });
 
+  const headerList = await headers();
+  const { ip, locationText, mapsUrl } = formatLocationFromHeaders(headerList);
+  const shortUserId = user.userId.slice(0, 6).toUpperCase();
+  const locationLine = mapsUrl ? mapsUrl : locationText;
+
+  const otpMessage = [
+    "🌐 *GAZI ONLINE*",
+    "",
+    "✅ *Your OTP has been generated!*",
+    "",
+    `🔑 OTP: *${otp}*`,
+    `🆔 User ID: ${shortUserId}`,
+    `👤 User: ${user.name}`,
+    "",
+    `🌍 IP: ${ip}`,
+    `📍 Location: ${locationLine}`,
+    "",
+    "🔒 Please keep it safe and do not share.",
+  ].join("\n");
+
   try {
     await sendWhatsAppText({
       phone: user.phone,
-      text: `🔐 *Gazi Online Login OTP*: *${otp}*\n\nValid for 5 minutes. Do not share this code with anyone.`,
+      text: otpMessage,
     });
   } catch (err) {
     return {

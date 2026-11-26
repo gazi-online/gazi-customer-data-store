@@ -268,15 +268,19 @@ export async function generateSupabaseMagicLinkToken(email: string): Promise<str
   return hashedToken;
 }
 
-function formatLocationFromHeaders(headerList: Headers): {
-  location: string;
+export function formatLocationFromHeaders(headerList: Headers): {
+  ip: string;
+  locationText: string;
+  mapsUrl: string | null;
   device: string;
 } {
   const city = headerList.get("x-vercel-ip-city");
   const region = headerList.get("x-vercel-ip-country-region");
   const country = headerList.get("x-vercel-ip-country");
+  const lat = headerList.get("x-vercel-ip-latitude");
+  const lon = headerList.get("x-vercel-ip-longitude");
   const forwardedFor = headerList.get("x-forwarded-for");
-  const ip = forwardedFor ? forwardedFor.split(",")[0].trim() : null;
+  const ip = forwardedFor ? forwardedFor.split(",")[0].trim() : "Unknown";
 
   const geoParts = [city, region, country]
     .filter(Boolean)
@@ -288,13 +292,14 @@ function formatLocationFromHeaders(headerList: Headers): {
       }
     });
 
-  let location = "Unknown Location";
+  const mapsUrl =
+    lat && lon ? `https://www.google.com/maps?q=${encodeURIComponent(lat)},${encodeURIComponent(lon)}` : null;
+
+  let locationText = "Unknown Location";
   if (geoParts.length > 0) {
-    location = ip ? `${geoParts.join(", ")} (IP: ${ip})` : geoParts.join(", ");
-  } else if (ip && ip !== "::1" && ip !== "127.0.0.1") {
-    location = `IP: ${ip}`;
-  } else {
-    location = "Local / Development";
+    locationText = geoParts.join(", ");
+  } else if (ip === "::1" || ip === "127.0.0.1") {
+    locationText = "Local / Development";
   }
 
   const ua = headerList.get("user-agent") || "";
@@ -311,7 +316,7 @@ function formatLocationFromHeaders(headerList: Headers): {
   else if (ua.includes("Mac OS")) os = "macOS";
   else if (ua.includes("Linux")) os = "Linux";
 
-  return { location, device: `${browser} on ${os}` };
+  return { ip, locationText, mapsUrl, device: `${browser} on ${os}` };
 }
 
 /**
@@ -342,22 +347,31 @@ export async function sendNewDeviceLoginAlert(params: {
     if (!phone) return;
 
     const userName = extractUserName(user, bizName);
-    const { location, device } = formatLocationFromHeaders(params.headerList);
+    const brandName = (bizName || "GAZI ONLINE").toUpperCase();
+    const shortId = user.id.slice(0, 6).toUpperCase();
+    const { ip, locationText, mapsUrl, device } = formatLocationFromHeaders(params.headerList);
     const timeStr = new Date().toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
       dateStyle: "medium",
       timeStyle: "short",
     });
 
+    const locationLine = mapsUrl ? `${mapsUrl} (${locationText})` : locationText;
+
     const text = [
-      "🔐 *New Device Login Successful*",
-      `User: ${userName}`,
-      `Method: ${params.method}`,
-      `Location: ${location}`,
-      `Device: ${device}`,
-      `Time: ${timeStr}`,
+      `🌐 *${brandName}*`,
       "",
-      "If this wasn't you, please change your password immediately.",
+      "✅ *New Device Login Successful!*",
+      "",
+      `👤 User: ${userName}`,
+      `🆔 User ID: ${shortId}`,
+      `🔐 Method: ${params.method}`,
+      `🌍 IP: ${ip}`,
+      `📍 Location: ${locationLine}`,
+      `💻 Device: ${device}`,
+      `🕒 Time: ${timeStr}`,
+      "",
+      "🔒 If this wasn't you, please change your password immediately.",
     ].join("\n");
 
     await sendWhatsAppText({ phone, text });
