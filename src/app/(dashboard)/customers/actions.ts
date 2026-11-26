@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { CustomerFormData, CustomerListRow, CustomerLookupRow } from "@/types/customer";
 import { requireAal2 } from "@/lib/auth/mfaEnforcement";
+import { sendAutoWhatsAppNotification } from "@/lib/whatsapp/autoNotify";
 
 export async function getCustomerLookupRows(): Promise<CustomerLookupRow[]> {
   const supabase = await createClient();
@@ -233,6 +234,12 @@ export async function createCustomer(data: CustomerFormData) {
       .single();
 
     if (!error) {
+      if (inserted?.id) {
+        void sendAutoWhatsAppNotification({
+          customerId: inserted.id,
+          templateKey: "welcome_customer",
+        });
+      }
       revalidatePath("/customers");
       return { success: true, customer: inserted };
     }

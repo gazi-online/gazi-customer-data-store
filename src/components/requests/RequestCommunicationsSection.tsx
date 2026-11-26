@@ -16,6 +16,7 @@ import {
   recordCommunication,
   getRequestCommunications,
 } from "@/app/(dashboard)/communications/actions";
+import { sendWhatsAppMessageAction } from "@/app/(dashboard)/communications/whatsapp-actions";
 import {
   scheduleFollowup,
   completeFollowup,
@@ -48,6 +49,7 @@ const APPLICABLE_TEMPLATES = [
   { key: "docs_required", label: "Documents Required" },
   { key: "service_ready", label: "Service Ready / Collection" },
   { key: "service_completed", label: "Service Completed" },
+  { key: "eci_acknowledgment", label: "ECI / Form Acknowledgment Receipt" },
   { key: "payment_reminder", label: "Payment Balance Reminder" },
 ] as const;
 
@@ -116,6 +118,35 @@ export function RequestCommunicationsSection({
       follow_up_date: activeFollowup?.followUpAt
         ? formatKolkataDateTime(activeFollowup.followUpAt)
         : "Soon",
+    });
+  };
+
+  // Send directly via OpenWA API
+  const handleSendDirectWhatsApp = () => {
+    if (!customerPhone) {
+      toast.error("Customer does not have a phone number registered");
+      return;
+    }
+
+    const msg = previewWhatsAppMessage();
+    startTransition(async () => {
+      try {
+        const res = await sendWhatsAppMessageAction({
+          customerId,
+          customerServiceId: requestId,
+          phone: customerPhone,
+          message: msg,
+          templateKey: selectedTemplateKey,
+        });
+        if (res.communication) {
+          setCommunications((prev) => [res.communication as CustomerCommunicationItem, ...prev]);
+        }
+        setIsWhatsAppModalOpen(false);
+        toast.success("WhatsApp message sent directly and logged.");
+        router.refresh();
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Failed to send WhatsApp message.");
+      }
     });
   };
 
@@ -721,14 +752,23 @@ export function RequestCommunicationsSection({
                   type="button"
                   onClick={handleLaunchWhatsApp}
                   disabled={isPending}
+                  className="min-h-[44px] px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 text-xs font-bold rounded-xl inline-flex items-center gap-2 touch-manipulation disabled:opacity-50"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>Open wa.me</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSendDirectWhatsApp}
+                  disabled={isPending}
                   className="min-h-[44px] px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs inline-flex items-center gap-2 touch-manipulation disabled:opacity-50"
                 >
                   {isPending ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <ExternalLink className="h-3.5 w-3.5" />
+                    <Send className="h-3.5 w-3.5" />
                   )}
-                  <span>Open WhatsApp & Log Outreach</span>
+                  <span>Send Directly (API)</span>
                 </button>
               </div>
             </div>

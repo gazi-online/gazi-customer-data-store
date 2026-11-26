@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { CustomerDocument, AiImportHistoryRecord } from "@/types/document";
-import { FileText, Cpu, RefreshCw, Archive, Replace, CheckCircle2, XCircle, Layers, User, Briefcase, Activity, Receipt, Download, Loader2, MessageSquare, CalendarClock, ClipboardList, ArrowRight } from "lucide-react";
+import { FileText, Cpu, RefreshCw, Archive, Replace, CheckCircle2, XCircle, Layers, User, Briefcase, Activity, Receipt, Download, Loader2, MessageSquare, CalendarClock, ClipboardList, ArrowRight, Send } from "lucide-react";
 import { rerunExtraction, archiveDocument, getDocumentSignedUrl } from "@/app/(dashboard)/documents/actions";
+import { sendDocumentViaWhatsAppAction } from "@/app/(dashboard)/communications/whatsapp-actions";
 import { toast } from "sonner";
 import { ReviewPanel } from "@/components/AiSmartImportEngine/components/ReviewPanel";
 import { MergedResult } from "@/components/AiSmartImportEngine/types";
@@ -67,6 +68,7 @@ export function CustomerProfileTabs({
   const [runningRerunId, setRunningRerunId] = useState<string | null>(null);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [viewingDocId, setViewingDocId] = useState<string | null>(null);
+  const [sendingWaDocId, setSendingWaDocId] = useState<string | null>(null);
   const [rerunReviewResult, setRerunReviewResult] = useState<MergedResult | null>(null);
   
   // Transactional on-demand active services (never cached in TanStack Query)
@@ -281,6 +283,21 @@ export function CustomerProfileTabs({
     }
   };
 
+  const handleSendDocWhatsApp = async (doc: CustomerDocument) => {
+    setSendingWaDocId(doc.id);
+    try {
+      await sendDocumentViaWhatsAppAction({
+        customerId,
+        documentId: doc.id,
+      });
+      toast.success(`Sent "${doc.document_name || doc.document_type}" via WhatsApp!`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to send document via WhatsApp");
+    } finally {
+      setSendingWaDocId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Navigation Tabs */}
@@ -479,6 +496,20 @@ export function CustomerProfileTabs({
                           <Download className="h-3.5 w-3.5 mr-1.5" />
                         )}
                         Download
+                      </button>
+
+                      <button
+                        onClick={() => handleSendDocWhatsApp(doc)}
+                        disabled={sendingWaDocId === doc.id}
+                        className="px-3 py-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-semibold transition-colors flex items-center disabled:opacity-50 min-h-[38px]"
+                        title="Send Document via WhatsApp"
+                      >
+                        {sendingWaDocId === doc.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                        ) : (
+                          <Send className="h-3.5 w-3.5 mr-1.5" />
+                        )}
+                        WhatsApp
                       </button>
 
                       {doc.status !== 'archived' && (

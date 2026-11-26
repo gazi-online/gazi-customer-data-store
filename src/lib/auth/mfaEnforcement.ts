@@ -26,6 +26,7 @@ export const PUBLIC_AUTH_ROUTES = [
   "/auth/confirm",
   "/auth/callback",
   "/api/bengali-suggestions",
+  "/api/webhooks/whatsapp",
 ] as const;
 
 export const PROTECTED_APP_ROUTE_PREFIXES = [

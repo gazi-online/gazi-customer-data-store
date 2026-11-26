@@ -5,11 +5,13 @@ import {
   MessageSquare,
   Plus,
   Clock,
+  Send,
 } from "lucide-react";
 import {
   recordCommunication,
   getCustomerCommunications,
 } from "@/app/(dashboard)/communications/actions";
+import { sendWhatsAppMessageAction } from "@/app/(dashboard)/communications/whatsapp-actions";
 import {
   CommunicationChannel,
   CommunicationDirection,
@@ -44,6 +46,8 @@ export function CustomerCommunicationsTimeline({
 }: CustomerCommunicationsTimelineProps) {
   const [communications, setCommunications] = useState<CustomerCommunicationItem[]>(initialCommunications);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isWaModalOpen, setIsWaModalOpen] = useState(false);
+  const [waMessage, setWaMessage] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const [channel, setChannel] = useState<CommunicationChannel>("phone");
@@ -56,6 +60,30 @@ export function CustomerCommunicationsTimeline({
       getCustomerCommunications(customerId).then(setCommunications);
     }
   }, [customerId, initialCommunications]);
+
+  const handleSendWhatsApp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!waMessage.trim()) {
+      toast.error("Please enter a message");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const res = await sendWhatsAppMessageAction({
+          customerId,
+          message: waMessage,
+        });
+        toast.success("WhatsApp message sent!");
+        if (res.communication) {
+          setCommunications((prev) => [res.communication as CustomerCommunicationItem, ...prev]);
+        }
+        setIsWaModalOpen(false);
+        setWaMessage("");
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Failed to send WhatsApp message");
+      }
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,13 +151,22 @@ export function CustomerCommunicationsTimeline({
             Log of WhatsApp messages, phone calls, visits, and customer reminders.
           </p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Log Outreach
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsWaModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+          >
+            <Send className="h-3.5 w-3.5" />
+            Send WhatsApp
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Log Outreach
+          </button>
+        </div>
       </div>
 
       {communications.length === 0 ? (
@@ -275,6 +312,58 @@ export function CustomerCommunicationsTimeline({
                 className="px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
               >
                 {isPending ? "Saving..." : "Save Log"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isWaModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <form
+            onSubmit={handleSendWhatsApp}
+            className="bg-white rounded-3xl border border-slate-200 max-w-md w-full p-6 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Send WhatsApp Message</h3>
+                <p className="text-xs text-slate-500">To: {customerName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWaModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">Message</label>
+              <textarea
+                rows={4}
+                placeholder={`Namaskar ${customerName}, ...`}
+                value={waMessage}
+                onChange={(e) => setWaMessage(e.target.value)}
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 focus:ring-2 focus:ring-emerald-500/20"
+              />
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setIsWaModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5"
+              >
+                <Send className="h-3.5 w-3.5" />
+                {isPending ? "Sending..." : "Send WhatsApp"}
               </button>
             </div>
           </form>

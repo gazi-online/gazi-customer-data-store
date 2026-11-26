@@ -10,6 +10,7 @@ import {
   detachDocumentFromRequest,
 } from "@/app/(dashboard)/requests/actions";
 import { requireAal2 } from "@/lib/auth/mfaEnforcement";
+import { sendAutoWhatsAppNotification } from "@/lib/whatsapp/autoNotify";
 
 export async function getServices(searchQuery?: string, statusFilter?: string, categoryFilter?: string) {
   const supabase = await createClient();
@@ -266,7 +267,7 @@ export async function transitionServiceRequestStatus(params: {
   // 1. Fetch current row server-side (never trust client fromStatus)
   const { data: current, error: fetchError } = await supabase
     .from("customer_services")
-    .select("id, customer_id, status, application_reference, rejection_reason, notes")
+    .select("id, customer_id, status, request_number, application_reference, rejection_reason, notes, service:services(service_name)")
     .eq("id", customerServiceId)
     .single();
 
@@ -323,6 +324,50 @@ export async function transitionServiceRequestStatus(params: {
     return {
       error: "Conflict: Service request status was modified concurrently by another operation. Please refresh."
     };
+  }
+
+  // Trigger non-blocking WhatsApp notification on key status transitions or ECI/application reference
+  const srvObj = Array.isArray(current.service) ? current.service[0] : current.service;
+  const serviceName = (srvObj as { service_name?: string | null } | null)?.service_name || "Service";
+  const effectiveRef =
+    (updated.application_reference as string | null) || current.application_reference;
+
+  if (toStatus === "submitted" && effectiveRef) {
+    void sendAutoWhatsAppNotification({
+      customerId: current.customer_id,
+      customerServiceId,
+      templateKey: "eci_acknowledgment",
+      variables: {
+        serviceName,
+        requestNumber: current.request_number,
+        applicationReference: effectiveRef,
+      },
+      userId: user.id,
+    });
+  } else if (toStatus === "action_required") {
+    void sendAutoWhatsAppNotification({
+      customerId: current.customer_id,
+      customerServiceId,
+      templateKey: "docs_required",
+      variables: { serviceName, requestNumber: current.request_number },
+      userId: user.id,
+    });
+  } else if (toStatus === "ready") {
+    void sendAutoWhatsAppNotification({
+      customerId: current.customer_id,
+      customerServiceId,
+      templateKey: "service_ready",
+      variables: { serviceName, requestNumber: current.request_number },
+      userId: user.id,
+    });
+  } else if (toStatus === "completed") {
+    void sendAutoWhatsAppNotification({
+      customerId: current.customer_id,
+      customerServiceId,
+      templateKey: "service_completed",
+      variables: { serviceName, requestNumber: current.request_number },
+      userId: user.id,
+    });
   }
 
   revalidatePath(`/customers/${current.customer_id}`);

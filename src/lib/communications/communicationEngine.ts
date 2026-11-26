@@ -74,12 +74,25 @@ export const COMMUNICATION_TEMPLATES: Record<string, CommunicationTemplate> = {
     category: 'payment',
     text: 'Namaskar {{customer_name}}, an amount of ₹{{amount_due}} is pending for your service {{service_name}} (Ref: {{request_number}}) at {{shop_name}}. Kindly clear the balance at your earliest convenience.',
   },
+  welcome_customer: {
+    key: 'welcome_customer',
+    name: 'Welcome Customer',
+    category: 'service',
+    text: 'Namaskar {{customer_name}}, welcome to {{shop_name}}! Your profile has been registered with us. Reply to this message anytime if you need assistance.',
+  },
+  eci_acknowledgment: {
+    key: 'eci_acknowledgment',
+    name: 'ECI / Form Acknowledgment Receipt',
+    category: 'service',
+    text: 'Namaskar {{customer_name}}, your application for {{service_name}} (Ref: {{request_number}}) has been submitted. Acknowledgment / Reference No: {{application_reference}}. Thank you for choosing {{shop_name}}.',
+  },
 };
 
 export interface TemplateVariables {
   customer_name?: string;
   service_name?: string;
   request_number?: string;
+  application_reference?: string;
   follow_up_date?: string;
   document_name?: string;
   expiry_date?: string;
@@ -130,6 +143,7 @@ export function renderTemplate(templateKey: string, variables: TemplateVariables
     .replace(/\{\{customer_name\}\}/g, variables.customer_name || 'Customer')
     .replace(/\{\{service_name\}\}/g, variables.service_name || 'Service')
     .replace(/\{\{request_number\}\}/g, variables.request_number || '—')
+    .replace(/\{\{application_reference\}\}/g, variables.application_reference || '—')
     .replace(/\{\{follow_up_date\}\}/g, variables.follow_up_date || 'Today')
     .replace(/\{\{document_name\}\}/g, variables.document_name || 'Document')
     .replace(/\{\{expiry_date\}\}/g, variables.expiry_date || '—')
