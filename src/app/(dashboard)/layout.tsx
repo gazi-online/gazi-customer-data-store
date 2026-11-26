@@ -17,7 +17,8 @@ import {
   CreditCard,
   ClipboardList,
   MessageSquare,
-  Bell
+  Bell,
+  ScanLine
 } from "lucide-react";
 import { logout } from "./actions";
 import { useState, useEffect } from "react";
@@ -34,6 +35,7 @@ const navigation = [
   { name: "Customers", href: "/customers", icon: Users },
   { name: "Invoices", href: "/invoices", icon: Receipt },
   { name: "Payments", href: "/payments", icon: CreditCard },
+  { name: "AEPS/UPI Receipt", href: "/receipts", icon: ScanLine },
   { name: "Documents", href: "/documents", icon: FileText },
   { name: "Services", href: "/services", icon: Wrench },
   { name: "Reports", href: "/reports", icon: BarChart2 },

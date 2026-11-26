@@ -27,6 +27,7 @@ export const PUBLIC_AUTH_ROUTES = [
   "/auth/callback",
   "/api/bengali-suggestions",
   "/api/webhooks/whatsapp",
+  "/api/webhooks/telegram",
 ] as const;
 
 export const PROTECTED_APP_ROUTE_PREFIXES = [
@@ -37,6 +38,7 @@ export const PROTECTED_APP_ROUTE_PREFIXES = [
   "/customers",
   "/invoices",
   "/payments",
+  "/receipts",
   "/documents",
   "/services",
   "/reports",
