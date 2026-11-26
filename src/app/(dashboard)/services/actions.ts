@@ -352,7 +352,7 @@ export async function transitionServiceRequestStatus(params: {
       variables: { serviceName, requestNumber: current.request_number },
       userId: user.id,
     });
-  } else if (toStatus === "ready") {
+  } else if (toStatus === "ready_to_submit" || toStatus === "delivered") {
     void sendAutoWhatsAppNotification({
       customerId: current.customer_id,
       customerServiceId,
