@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { X, Save, AlertCircle } from "lucide-react";
@@ -73,7 +74,7 @@ export function ServiceForm({
     }
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm animate-in fade-in duration-200"
       role="dialog"
@@ -211,5 +212,5 @@ export function ServiceForm({
 
       </div>
     </div>
-  );
+  , document.body);
 }

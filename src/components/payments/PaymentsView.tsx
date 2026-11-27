@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { 
   CreditCard, 
@@ -491,7 +492,7 @@ export function PaymentsView({
       />
 
       {/* Custom Confirmation Modal */}
-      {confirmModal && (
+      {confirmModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
@@ -528,7 +529,7 @@ export function PaymentsView({
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </>
   );
 }

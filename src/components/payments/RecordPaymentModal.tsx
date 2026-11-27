@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X, CreditCard } from "lucide-react";
 import { PaymentMethod } from "@/types/billing";
 import { createPayment } from "@/app/(dashboard)/payments/actions";
@@ -135,7 +136,7 @@ export function RecordPaymentModal({
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
@@ -332,5 +333,5 @@ export function RecordPaymentModal({
         </form>
       </div>
     </div>
-  );
+  , document.body);
 }
