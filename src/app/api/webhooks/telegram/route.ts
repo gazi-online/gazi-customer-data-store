@@ -71,9 +71,22 @@ async function downloadTelegramFile(fileId: string): Promise<{
 }
 
 async function logReceiptWhatsAppToCustomer(params: {
-  phone10: string;
-  message: string;
-  rrnNumber: string | null;
+  phone10: string | null;
+  waPhone: string | null;
+  message: string | null;
+  whatsappSent: boolean;
+  whatsappMessageId?: string | null;
+  whatsappError?: string | null;
+  extracted: {
+    status: string;
+    customerName: string | null;
+    amount: string | null;
+    rrnNumber: string | null;
+    upiId: string | null;
+    provider?: string | null;
+    rawText?: string | null;
+  };
+  filename?: string | null;
 }) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -82,6 +95,38 @@ async function logReceiptWhatsAppToCustomer(params: {
   const supabase = createSupabaseAdmin(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+
+  const { data: bizSettings } = await supabase
+    .from("business_settings")
+    .select("business_id")
+    .limit(1)
+    .maybeSingle();
+
+  const parsedAmount = params.extracted.amount
+    ? Number(String(params.extracted.amount).replace(/,/g, ""))
+    : null;
+
+  await supabase.from("receipt_transactions").insert({
+    business_id: bizSettings?.business_id || null,
+    source: "telegram",
+    filename: params.filename || null,
+    provider: params.extracted.provider || null,
+    tx_status: params.extracted.status || "unknown",
+    customer_name: params.extracted.customerName || null,
+    amount: parsedAmount !== null && !Number.isNaN(parsedAmount) ? parsedAmount : null,
+    rrn_number: params.extracted.rrnNumber || null,
+    upi_id: params.extracted.upiId || null,
+    extracted_phone: params.phone10 || null,
+    raw_text: params.extracted.rawText ? params.extracted.rawText.slice(0, 4000) : null,
+    whatsapp_sent: params.whatsappSent,
+    whatsapp_phone: params.waPhone || null,
+    whatsapp_message: params.message || null,
+    whatsapp_message_id: params.whatsappMessageId || null,
+    whatsapp_sent_at: params.whatsappSent ? new Date().toISOString() : null,
+    whatsapp_error: params.whatsappError || null,
+  });
+
+  if (!params.phone10 || !params.whatsappSent || !params.message) return;
 
   const { data: customer } = await supabase
     .from("customers")
@@ -99,7 +144,7 @@ async function logReceiptWhatsAppToCustomer(params: {
       template_key: "aeps_upi_receipt",
       message_snapshot: params.message.slice(0, 500),
       outcome: "contacted",
-      notes: `Auto-sent via Telegram Receipt Bot${params.rrnNumber ? ` (RRN: ${params.rrnNumber})` : ""}`,
+      notes: `Auto-sent via Telegram Receipt Bot${params.extracted.rrnNumber ? ` (RRN: ${params.extracted.rrnNumber})` : ""}`,
     });
   }
 }
@@ -184,6 +229,15 @@ export async function POST(request: NextRequest) {
     const waPhone = normalizeWhatsAppPhone(phone10);
 
     if (!waPhone || !phone10) {
+      await logReceiptWhatsAppToCustomer({
+        phone10: null,
+        waPhone: null,
+        message: null,
+        whatsappSent: false,
+        whatsappError: "Mobile number not found in receipt or caption",
+        extracted,
+        filename: msg.document?.file_name || "telegram-receipt",
+      });
       await sendTelegramReply(
         chatId,
         [
@@ -202,11 +256,15 @@ export async function POST(request: NextRequest) {
     }
 
     const waMessage = formatWithdrawalWhatsAppMessage(extracted);
-    await sendWhatsAppText({ phone: waPhone, text: waMessage });
+    const waResult = await sendWhatsAppText({ phone: waPhone, text: waMessage });
     await logReceiptWhatsAppToCustomer({
       phone10,
+      waPhone,
       message: waMessage,
-      rrnNumber: extracted.rrnNumber,
+      whatsappSent: true,
+      whatsappMessageId: waResult?.id || null,
+      extracted,
+      filename: msg.document?.file_name || "telegram-receipt",
     });
 
     await sendTelegramReply(
