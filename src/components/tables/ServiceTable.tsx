@@ -86,18 +86,8 @@ export function ServiceTable({ initialServices }: ServiceTableProps = {}) {
   };
 
   return (
+    <>
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs animate-in fade-in slide-in-from-bottom-2 duration-200">
-      {isFormOpen && (
-        <ServiceForm
-          service={editingService}
-          onClose={() => setIsFormOpen(false)}
-          onSuccess={() => {
-            setIsFormOpen(false);
-            router.refresh();
-          }}
-        />
-      )}
-
       {/* Toolbar */}
       <div className="p-3.5 sm:p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
         <form onSubmit={handleSearch} className="relative w-full sm:max-w-md">
@@ -393,5 +383,17 @@ export function ServiceTable({ initialServices }: ServiceTableProps = {}) {
         )}
       </div>
     </div>
+
+      {isFormOpen && (
+        <ServiceForm
+          service={editingService}
+          onClose={() => setIsFormOpen(false)}
+          onSuccess={() => {
+            setIsFormOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
+    </>
   );
 }

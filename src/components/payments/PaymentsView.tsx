@@ -122,6 +122,7 @@ export function PaymentsView({
   }));
 
   return (
+    <>
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-150">
       {/* Header */}
       <PageHeader
@@ -479,6 +480,7 @@ export function PaymentsView({
           </>
         )}
       </div>
+    </div>
 
       {/* Record Payment Modal */}
       <RecordPaymentModal
@@ -527,6 +529,6 @@ export function PaymentsView({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
