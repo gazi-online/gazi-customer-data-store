@@ -18,7 +18,8 @@ import {
   ClipboardList,
   MessageSquare,
   Bell,
-  ScanLine
+  ScanLine,
+  HelpCircle
 } from "lucide-react";
 import { logout } from "./actions";
 import { useState, useEffect } from "react";
@@ -30,6 +31,7 @@ import { QueryProvider } from "@/providers/QueryProvider";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "Operations", href: "/operations", icon: Bell },
+  { name: "Enquiries", href: "/enquiries", icon: HelpCircle },
   { name: "Communications", href: "/communications", icon: MessageSquare },
   { name: "Requests", href: "/requests", icon: ClipboardList },
   { name: "Customers", href: "/customers", icon: Users },

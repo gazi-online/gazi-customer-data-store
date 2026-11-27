@@ -86,6 +86,24 @@ export const COMMUNICATION_TEMPLATES: Record<string, CommunicationTemplate> = {
     category: 'service',
     text: 'Namaskar {{customer_name}}, your application for {{service_name}} (Ref: {{request_number}}) has been submitted. Acknowledgment / Reference No: {{application_reference}}. Thank you for choosing {{shop_name}}.',
   },
+  enquiry_received: {
+    key: 'enquiry_received',
+    name: 'Enquiry Received Confirmation',
+    category: 'followup',
+    text: 'Namaskar {{customer_name}}, thank you for your enquiry regarding {{enquiry_subject}} (Ref: {{enquiry_number}}) at {{shop_name}}. We have noted your details and will update you shortly.',
+  },
+  enquiry_update: {
+    key: 'enquiry_update',
+    name: 'Enquiry Update',
+    category: 'followup',
+    text: 'Namaskar {{customer_name}}, update on your enquiry for {{enquiry_subject}} (Ref: {{enquiry_number}}) at {{shop_name}}: {{update_message}}',
+  },
+  enquiry_followup: {
+    key: 'enquiry_followup',
+    name: 'Enquiry Follow-up Reminder',
+    category: 'followup',
+    text: 'Namaskar {{customer_name}}, this is a follow-up from {{shop_name}} regarding your enquiry for {{enquiry_subject}} (Ref: {{enquiry_number}}). Please let us know if you would like to proceed or need any assistance.',
+  },
 };
 
 export interface TemplateVariables {
@@ -93,6 +111,9 @@ export interface TemplateVariables {
   service_name?: string;
   request_number?: string;
   application_reference?: string;
+  enquiry_number?: string;
+  enquiry_subject?: string;
+  update_message?: string;
   follow_up_date?: string;
   document_name?: string;
   expiry_date?: string;
@@ -144,6 +165,9 @@ export function renderTemplate(templateKey: string, variables: TemplateVariables
     .replace(/\{\{service_name\}\}/g, variables.service_name || 'Service')
     .replace(/\{\{request_number\}\}/g, variables.request_number || '—')
     .replace(/\{\{application_reference\}\}/g, variables.application_reference || '—')
+    .replace(/\{\{enquiry_number\}\}/g, variables.enquiry_number || '—')
+    .replace(/\{\{enquiry_subject\}\}/g, variables.enquiry_subject || 'Service Enquiry')
+    .replace(/\{\{update_message\}\}/g, variables.update_message || 'Status updated.')
     .replace(/\{\{follow_up_date\}\}/g, variables.follow_up_date || 'Today')
     .replace(/\{\{document_name\}\}/g, variables.document_name || 'Document')
     .replace(/\{\{expiry_date\}\}/g, variables.expiry_date || '—')
