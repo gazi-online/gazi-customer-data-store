@@ -3,6 +3,7 @@ import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import {
   analyzeWithdrawalReceipt,
   analyzeWithdrawalReceiptText,
+  ExtractedWithdrawalReceipt,
   extractPhoneFromUpiOrText,
   formatWithdrawalWhatsAppMessage,
 } from "@/lib/receipts/receiptAnalyzer";
@@ -13,6 +14,15 @@ function getTelegramToken(): string {
   const token = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
   if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not configured");
   return token;
+}
+
+function getSupabaseAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createSupabaseAdmin(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 }
 
 async function sendTelegramReply(chatId: number | string, text: string) {
@@ -70,63 +80,13 @@ async function downloadTelegramFile(fileId: string): Promise<{
   };
 }
 
-async function logReceiptWhatsAppToCustomer(params: {
-  phone10: string | null;
-  waPhone: string | null;
-  message: string | null;
-  whatsappSent: boolean;
-  whatsappMessageId?: string | null;
-  whatsappError?: string | null;
-  extracted: {
-    status: string;
-    customerName: string | null;
-    amount: string | null;
-    rrnNumber: string | null;
-    upiId: string | null;
-    provider?: string | null;
-    rawText?: string | null;
-  };
-  filename?: string | null;
+async function logCustomerCommunication(params: {
+  phone10: string;
+  message: string;
+  rrnNumber: string | null;
 }) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return;
-
-  const supabase = createSupabaseAdmin(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  const { data: bizSettings } = await supabase
-    .from("business_settings")
-    .select("business_id")
-    .limit(1)
-    .maybeSingle();
-
-  const parsedAmount = params.extracted.amount
-    ? Number(String(params.extracted.amount).replace(/,/g, ""))
-    : null;
-
-  await supabase.from("receipt_transactions").insert({
-    business_id: bizSettings?.business_id || null,
-    source: "telegram",
-    filename: params.filename || null,
-    provider: params.extracted.provider || null,
-    tx_status: params.extracted.status || "unknown",
-    customer_name: params.extracted.customerName || null,
-    amount: parsedAmount !== null && !Number.isNaN(parsedAmount) ? parsedAmount : null,
-    rrn_number: params.extracted.rrnNumber || null,
-    upi_id: params.extracted.upiId || null,
-    extracted_phone: params.phone10 || null,
-    raw_text: params.extracted.rawText ? params.extracted.rawText.slice(0, 4000) : null,
-    whatsapp_sent: params.whatsappSent,
-    whatsapp_phone: params.waPhone || null,
-    whatsapp_message: params.message || null,
-    whatsapp_message_id: params.whatsappMessageId || null,
-    whatsapp_sent_at: params.whatsappSent ? new Date().toISOString() : null,
-    whatsapp_error: params.whatsappError || null,
-  });
-
-  if (!params.phone10 || !params.whatsappSent || !params.message) return;
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return;
 
   const { data: customer } = await supabase
     .from("customers")
@@ -144,9 +104,140 @@ async function logReceiptWhatsAppToCustomer(params: {
       template_key: "aeps_upi_receipt",
       message_snapshot: params.message.slice(0, 500),
       outcome: "contacted",
-      notes: `Auto-sent via Telegram Receipt Bot${params.extracted.rrnNumber ? ` (RRN: ${params.extracted.rrnNumber})` : ""}`,
+      notes: `Auto-sent via Telegram Receipt Bot${params.rrnNumber ? ` (RRN: ${params.rrnNumber})` : ""}`,
     });
   }
+}
+
+async function saveTelegramReceiptTransaction(params: {
+  chatId: number | string;
+  phone10: string | null;
+  waPhone: string | null;
+  message: string | null;
+  whatsappSent: boolean;
+  whatsappMessageId?: string | null;
+  whatsappError?: string | null;
+  extracted: ExtractedWithdrawalReceipt;
+}) {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return;
+
+  const { data: bizSettings } = await supabase
+    .from("business_settings")
+    .select("business_id")
+    .limit(1)
+    .maybeSingle();
+
+  const parsedAmount = params.extracted.amount
+    ? Number(String(params.extracted.amount).replace(/,/g, ""))
+    : null;
+
+  await supabase.from("receipt_transactions").insert({
+    business_id: bizSettings?.business_id || null,
+    source: "telegram",
+    filename: `tg_chat:${params.chatId}`,
+    provider: params.extracted.provider || null,
+    tx_status: params.extracted.status || "unknown",
+    customer_name: params.extracted.customerName || null,
+    amount: parsedAmount !== null && !Number.isNaN(parsedAmount) ? parsedAmount : null,
+    rrn_number: params.extracted.rrnNumber || null,
+    upi_id: params.extracted.upiId || null,
+    extracted_phone: params.phone10 || null,
+    raw_text: params.extracted.rawText ? params.extracted.rawText.slice(0, 4000) : null,
+    whatsapp_sent: params.whatsappSent,
+    whatsapp_phone: params.waPhone || null,
+    whatsapp_message: params.message || null,
+    whatsapp_message_id: params.whatsappMessageId || null,
+    whatsapp_sent_at: params.whatsappSent ? new Date().toISOString() : null,
+    whatsapp_error: params.whatsappError || null,
+  });
+
+  if (params.phone10 && params.whatsappSent && params.message) {
+    await logCustomerCommunication({
+      phone10: params.phone10,
+      message: params.message,
+      rrnNumber: params.extracted.rrnNumber,
+    });
+  }
+}
+
+function isPhoneReplyMessage(text: string): string | null {
+  const trimmed = text.trim();
+  // Receipt texts are longer or contain receipt keywords like RRN, UTR, Amount, Status, @
+  const hasReceiptKeywords =
+    /\b(rrn|utr|amount|status|withdrawal|transaction|payee|payer|order\s*id|balance)\b/i.test(
+      trimmed
+    ) ||
+    trimmed.includes("@") ||
+    trimmed.includes("₹") ||
+    trimmed.length > 80;
+
+  if (hasReceiptKeywords) return null;
+  return extractPhoneFromUpiOrText(null, trimmed);
+}
+
+async function findAndCompletePendingReceiptForChat(params: {
+  chatId: number | string;
+  phone10: string;
+  waPhone: string;
+}): Promise<{
+  found: boolean;
+  extracted?: ExtractedWithdrawalReceipt;
+}> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return { found: false };
+
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+  const { data: pending } = await supabase
+    .from("receipt_transactions")
+    .select("*")
+    .eq("source", "telegram")
+    .eq("filename", `tg_chat:${params.chatId}`)
+    .eq("whatsapp_sent", false)
+    .gte("created_at", oneHourAgo)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!pending) {
+    return { found: false };
+  }
+
+  const extracted: ExtractedWithdrawalReceipt = {
+    status: (pending.tx_status as ExtractedWithdrawalReceipt["status"]) || "success",
+    customerName: pending.customer_name || null,
+    amount: pending.amount !== null && pending.amount !== undefined ? String(pending.amount) : null,
+    rrnNumber: pending.rrn_number || null,
+    upiId: pending.upi_id || null,
+    extractedPhone: params.phone10,
+    rawText: pending.raw_text || "",
+    provider: (pending.provider as ExtractedWithdrawalReceipt["provider"]) || "ocr_space",
+  };
+
+  const waMessage = formatWithdrawalWhatsAppMessage(extracted);
+  const waResult = await sendWhatsAppText({ phone: params.waPhone, text: waMessage });
+
+  await supabase
+    .from("receipt_transactions")
+    .update({
+      extracted_phone: params.phone10,
+      whatsapp_sent: true,
+      whatsapp_phone: params.waPhone,
+      whatsapp_message: waMessage,
+      whatsapp_message_id: waResult?.id || null,
+      whatsapp_sent_at: new Date().toISOString(),
+      whatsapp_error: null,
+    })
+    .eq("id", pending.id);
+
+  await logCustomerCommunication({
+    phone10: params.phone10,
+    message: waMessage,
+    rrnNumber: extracted.rrnNumber,
+  });
+
+  return { found: true, extracted };
 }
 
 export async function POST(request: NextRequest) {
@@ -194,12 +285,49 @@ export async function POST(request: NextRequest) {
     if (msg.text === "/start") {
       await sendTelegramReply(
         chatId,
-        "👋 *Gazi Online AEPS / UPI Receipt Bot*\n\nSend any AEPS or UPI Cash Withdrawal receipt photo/PDF (or paste receipt text). I will extract Customer Name, RRN, Amount, and Mobile from UPI ID, and send the WhatsApp receipt automatically!\n\n_Tip: You can also write a 10-digit mobile number in the caption as a fallback._"
+        "👋 *Gazi Online AEPS / UPI Receipt Bot*\n\nSend any AEPS or UPI Cash Withdrawal receipt photo/PDF (or paste receipt text). I will extract Customer Name, RRN, Amount, and Mobile from UPI ID, and send the WhatsApp receipt automatically!\n\n_If a UPI ID doesn't contain a mobile number (like `@oksbi`), just reply with the customer's 10-digit mobile number in the next message._"
       );
       return NextResponse.json({ ok: true });
     }
 
-    let extracted;
+    // Check if user is replying with a 10-digit mobile number for a pending receipt
+    if (msg.text && !msg.photo && !msg.document) {
+      const replyPhone10 = isPhoneReplyMessage(msg.text);
+      if (replyPhone10) {
+        const waPhone = normalizeWhatsAppPhone(replyPhone10);
+        if (waPhone) {
+          const completed = await findAndCompletePendingReceiptForChat({
+            chatId,
+            phone10: replyPhone10,
+            waPhone,
+          });
+
+          if (completed.found && completed.extracted) {
+            await sendTelegramReply(
+              chatId,
+              [
+                "✅ *WhatsApp Receipt Sent!*",
+                "",
+                `• To: \`${replyPhone10}\``,
+                `• Name: ${completed.extracted.customerName || "—"}`,
+                `• Amount: ${completed.extracted.amount ? `₹${completed.extracted.amount}` : "—"}`,
+                `• RRN: ${completed.extracted.rrnNumber || "—"}`,
+                `• UPI ID: ${completed.extracted.upiId || "—"}`,
+              ].join("\n")
+            );
+            return NextResponse.json({ ok: true });
+          }
+
+          await sendTelegramReply(
+            chatId,
+            "⚠️ No pending receipt found from the last 1 hour. Please send the receipt photo/PDF first (or include the 10-digit mobile number in the caption)."
+          );
+          return NextResponse.json({ ok: true });
+        }
+      }
+    }
+
+    let extracted: ExtractedWithdrawalReceipt;
     if (msg.photo && msg.photo.length > 0) {
       const bestPhoto = msg.photo[msg.photo.length - 1];
       const file = await downloadTelegramFile(bestPhoto.file_id);
@@ -213,6 +341,19 @@ export async function POST(request: NextRequest) {
       });
     } else if (msg.text && msg.text.trim().length > 10) {
       extracted = analyzeWithdrawalReceiptText(msg.text);
+      // Guard against sending blank receipts for random text messages
+      if (
+        !extracted.amount &&
+        !extracted.rrnNumber &&
+        !extracted.upiId &&
+        !extracted.customerName
+      ) {
+        await sendTelegramReply(
+          chatId,
+          "📄 Could not detect receipt details from that message. Please send a receipt *photo*, *PDF*, or full receipt text."
+        );
+        return NextResponse.json({ ok: true });
+      }
     } else {
       await sendTelegramReply(
         chatId,
@@ -229,19 +370,20 @@ export async function POST(request: NextRequest) {
     const waPhone = normalizeWhatsAppPhone(phone10);
 
     if (!waPhone || !phone10) {
-      await logReceiptWhatsAppToCustomer({
+      const previewMessage = formatWithdrawalWhatsAppMessage(extracted);
+      await saveTelegramReceiptTransaction({
+        chatId,
         phone10: null,
         waPhone: null,
-        message: null,
+        message: previewMessage,
         whatsappSent: false,
-        whatsappError: "Mobile number not found in receipt or caption",
+        whatsappError: null,
         extracted,
-        filename: msg.document?.file_name || "telegram-receipt",
       });
       await sendTelegramReply(
         chatId,
         [
-          "⚠️ *Receipt Analyzed — Mobile Number Not Found*",
+          "⚠️ *Mobile Number Not Found in UPI ID*",
           "",
           `• Status: ${extracted.status}`,
           `• Name: ${extracted.customerName || "—"}`,
@@ -249,7 +391,7 @@ export async function POST(request: NextRequest) {
           `• RRN: ${extracted.rrnNumber || "—"}`,
           `• UPI ID: ${extracted.upiId || "—"}`,
           "",
-          "Please resend the photo with the customer's 10-digit mobile number in the caption, or upload it in the Portal.",
+          "📱 *Reply with the customer's 10-digit mobile number* (e.g. `9333561943`) to send this WhatsApp receipt now.",
         ].join("\n")
       );
       return NextResponse.json({ ok: true });
@@ -257,14 +399,14 @@ export async function POST(request: NextRequest) {
 
     const waMessage = formatWithdrawalWhatsAppMessage(extracted);
     const waResult = await sendWhatsAppText({ phone: waPhone, text: waMessage });
-    await logReceiptWhatsAppToCustomer({
+    await saveTelegramReceiptTransaction({
+      chatId,
       phone10,
       waPhone,
       message: waMessage,
       whatsappSent: true,
       whatsappMessageId: waResult?.id || null,
       extracted,
-      filename: msg.document?.file_name || "telegram-receipt",
     });
 
     await sendTelegramReply(
