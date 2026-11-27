@@ -16,8 +16,8 @@ export interface ExtractedWithdrawalReceipt {
 }
 
 /**
- * Extracts a 10-digit Indian mobile number from a UPI ID (e.g. 9876543210@ybl, 919876543210@paytm)
- * or falls back to explicit mobile numbers in receipt text.
+ * Extracts a 10-digit Indian mobile number from a UPI ID (e.g. 9749383710-z2da@axl, 9876543210@ybl)
+ * or falls back to explicit customer mobile numbers in receipt text (skipping CSP/Agent mobile).
  */
 export function extractPhoneFromUpiOrText(
   upiId: string | null | undefined,
@@ -25,26 +25,49 @@ export function extractPhoneFromUpiOrText(
 ): string | null {
   if (upiId) {
     const localPart = upiId.split("@")[0] || "";
-    const digitsOnly = localPart.replace(/\D/g, "");
-    // Match 91XXXXXXXXXX or XXXXXXXXXX starting with 6-9
-    const match12 = digitsOnly.match(/91([6-9]\d{9})/);
+    // Match 91XXXXXXXXXX or XXXXXXXXXX starting with 6-9 (even if followed by -z2da etc.)
+    const match12 = localPart.match(/(?:^|\D)91([6-9]\d{9})(?:\D|$)/);
     if (match12) return match12[1];
-    const match10 = digitsOnly.match(/([6-9]\d{9})/);
+    const match10 = localPart.match(/(?:^|\D)([6-9]\d{9})(?:\D|$)/);
     if (match10) return match10[1];
   }
 
   if (rawText) {
-    // Look for labeled phone/mobile first
-    const labeledMatch = rawText.match(
-      /(?:mob(?:ile)?|phone|contact|cust(?:omer)?\s*no\.?|whatsapp)\s*[:\-]?\s*(?:\+?91[\s-]?)?([6-9]\d{9})\b/i
+    // 1. Prefer Payer VPA / Customer VPA in raw text
+    const payerVpaMatch = rawText.match(
+      /(?:payer\s*vpa|customer\s*upi|sender\s*vpa|upi\s*id)\s*[:\-]?\s*([a-zA-Z0-9.\-_]{2,64}@[a-zA-Z0-9]{2,32})/i
     );
-    if (labeledMatch) return labeledMatch[1];
+    if (payerVpaMatch) {
+      const fromPayer = extractPhoneFromUpiOrText(payerVpaMatch[1], null);
+      if (fromPayer) return fromPayer;
+    }
 
-    // Look for any standalone 10-digit Indian mobile (excluding 12-digit RRNs)
-    const standaloneMatches = rawText.match(/(?<!\d)(?:\+?91[\s-]?)?([6-9]\d{9})(?!\d)/g);
-    if (standaloneMatches && standaloneMatches.length > 0) {
-      const cleaned = standaloneMatches[0].replace(/\D/g, "").slice(-10);
-      if (/^[6-9]\d{9}$/.test(cleaned)) return cleaned;
+    // 2. Check all UPI IDs in text for an embedded 10-digit mobile number
+    const allUpis = rawText.match(/\b[a-zA-Z0-9.\-_]{2,64}@[a-zA-Z0-9]{2,32}\b/g) || [];
+    for (const u of allUpis) {
+      const fromU = extractPhoneFromUpiOrText(u, null);
+      if (fromU) return fromU;
+    }
+
+    // 3. Look for labeled customer phone/mobile (explicitly exclude CSP / Agent / Merchant mobile)
+    const lines = rawText.split(/\r?\n/);
+    for (const line of lines) {
+      if (/\b(?:csp|agent|merchant|retailer|shop|helpline|support|toll)\b/i.test(line)) {
+        continue;
+      }
+      const labeledMatch = line.match(
+        /(?:cust(?:omer)?\s*(?:mob(?:ile)?|phone|no\.?)|payer\s*(?:mob|phone)|mob(?:ile)?|phone|contact|whatsapp)\s*[:\-]?\s*(?:\+?91[\s-]?)?([6-9]\d{9})\b/i
+      );
+      if (labeledMatch) return labeledMatch[1];
+    }
+
+    // 4. Standalone 10-digit mobile not on a CSP/Merchant/RRN line
+    for (const line of lines) {
+      if (/\b(?:csp|agent|merchant|rrn|utr|order|txn|transaction)\b/i.test(line)) {
+        continue;
+      }
+      const m = line.match(/(?<!\d)(?:\+?91[\s-]?)?([6-9]\d{9})(?!\d)/);
+      if (m) return m[1];
     }
   }
 
@@ -83,12 +106,38 @@ export function formatWithdrawalWhatsAppMessage(
   return lines.join("\n");
 }
 
-function parseReceiptTextHeuristics(
+/**
+ * Extracts a field value that may be on the same line (after tab/spaces/colon)
+ * or on the immediately following line.
+ */
+function extractFieldAcrossLines(lines: string[], labelRegex: RegExp): string | null {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const match = line.match(labelRegex);
+    if (!match) continue;
+
+    // Value on same line after label
+    const sameLineRest = line.slice((match.index || 0) + match[0].length).replace(/^[\s:\-]+/, "").trim();
+    if (sameLineRest) {
+      return sameLineRest;
+    }
+
+    // Value on next non-empty line
+    for (let j = i + 1; j < Math.min(i + 3, lines.length); j++) {
+      const nextLine = lines[j].trim();
+      if (nextLine) return nextLine;
+    }
+  }
+  return null;
+}
+
+export function parseReceiptTextHeuristics(
   rawText: string,
   provider: "ocr_space" | "text_parser"
 ): ExtractedWithdrawalReceipt {
   const text = rawText || "";
   const lower = text.toLowerCase();
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
   let status: ExtractedWithdrawalReceipt["status"] = "unknown";
   if (/\b(success|successful|completed|approved|credited|debited)\b/i.test(text)) {
@@ -107,40 +156,64 @@ function parseReceiptTextHeuristics(
         ? "Cash Withdrawal"
         : "AEPS / UPI Cash Withdrawal";
 
-  // RRN / UTR (12 digits typically)
-  const rrnMatch =
-    text.match(/(?:rrn|utr|ref(?:erence)?\s*(?:no|id|number)?|txn\s*id)\s*[:\-#]?\s*([A-Z0-9]{10,22})/i) ||
-    text.match(/\b(\d{12})\b/);
-  const rrnNumber = rrnMatch ? rrnMatch[1].trim() : null;
+  // RRN / UTR (12 digits typically, or Transaction Id)
+  const rrnField = extractFieldAcrossLines(lines, /^(?:rrn|utr(?:\s*no\.?)?|ref(?:erence)?\s*(?:no|id|number)?)\b/i);
+  const rrnFromField = rrnField?.match(/([A-Z0-9]{10,22})/i)?.[1] || null;
+  const rrnFallback = text.match(/\b(\d{12})\b/)?.[1] || null;
+  const rrnNumber = rrnFromField || rrnFallback;
 
-  // UPI ID
-  const upiMatch = text.match(/\b([a-zA-Z0-9.\-_]{2,64}@[a-zA-Z]{2,32})\b/);
-  const upiId = upiMatch ? upiMatch[1].trim() : null;
+  // UPI ID: strongly prefer Payer VPA (customer) over Payee VPA (merchant)
+  const payerVpaField = extractFieldAcrossLines(lines, /^(?:payer\s*vpa|customer\s*vpa|customer\s*upi|sender\s*vpa)\b/i);
+  const payerUpi = payerVpaField?.match(/([a-zA-Z0-9.\-_]{2,64}@[a-zA-Z0-9]{2,32})/)?.[1] || null;
+  const allUpis = text.match(/\b[a-zA-Z0-9.\-_]{2,64}@[a-zA-Z0-9]{2,32}\b/g) || [];
+  // If payerUpi isn't labeled, pick any UPI ID that contains a 10-digit mobile, else first UPI ID
+  const mobileUpi = allUpis.find((u) => extractPhoneFromUpiOrText(u, null) !== null) || null;
+  const upiId = payerUpi || mobileUpi || allUpis[0] || null;
 
-  // Amount
-  const amountMatch =
-    text.match(/(?:amount|amt|rs\.?|inr|₹)\s*[:\-]?\s*₹?\s*([\d,]+(?:\.\d{1,2})?)/i) ||
-    text.match(/₹\s*([\d,]+(?:\.\d{1,2})?)/);
-  const amount = amountMatch ? amountMatch[1].replace(/,/g, "") : null;
-
-  // Customer Name
-  const nameMatch = text.match(
-    /(?:customer\s*name|cust\.?\s*name|name|beneficiary|a\/c\s*holder|paid\s*by|from)\s*[:\-]\s*([A-Za-z][A-Za-z\s.]{2,45})/i
+  // Amount (handles "Transaction Amount  ₹ 500.00", "Amount  1000.00", or across newlines)
+  const amountField = extractFieldAcrossLines(
+    lines,
+    /^(?:transaction\s*amount|txn\s*amount|withdrawal\s*amount|amount|amt)\b/i
   );
-  const customerName = nameMatch
-    ? nameMatch[1].split(/\r?\n/)[0].trim()
+  const amountFromField =
+    amountField?.match(/(?:₹|₽|rs\.?|inr)?[^\d\n]*([\d,]+(?:\.\d{1,2})?)/i)?.[1]?.replace(/,/g, "") || null;
+  const amountFallback =
+    text.match(/(?:₹|₽|rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)/i)?.[1]?.replace(/,/g, "") || null;
+  const amount = amountFromField || amountFallback;
+
+  // Customer Name (handles "Payer Name  RASEK MOLLA", "Name  ALAMIN DAFADAR", "Customer Name  ...", ignoring "CSP FIRM NAME")
+  const nameField = extractFieldAcrossLines(
+    lines,
+    /^(?:payer\s*name|customer\s*name|cust\.?\s*name|beneficiary\s*name|a\/c\s*holder\s*name|name)\b/i
+  );
+  const customerName = nameField && !/^gazi\s*online$/i.test(nameField)
+    ? nameField.replace(/^[:\-\s]+/, "").trim()
     : null;
 
   // Bank / Portal
-  const bankMatch = text.match(
-    /(?:bank\s*name|bank|portal)\s*[:\-]\s*([A-Za-z][A-Za-z\s.&]{2,40})/i
+  let bankOrPortal: string | null = extractFieldAcrossLines(
+    lines,
+    /^(?:bank\s*name|bank|portal|csp\s*firm\s*name)\b/i
   );
-  const bankOrPortal = bankMatch ? bankMatch[1].split(/\r?\n/)[0].trim() : null;
+  if (!bankOrPortal) {
+    if (lower.includes("payments bank") || lower.includes("airtel") || lower.includes("mairtel")) {
+      bankOrPortal = "Airtel Payments Bank";
+    } else if (lower.includes("relipay") || lower.includes("rnfi")) {
+      bankOrPortal = "Relipay (RNFI)";
+    } else if (lower.includes("paynearby")) {
+      bankOrPortal = "PayNearby";
+    } else if (lower.includes("spice money")) {
+      bankOrPortal = "Spice Money";
+    } else if (lower.includes("fino")) {
+      bankOrPortal = "Fino Payments Bank";
+    }
+  }
 
-  // Date & Time
-  const dateMatch = text.match(
-    /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)?)/i
-  );
+  // Date & Time (handles DD/MM/YYYY, HH:MM and YYYY-MM-DD HH:MM:SS)
+  const dateMatch =
+    text.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)/) ||
+    text.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4},?\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)/i) ||
+    text.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/);
   const dateTime = dateMatch ? dateMatch[1].trim() : null;
 
   const extractedPhone = extractPhoneFromUpiOrText(upiId, text);
@@ -173,11 +246,11 @@ Extract the following fields from this receipt image/PDF and return ONLY valid J
 {
   "status": "success" | "failed" | "pending" | "unknown",
   "transactionType": "string (e.g. AEPS Cash Withdrawal or UPI Cash Withdrawal)",
-  "customerName": "string or null",
+  "customerName": "customer/payer name (NOT the shop/CSP/payee name) or null",
   "amount": "numeric string without currency symbol or null",
   "rrnNumber": "12-digit RRN/UTR or transaction reference or null",
-  "upiId": "full UPI ID like 9876543210@ybl or null",
-  "mobileNumber": "10-digit mobile number if visible on receipt or inside UPI ID, or null",
+  "upiId": "customer/payer UPI ID (e.g. Payer VPA like 9749383710-z2da@axl) rather than merchant Payee VPA, or null",
+  "mobileNumber": "customer 10-digit mobile number if visible on receipt or inside Payer UPI ID (NOT CSP/merchant mobile), or null",
   "bankOrPortal": "bank or AEPS portal name or null",
   "dateTime": "date and time string or null",
   "rawText": "concise transcription of key receipt lines"
@@ -246,6 +319,7 @@ async function analyzeWithOcrSpace(
   formData.append("language", "eng");
   formData.append("OCREngine", "2");
   formData.append("scale", "true");
+  formData.append("isTable", "true");
 
   const res = await fetch("https://api.ocr.space/parse/image", {
     method: "POST",
